@@ -5,12 +5,12 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Auth_Service/auth_service.dart';
+import 'package:optionxi/Components/cust_virtual_balance_section.dart';
 import 'package:optionxi/Helpers/open_url.dart';
 import 'package:optionxi/Main_Pages/act_leaderboard.dart';
 import 'package:optionxi/Main_Pages/act_news.dart';
 import 'package:optionxi/Main_Pages/act_portfolio.dart';
 import 'package:optionxi/Main_Pages/act_predictions.dart';
-import 'package:optionxi/Main_Pages/act_traderprofile.dart';
 import 'package:optionxi/Main_Pages/act_tradingideas.dart';
 import 'package:optionxi/MobileLink/link_phone_screen.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
@@ -78,7 +78,8 @@ class _TradingProfilePageState extends State<TradingProfilePage>
   // Add this method to update privacy setting
   Future<void> _updatePrivacySetting(bool value) async {
     final theme = Theme.of(context);
-    String up_message = value ? "Privacy turned on" : "Privacy turn off";
+    // String up_message = value ? "Privacy turned on" : "Privacy turn off";
+    String up_message = "Will be updated after market hours..";
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
@@ -123,14 +124,15 @@ class _TradingProfilePageState extends State<TradingProfilePage>
           child: Column(
             children: [
               _buildHeader(theme),
-              // _buildProfileStats(theme),
+              BalanceCard(),
+              // ProfileStatsWidget(),
               _buildOptionsLists(theme),
               InkWell(
                   onTap: () {
                     OpenHelper.open_url(
                         "https://github.com/optionxi/optionxi-flutter-community");
                   },
-                  child: _buildFooter(isDark))
+                  child: _buildFooter(isDark)),
             ],
           ),
         ),
@@ -215,84 +217,22 @@ class _TradingProfilePageState extends State<TradingProfilePage>
                 color: theme.colorScheme.onBackground,
               ),
             ),
-            SizedBox(height: 8),
-            Text(
-              "Professional Trader",
-              style: TextStyle(
-                color: theme.colorScheme.onBackground.withValues(alpha: 0.6),
-                fontSize: 16,
-              ),
-            ),
+            // SizedBox(height: 8),
+            // Text(
+            //   "Professional Trader",
+            //   style: TextStyle(
+            //     color: theme.colorScheme.onBackground.withValues(alpha: 0.6),
+            //     fontSize: 16,
+            //   ),
+            // ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildProfileStats(ThemeData theme) {
-    return SlideTransition(
-      position: Tween<Offset>(
-        begin: Offset(0, 0.2),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Interval(0.2, 0.4, curve: Curves.easeOut),
-      )),
-      child: Container(
-        padding: EdgeInsets.symmetric(horizontal: 20),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildStatItem(
-                "Total Profit", "\₹15,234", Icons.trending_up, theme),
-            _buildStatItem("Win Rate", "76%", Icons.auto_graph, theme),
-            _buildStatItem(
-                "Total Trades", "142", Icons.currency_exchange, theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatItem(
-      String label, String value, IconData icon, ThemeData theme) {
-    final borderColor = theme.brightness == Brightness.dark
-        ? Colors.grey[850]
-        : Colors.grey[300];
-
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor!, width: 1),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: theme.colorScheme.primary, size: 24),
-          SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onBackground,
-            ),
-          ),
-          SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: theme.colorScheme.onBackground.withValues(alpha: 0.6),
-            ),
-          ),
-        ],
       ),
     );
   }
 
   Widget _buildOptionsLists(ThemeData theme) {
+    final theme = Theme.of(context);
     return SlideTransition(
       position: Tween<Offset>(
         begin: Offset(0, 0.2),
@@ -302,23 +242,20 @@ class _TradingProfilePageState extends State<TradingProfilePage>
         curve: Interval(0.4, 0.6, curve: Curves.easeOut),
       )),
       child: Container(
-        padding: EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(20, 0, 20, 0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // AdSectionProfilePrev(),
             _buildSection(
                 "Trading",
                 [
-                  // OptionItem("Active Positions", Icons.candlestick_chart,
-                  //     onTap: goToTradersPredictions),
-                  // OptionItem("Trading History", Icons.history,
-                  //     onTap: goToTradingIdeas),
-                  // OptionItem("Risk Management", Icons.shield,
-                  //     onTap: goToMarketNews),
-                  OptionItem("Live virtual trading", Icons.bolt,
-                      badgeText: "Beta", onTap: gotoBrokerConnect),
-                  OptionItem("Leaderboard", Icons.account_balance_wallet,
+                  OptionItem("Leaderboard", FontAwesomeIcons.trophy,
                       badgeText: "New", onTap: goToLeaderBoardPage),
+                  OptionItem("Connect Algo", FontAwesomeIcons.robot,
+                      badgeText: "Beta", onTap: gotoBrokerConnect),
+                  OptionItem("Live virtual trading", Icons.bolt,
+                      badgeText: "Soon", onTap: showCommingSoon),
                   OptionItem(
                     "Privacy Mode",
                     Icons.privacy_tip,
@@ -364,7 +301,7 @@ class _TradingProfilePageState extends State<TradingProfilePage>
                   // OptionItem("Payment Methods", Icons.payment),
                   OptionItem(
                     "Logout",
-                    Icons.key,
+                    Icons.exit_to_app,
                     onTap: () {
                       AuthService().logOut();
                     },
@@ -537,6 +474,22 @@ class _TradingProfilePageState extends State<TradingProfilePage>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => BrokerConnectPage()),
+    );
+  }
+
+  void showCommingSoon() {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('This feature will be comming soon!, Stay tuned',
+            style: GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
+        backgroundColor:
+            theme.colorScheme.primary, // SnackBar consistent with primary color
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
     );
   }
 

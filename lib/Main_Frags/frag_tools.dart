@@ -285,7 +285,7 @@ class _AdvancedTradingToolsPageState extends State<AdvancedTradingToolsPage>
     ];
 
     return Padding(
-      padding: const EdgeInsets.all(20.0),
+      padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
       child: Column(
         children: tools.map((section) {
           return Column(

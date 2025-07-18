@@ -85,14 +85,29 @@ class CustomBottomNavBar extends StatelessWidget {
     final primaryColor = colorScheme.primary;
     final onSurfaceColor = colorScheme.onSurface;
     final isSelected = currentIndex == index;
+    final isTradeSelected = currentIndex == 1; // Trade is index 1
+    final isTradeTab = index == 1;
 
     // Selected background color based on theme
     final selectedBackgroundColor =
         primaryColor.withValues(alpha: isDarkMode ? 0.3 : 0.15);
 
-    // Active and inactive colors
+    // Active and inactive colors with special dimming for trade focus
     final activeColor = primaryColor;
-    final inactiveColor = onSurfaceColor.withValues(alpha: 0.6);
+    double inactiveOpacity;
+
+    if (isTradeSelected && !isTradeTab) {
+      // When trade is selected, make other icons much dimmer
+      inactiveOpacity = 0.55;
+    } else if (isSelected) {
+      // Selected item gets full opacity
+      inactiveOpacity = 1.0;
+    } else {
+      // Normal inactive state
+      inactiveOpacity = 0.6;
+    }
+
+    final inactiveColor = onSurfaceColor.withValues(alpha: inactiveOpacity);
 
     return Expanded(
       child: GestureDetector(
@@ -107,33 +122,37 @@ class CustomBottomNavBar extends StatelessWidget {
                   borderRadius: BorderRadius.circular(20),
                 )
               : null,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                isSelected ? activeIcon : icon,
-                color: isSelected ? activeColor : inactiveColor,
-                size: isSelected ? 28 : 24,
-              )
-                  .animate(target: isSelected ? 1 : 0)
-                  .scale(
-                    begin: const Offset(1, 1),
-                    end: const Offset(1.2, 1.2),
-                  )
-                  .shake(
-                    hz: 2,
-                    rotation: 0.1,
-                  ),
-              const SizedBox(height: 4),
-              Text(
-                label,
-                style: GoogleFonts.inter(
-                  fontSize: 10,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: isTradeSelected && !isTradeTab ? 0.4 : 1.0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isSelected ? activeIcon : icon,
                   color: isSelected ? activeColor : inactiveColor,
+                  size: isSelected ? 28 : 24,
+                )
+                    .animate(target: isSelected ? 1 : 0)
+                    .scale(
+                      begin: const Offset(1, 1),
+                      end: const Offset(1.2, 1.2),
+                    )
+                    .shake(
+                      hz: 2,
+                      rotation: 0.1,
+                    ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    fontSize: 10,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                    color: isSelected ? activeColor : inactiveColor,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

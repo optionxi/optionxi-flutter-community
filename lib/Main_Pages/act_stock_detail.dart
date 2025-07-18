@@ -4,7 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/volume_formater.dart';
-import 'package:optionxi/VirtualTrading/act_buyandsell_prev.dart';
+import 'package:optionxi/VirtualTrading/VComponents/cust_colorful_action_button.dart';
 import 'package:optionxi/browser_lite.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
 import 'package:intl/intl.dart';
@@ -316,7 +316,7 @@ class _StockDetailPageState extends State<StockDetailPage>
                       errorWidget: (context, url, error) => ClipRRect(
                         borderRadius: BorderRadius.circular(20),
                         child: Image.asset(
-                          'assets/images/option_xi_w.png',
+                          'assets/images/stockdefault.png',
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -375,8 +375,21 @@ class _StockDetailPageState extends State<StockDetailPage>
                             ),
                           ),
                           const SizedBox(height: 4),
+                        ],
+                      ),
+                      Column(
+                        children: [
+                          // _buildIndicatorButton(
+                          //   stock.isUp ? 'Bullish' : 'Bearish',
+                          //   stockController.showVolume.value,
+                          //   () => stockController.toggleVolume(),
+                          //   isDark,
+                          //   stock.isUp,
+                          // ),
+                          const SizedBox(height: 8),
                           Row(
                             children: [
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 8,
@@ -396,151 +409,71 @@ class _StockDetailPageState extends State<StockDetailPage>
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              Text(
-                                stock.priceChangeFormatted,
-                                style: TextStyle(
-                                  color: isDark
-                                      ? Colors.grey[400]
-                                      : Colors.grey[600],
-                                  fontSize: 14,
-                                ),
-                              ),
+                              // Text(
+                              //   stock.priceChangeFormatted,
+                              //   style: TextStyle(
+                              //     color: isDark
+                              //         ? Colors.grey[400]
+                              //         : Colors.grey[600],
+                              //     fontSize: 14,
+                              //   ),
+                              // ),
                             ],
                           ),
-                        ],
-                      ),
-                      Column(
-                        children: [
-                          // _buildIndicatorButton(
-                          //   stock.isUp ? 'Bullish' : 'Bearish',
-                          //   stockController.showVolume.value,
-                          //   () => stockController.toggleVolume(),
-                          //   isDark,
-                          //   stock.isUp,
-                          // ),
                           const SizedBox(height: 12),
                           // Modern TradingView Chart Button
-                          Container(
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color:
-                                  isDark ? Colors.grey[800] : Colors.grey[100],
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(
-                                color: isDark
-                                    ? Colors.grey[700]!
-                                    : Colors.grey[300]!,
-                                width: 1,
-                              ),
-                            ),
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(18),
-                                onTap: () {
-                                  // Add your TradingView chart navigation logic here
-                                  // Get.toNamed('/tradingview/${stock.symbol}');
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) => BrowserLite_V(
-                                            "https://in.tradingview.com/chart/?symbol=NSE%3A" +
-                                                widget.stockname.toString())),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 6),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(
-                                        Icons.candlestick_chart_outlined,
-                                        size: 16,
-                                        color: isDark
-                                            ? Colors.grey[300]
-                                            : Colors.grey[700],
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'View Chart',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w500,
-                                          color: isDark
-                                              ? Colors.grey[300]
-                                              : Colors.grey[700],
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
+
+                          // _buildViewChart(isDark, context),
                         ],
                       ),
                     ],
                   ),
                 ),
               ),
+              // SliverToBoxAdapter(
+              //   child: viewAlertandScreeners(stock, theme),
+              // ),
               SliverToBoxAdapter(
-                child: Container(
-                  width: double.infinity,
-                  height: 44,
-                  margin:
-                      const EdgeInsets.only(bottom: 16, right: 16, left: 16),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Get.toNamed(
-                          '/alerts/${stock.stckname.split("-")[0].split(":")[1].toUpperCase()}');
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: theme.colorScheme.primary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: buildColorfulActionButton(
+                          context,
+                          isDark,
+                          'Chart',
+                          Icons.trending_up_rounded,
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                  builder: (context) => BrowserLite_V(
+                                      "https://in.tradingview.com/chart/?symbol=NSE%3A" +
+                                          widget.stockname
+                                              .toString()
+                                              .split("-")[0]
+                                              .split(":")[1])),
+                            );
+                          },
+                          true, // isChart button
+                        ),
                       ),
-                    ).copyWith(
-                      overlayColor: MaterialStateProperty.resolveWith<Color?>(
-                        (Set<MaterialState> states) {
-                          if (states.contains(MaterialState.pressed)) {
-                            return Colors.white.withValues(alpha: 0.1);
-                          }
-                          if (states.contains(MaterialState.hovered)) {
-                            return Colors.white.withValues(alpha: 0.05);
-                          }
-                          return null;
-                        },
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: buildColorfulActionButton(
+                          context,
+                          isDark,
+                          'Alerts',
                           Icons.analytics_outlined,
-                          size: 18,
-                          color: Colors.white,
+                          () {
+                            Get.toNamed(
+                                '/alerts/${widget.stockname.toString().split("-")[0].split(":")[1]}');
+                          },
+                          false, // isChart button
                         ),
-                        const SizedBox(width: 8),
-                        Text(
-                          'View Alerts and Screeners',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white,
-                          ),
-                        ),
-                        const SizedBox(width: 4),
-                        Icon(
-                          Icons.arrow_forward_ios,
-                          size: 14,
-                          color: Colors.white,
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -586,6 +519,66 @@ class _StockDetailPageState extends State<StockDetailPage>
       //   }
       //   return _buildBottomButtons(context, isDark);
       // }),
+    );
+  }
+
+  Container viewAlertandScreeners(StockModel stock, ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      height: 44,
+      margin: const EdgeInsets.only(bottom: 16, right: 16, left: 16),
+      child: ElevatedButton(
+        onPressed: () {
+          Get.toNamed(
+              '/alerts/${stock.stckname.split("-")[0].split(":")[1].toUpperCase()}');
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: theme.colorScheme.primary,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ).copyWith(
+          overlayColor: MaterialStateProperty.resolveWith<Color?>(
+            (Set<MaterialState> states) {
+              if (states.contains(MaterialState.pressed)) {
+                return Colors.white.withValues(alpha: 0.1);
+              }
+              if (states.contains(MaterialState.hovered)) {
+                return Colors.white.withValues(alpha: 0.05);
+              }
+              return null;
+            },
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.analytics_outlined,
+              size: 18,
+              color: Colors.white,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              'View Alerts and Screeners',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 14,
+              color: Colors.white,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -958,29 +951,6 @@ class _StockDetailPageState extends State<StockDetailPage>
       default:
         return DateTimeIntervalType.months;
     }
-  }
-
-  Widget _buildIndicatorButton(
-      String label, bool isActive, VoidCallback onTap, bool isDark, bool isUp) {
-    final color = isUp ? Colors.green : Colors.red;
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: isDark ? color[900] : color[100],
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isDark ? color[100] : color[800],
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
   }
 
   Widget _buildOverviewTab(BuildContext context, bool isDark, dynamic stock) {
@@ -1589,61 +1559,84 @@ class _StockDetailPageState extends State<StockDetailPage>
     );
   }
 
-  Widget _buildBottomButtons(BuildContext context, bool isDark) {
-    final stockSymbol = widget.stockname.split(":").length > 1
-        ? widget.stockname.split(":")[1].split("-")[0]
-        : widget.stockname;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).dividerColor,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: FilledButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          BuyandSellPagePrev(stockSymbol, "EQ", false)),
-                );
-              },
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.green[isDark ? 600 : 500],
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text('Buy'),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          BuyandSellPagePrev(stockSymbol, "EQ", true)),
-                );
-              },
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.red[isDark ? 400 : 500],
-                side: BorderSide(color: Colors.red[isDark ? 400 : 500]!),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-              child: const Text('Sell'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildBottomButtons(BuildContext context, bool isDark) {
+  //   final stockSymbol = widget.stockname.split(":").length > 1
+  //       ? widget.stockname.split(":")[1].split("-")[0]
+  //       : widget.stockname;
+  //   return Container(
+  //     padding: const EdgeInsets.all(16),
+  //     decoration: BoxDecoration(
+  //       color: Theme.of(context).scaffoldBackgroundColor,
+  //       border: Border(
+  //         top: BorderSide(
+  //           color: Theme.of(context).dividerColor,
+  //           width: 1,
+  //         ),
+  //       ),
+  //     ),
+  //     child: Row(
+  //       children: [
+  //         Expanded(
+  //           child: FilledButton(
+  //             onPressed: () {
+  //               Navigator.push(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                     builder: (context) =>
+  //                         BuyandSellPagePrev(stockSymbol, "EQ", false)),
+  //               );
+  //             },
+  //             style: FilledButton.styleFrom(
+  //               backgroundColor: Colors.green[isDark ? 600 : 500],
+  //               padding: const EdgeInsets.symmetric(vertical: 16),
+  //             ),
+  //             child: const Text('Buy'),
+  //           ),
+  //         ),
+  //         const SizedBox(width: 8),
+  //         Expanded(
+  //           child: OutlinedButton(
+  //             onPressed: () {
+  //               Navigator.push(
+  //                 context,
+  //                 MaterialPageRoute(
+  //                     builder: (context) =>
+  //                         BuyandSellPagePrev(stockSymbol, "EQ", true)),
+  //               );
+  //             },
+  //             style: OutlinedButton.styleFrom(
+  //               foregroundColor: Colors.red[isDark ? 400 : 500],
+  //               side: BorderSide(color: Colors.red[isDark ? 400 : 500]!),
+  //               padding: const EdgeInsets.symmetric(vertical: 16),
+  //             ),
+  //             child: const Text('Sell'),
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  // Widget _buildIndicatorButton(
+  //     String label, bool isActive, VoidCallback onTap, bool isDark, bool isUp) {
+  //   final color = isUp ? Colors.green : Colors.red;
+  //   return InkWell(
+  //     onTap: onTap,
+  //     child: Container(
+  //       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  //       decoration: BoxDecoration(
+  //         color: isDark ? color[900] : color[100],
+  //         borderRadius: BorderRadius.circular(6),
+  //       ),
+  //       child: Text(
+  //         label,
+  //         style: TextStyle(
+  //           color: isDark ? color[100] : color[800],
+  //           fontSize: 12,
+  //           fontWeight: FontWeight.w500,
+  //         ),
+  //       ),
+  //     ),
+  //   );
+  // }
 }

@@ -548,7 +548,7 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
                     errorWidget: (context, url, error) => ClipRRect(
                       borderRadius: BorderRadius.circular(25),
                       child: Image.asset(
-                        'assets/images/option_xi_w.png',
+                        'assets/images/stockdefault.png',
                         fit: BoxFit.cover,
                       ),
                     ),

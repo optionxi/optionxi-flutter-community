@@ -15,33 +15,50 @@ class SectorStocksPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0B),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1B),
+        backgroundColor: theme.appBarTheme.backgroundColor ??
+            (isDark ? const Color(0xFF1A1A1B) : Colors.white),
         title: Text(
           sectorName,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: theme.appBarTheme.foregroundColor ??
+                (isDark ? Colors.white : Colors.black),
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: Icon(
+            Icons.arrow_back,
+            color: theme.appBarTheme.foregroundColor ??
+                (isDark ? Colors.white : Colors.black),
+          ),
           onPressed: () => Get.back(),
         ),
+        elevation: isDark ? 0 : 1,
       ),
-      body: _buildStocksList(),
+      body: _buildStocksList(context),
     );
   }
 
-  Widget _buildStocksList() {
+  Widget _buildStocksList(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     if (stocks.isEmpty) {
-      return const Center(
+      return Center(
         child: Text(
           'No stocks found for this sector',
-          style: TextStyle(color: Colors.grey, fontSize: 16),
+          style: TextStyle(
+            color: theme.textTheme.bodyMedium?.color?.withOpacity(0.6) ??
+                (isDark ? Colors.grey : Colors.grey[600]),
+            fontSize: 16,
+          ),
         ),
       );
     }
@@ -54,22 +71,45 @@ class SectorStocksPage extends StatelessWidget {
       itemCount: stocks.length,
       itemBuilder: (context, index) {
         final stock = stocks[index];
+        final isPositive = stock.pcnt > 0;
+
+        // Theme-aware colors
+        final cardColor = isDark ? const Color(0xFF1A1A1B) : theme.cardColor;
+        final primaryTextColor = theme.textTheme.bodyLarge?.color ??
+            (isDark ? Colors.white : Colors.black);
+        final secondaryTextColor =
+            theme.textTheme.bodyMedium?.color?.withOpacity(0.7) ??
+                (isDark ? Colors.grey : Colors.grey[600]);
+
+        // Stock performance colors
+        final positiveColor = isDark ? const Color(0xFF00FF88) : Colors.green;
+        final negativeColor = isDark ? const Color(0xFFFF4444) : Colors.red;
+        final performanceColor = isPositive ? positiveColor : negativeColor;
 
         return InkWell(
           onTap: () {
             Get.toNamed('/stocks/${(stock.stckname.toUpperCase())}');
           },
+          borderRadius: BorderRadius.circular(12),
           child: Container(
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF1A1A1B),
+              color: cardColor,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: stock.pcnt > 0
-                    ? const Color(0xFF00FF88).withValues(alpha: 0.3)
-                    : const Color(0xFFFF4444).withValues(alpha: 0.3),
+                color: performanceColor.withOpacity(0.3),
+                width: 1,
               ),
+              boxShadow: isDark
+                  ? null
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
             ),
             child: Row(
               children: [
@@ -86,14 +126,14 @@ class SectorStocksPage extends StatelessWidget {
                     placeholder: (context, url) => ClipRRect(
                       borderRadius: BorderRadius.circular(25),
                       child: Image.asset(
-                        'assets/images/option_xi_w.png',
+                        'assets/images/stockdefault.png',
                         fit: BoxFit.cover,
                       ),
                     ),
                     errorWidget: (context, url, error) => ClipRRect(
                       borderRadius: BorderRadius.circular(25),
                       child: Image.asset(
-                        'assets/images/option_xi_w.png',
+                        'assets/images/stockdefault.png',
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -106,27 +146,28 @@ class SectorStocksPage extends StatelessWidget {
                     children: [
                       Text(
                         stock.stckname.split("-")[0].split(":")[1],
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: primaryTextColor,
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                       const SizedBox(height: 4),
-                      Row(
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
                             'High: ₹${stock.high.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.grey,
+                            style: TextStyle(
+                              color: secondaryTextColor,
                               fontSize: 12,
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(height: 2),
                           Text(
                             'Low: ₹${stock.low.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              color: Colors.grey,
+                            style: TextStyle(
+                              color: secondaryTextColor,
                               fontSize: 12,
                             ),
                           ),
@@ -140,27 +181,24 @@ class SectorStocksPage extends StatelessWidget {
                   children: [
                     Text(
                       '₹${stock.close.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: primaryTextColor,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
+                    const SizedBox(height: 4),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
-                        color: stock.pcnt > 0
-                            ? const Color(0xFF00FF88).withValues(alpha: 0.2)
-                            : const Color(0xFFFF4444).withValues(alpha: 0.2),
+                        color: performanceColor.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         '${stock.pcnt > 0 ? '+' : ''}${stock.pcnt.toStringAsFixed(2)}%',
                         style: TextStyle(
-                          color: stock.pcnt > 0
-                              ? const Color(0xFF00FF88)
-                              : const Color(0xFFFF4444),
+                          color: performanceColor,
                           fontWeight: FontWeight.bold,
                           fontSize: 12,
                         ),

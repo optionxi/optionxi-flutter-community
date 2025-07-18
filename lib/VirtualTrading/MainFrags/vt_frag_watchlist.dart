@@ -54,7 +54,7 @@ class _FNOPageState extends State<FNOPage> with TickerProviderStateMixin {
         child: Column(
           children: [
             // Fixed scrolling text at bottom
-            Expanded(
+            Flexible(
               child: NestedScrollView(
                 headerSliverBuilder: (context, innerBoxIsScrolled) => [
                   // Collapsible header
@@ -68,15 +68,16 @@ class _FNOPageState extends State<FNOPage> with TickerProviderStateMixin {
                     ),
                   ),
                   // Collapsible search bar
-                  SliverPersistentHeader(
-                    floating: false,
-                    pinned: false,
-                    delegate: CollapsibleHeaderDelegate(
-                      minHeight: 0,
-                      maxHeight: 60, // Adjust based on your search bar height
-                      child: _buildSearchBar(context),
-                    ),
-                  ),
+                  // SliverPersistentHeader(
+                  //   floating: false,
+                  //   pinned: false,
+                  //   delegate: CollapsibleHeaderDelegate(
+                  //     minHeight: 0,
+                  //     maxHeight: 60, // Adjust based on your search bar height
+                  //     child: _buildSearchBar(context),
+                  //   ),
+                  // ),
+
                   // Pinned tab bar
                   SliverPersistentHeader(
                     pinned: true,
@@ -145,34 +146,34 @@ class _FNOPageState extends State<FNOPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildSearchBar(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: TextField(
-        onChanged: fnoController.updateSearchQuery,
-        decoration: InputDecoration(
-          hintText: 'Search stocks or options...',
-          prefixIcon: Icon(Icons.search),
-          filled: true,
-          fillColor: Theme.of(context).cardColor,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Theme.of(context).dividerColor),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Theme.of(context).dividerColor),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide:
-                BorderSide(color: Theme.of(context).colorScheme.primary),
-          ),
-        ),
-        style: GoogleFonts.poppins(fontSize: 14),
-      ),
-    );
-  }
+  // Widget _buildSearchBar(BuildContext context) {
+  //   return Padding(
+  //     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+  //     child: TextField(
+  //       onChanged: fnoController.updateSearchQuery,
+  //       decoration: InputDecoration(
+  //         hintText: 'Search stocks or options...',
+  //         prefixIcon: Icon(Icons.search),
+  //         filled: true,
+  //         fillColor: Theme.of(context).cardColor,
+  //         border: OutlineInputBorder(
+  //           borderRadius: BorderRadius.circular(12),
+  //           borderSide: BorderSide(color: Theme.of(context).dividerColor),
+  //         ),
+  //         enabledBorder: OutlineInputBorder(
+  //           borderRadius: BorderRadius.circular(12),
+  //           borderSide: BorderSide(color: Theme.of(context).dividerColor),
+  //         ),
+  //         focusedBorder: OutlineInputBorder(
+  //           borderRadius: BorderRadius.circular(12),
+  //           borderSide:
+  //               BorderSide(color: Theme.of(context).colorScheme.primary),
+  //         ),
+  //       ),
+  //       style: GoogleFonts.poppins(fontSize: 14),
+  //     ),
+  //   );
+  // }
 
   Widget _buildTabBar(BuildContext context) {
     return Container(

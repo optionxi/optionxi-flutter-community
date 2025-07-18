@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:optionxi/Main_Pages/act_leaderboard.dart';
+import 'package:optionxi/VirtualTrading/VComponents/cust_info_section_item.dart';
 import 'package:optionxi/VirtualTrading/act_broker_connectpage.dart';
 
 class FragTradingHub extends StatefulWidget {
@@ -132,22 +133,19 @@ class _FragTradingHubState extends State<FragTradingHub>
               ),
             ),
             SizedBox(height: 16),
-            _buildActionItem(
+            buildActionItem(
               title: 'Live Virtual Trading',
               subtitle: 'Trade with live data, broker connect',
               icon: FontAwesomeIcons.chartLine,
               color: Color(0xFF667EEA),
               onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => BrokerConnectPage()),
-                );
+                showCommingSoon();
               },
               isDark: isDark,
               badge: 'BETA',
             ),
             SizedBox(height: 12),
-            _buildActionItem(
+            buildActionItem(
               title: 'Leaderboard',
               subtitle: 'Show top traders and rankings',
               icon: FontAwesomeIcons.trophy,
@@ -161,145 +159,32 @@ class _FragTradingHubState extends State<FragTradingHub>
               isDark: isDark,
             ),
             SizedBox(height: 12),
-            _buildActionItem(
+            buildActionItem(
               title: 'Organizational Request',
               subtitle: 'Request custom demo sessions & requirements',
               icon: FontAwesomeIcons.building,
               color: Color(0xFF4ECDC4),
-              onTap: () {},
+              onTap: () {
+                showCommingSoon();
+              },
               isDark: isDark,
             ),
             SizedBox(height: 12),
-            _buildActionItem(
+            buildActionItem(
               title: 'Connect Algo',
               subtitle: 'Deploy algo, place orders via app, needs API access',
               icon: FontAwesomeIcons.robot,
               color: Color(0xFF9B59B6),
-              onTap: () {},
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => BrokerConnectPage()),
+                );
+              },
               isDark: isDark,
               badge: 'API',
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionItem({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required VoidCallback onTap,
-    required bool isDark,
-    String? badge,
-  }) {
-    return Container(
-      height: 100,
-      decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.1)
-                : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: onTap,
-          child: Padding(
-            padding: EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: color.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: FaIcon(
-                    icon,
-                    color: color,
-                    size: 20,
-                  ),
-                ),
-                SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: GoogleFonts.poppins(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white : Colors.black87,
-                              ),
-                            ),
-                          ),
-                          if (badge != null) ...[
-                            SizedBox(width: 8),
-                            Container(
-                              padding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: color.withOpacity(0.1),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: color.withOpacity(0.3),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                badge,
-                                style: GoogleFonts.inter(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: color,
-                                  letterSpacing: 0.5,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        subtitle,
-                        style: GoogleFonts.inter(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey[400] : Colors.grey[600],
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                SizedBox(width: 8),
-                Icon(
-                  Icons.arrow_forward_ios,
-                  color:
-                      isDark ? Colors.white.withOpacity(0.5) : Colors.grey[400],
-                  size: 16,
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -453,6 +338,22 @@ class _FragTradingHubState extends State<FragTradingHub>
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  void showCommingSoon() {
+    final theme = Theme.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('This feature will be comming soon!, Stay tuned',
+            style: GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
+        backgroundColor:
+            theme.colorScheme.primary, // SnackBar consistent with primary color
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
         ),
       ),
     );

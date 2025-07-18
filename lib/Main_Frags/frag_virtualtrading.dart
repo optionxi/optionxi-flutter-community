@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:optionxi/Components/cust_badge_widget.dart';
+import 'package:optionxi/Components/cust_notice_section.dart';
+import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_portfolio.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_watchlist.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_tradinghub.dart';
@@ -7,7 +10,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_orders.dart';
 
 class VirtualTradingFragment extends StatefulWidget {
-  const VirtualTradingFragment({Key? key}) : super(key: key);
+  final int? initialFragIndex;
+
+  const VirtualTradingFragment({Key? key, this.initialFragIndex})
+      : super(key: key);
 
   @override
   State<VirtualTradingFragment> createState() => _VirtualTradingFragmentState();
@@ -19,17 +25,36 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
   int _currentPageIndex = 0;
   bool _hasShownPopup = false;
 
+  // Badge counts
+  int _ordersBadgeCount = 0;
+  int _portfolioBadgeCount = 0;
+
   @override
   void initState() {
     super.initState();
+    _currentPageIndex = widget.initialFragIndex ?? 0;
+
     _controller = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     )..forward();
 
-    // Show popup after widget is built
+    // Load badge counts
+    _loadBadgeCounts();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showEducationalPopup();
+    });
+  }
+
+  // Load badge counts from SharedPreferences
+  Future<void> _loadBadgeCounts() async {
+    final ordersBadge = await BadgeService.getOrdersBadgeCount();
+    final portfolioBadge = await BadgeService.getPortfolioBadgeCount();
+
+    setState(() {
+      _ordersBadgeCount = ordersBadge;
+      _portfolioBadgeCount = portfolioBadge;
     });
   }
 
@@ -49,7 +74,7 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
     if (lastDismissedStr != null) {
       final lastDismissed = DateTime.tryParse(lastDismissedStr);
       if (lastDismissed != null && now.difference(lastDismissed).inHours < 24) {
-        return; // Don't show if it's been dismissed within the last 24 hours
+        return;
       }
     }
 
@@ -178,7 +203,22 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
     );
   }
 
-  void _onBottomNavItemTapped(int index) {
+  void _onBottomNavItemTapped(int index) async {
+    // Clear badge when user taps on the respective tab
+    if (index == 1) {
+      // Orders tab
+      await BadgeService.clearOrdersBadge();
+      setState(() {
+        _ordersBadgeCount = 0;
+      });
+    } else if (index == 2) {
+      // Portfolio tab
+      await BadgeService.clearPortfolioBadge();
+      setState(() {
+        _portfolioBadgeCount = 0;
+      });
+    }
+
     setState(() {
       _currentPageIndex = index;
     });
@@ -193,16 +233,31 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
       FNOPage(),
       OrdersPage(),
       PortfolioFragmentPrev(),
-      FragTradingHub(), // Settings page (placeholder)
+      FragTradingHub(),
     ];
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        transitionBuilder: (child, animation) =>
-            FadeTransition(opacity: animation, child: child),
-        child: pages[_currentPageIndex],
+      body: Column(
+        children: [
+          // NoticesSection at the top - normal flow
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+              child: NoticesSection(),
+            ),
+          ),
+          // Main content - takes remaining space
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 400),
+              transitionBuilder: (child, animation) =>
+                  FadeTransition(opacity: animation, child: child),
+              child: pages[_currentPageIndex],
+            ),
+          ),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
@@ -215,82 +270,125 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
             ),
           ),
         ),
-        child: BottomNavigationBar(
-          currentIndex: _currentPageIndex,
-          onTap: _onBottomNavItemTapped,
-          type: BottomNavigationBarType.fixed,
-          selectedItemColor: theme.colorScheme.primary,
-          unselectedItemColor: theme.colorScheme.onSurface.withOpacity(0.6),
-          backgroundColor: theme.scaffoldBackgroundColor,
-          selectedLabelStyle:
-              GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
-          unselectedLabelStyle:
-              GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 12),
-          elevation: 0,
-          items: [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.visibility_outlined),
-              activeIcon: Container(
-                padding: EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+        child: Stack(
+          children: [
+            BottomNavigationBar(
+              currentIndex: _currentPageIndex,
+              onTap: _onBottomNavItemTapped,
+              type: BottomNavigationBarType.fixed,
+              selectedItemColor: theme.colorScheme.primary,
+              unselectedItemColor: theme.colorScheme.onSurface.withOpacity(0.6),
+              backgroundColor: theme.scaffoldBackgroundColor,
+              selectedLabelStyle:
+                  GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
+              unselectedLabelStyle:
+                  GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 12),
+              elevation: 0,
+              items: [
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.visibility_outlined),
+                  activeIcon: Container(
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.visibility,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  label: 'Watchlist',
                 ),
-                child: Icon(
-                  Icons.visibility,
-                  color: theme.colorScheme.primary,
+                BottomNavigationBarItem(
+                  icon: BadgeWidget(
+                    count: _ordersBadgeCount,
+                    child: Icon(Icons.list_alt_outlined),
+                  ),
+                  activeIcon: BadgeWidget(
+                    count: _ordersBadgeCount,
+                    child: Container(
+                      padding: EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.list_alt,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  label: 'Orders',
                 ),
-              ),
-              label: 'Watchlist',
+                BottomNavigationBarItem(
+                  icon: BadgeWidget(
+                    count: _portfolioBadgeCount,
+                    child: Icon(Icons.donut_small_outlined),
+                  ),
+                  activeIcon: BadgeWidget(
+                    count: _portfolioBadgeCount,
+                    child: Container(
+                      padding: EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Icon(
+                        Icons.donut_small,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  label: 'Portfolio',
+                ),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.wallet),
+                  activeIcon: Container(
+                    padding: EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Icon(
+                      Icons.wallet,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  label: 'Trade Hub',
+                ),
+              ],
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.list_alt_outlined),
-              activeIcon: Container(
-                padding: EdgeInsets.all(6),
+            // Selection border indicator
+            Positioned(
+              top: 0,
+              left:
+                  (_currentPageIndex * MediaQuery.of(context).size.width / 4) +
+                      (MediaQuery.of(context).size.width / 4 - 40) / 2,
+              child: Container(
+                width: 40,
+                height: 3,
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.list_alt,
                   color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              label: 'Orders',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.donut_small_outlined),
-              activeIcon: Container(
-                padding: EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.donut_small,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              label: 'Portfolio',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.wallet),
-              activeIcon: Container(
-                padding: EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  Icons.wallet,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-              label: 'Trade Hub',
             ),
           ],
         ),
       ),
     );
+  }
+}
+
+// 4. Example of how to increment badges from anywhere in your app
+class ExampleOrderTrigger {
+  static Future<void> triggerOrder() async {
+    // When an order gets triggered, increment both badges
+    await BadgeService.incrementOrdersBadge();
+    await BadgeService.incrementPortfolioBadge();
+
+    // You can also trigger a rebuild of the VirtualTradingFragment
+    // by using a state management solution like Provider, Bloc, or Riverpod
   }
 }

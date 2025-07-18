@@ -15,6 +15,7 @@ class Constants {
 
   static const double ADVIEW_BAL = 5000;
   static const double INITAL_BAL_LIVE = 300000.0;
+  static const double INITAL_BAL_PREV = 300000.0;
   static const int BANKNIFTY_LOTSIZE = 35;
   static const int NIFTY_LOTSIZE = 75;
 

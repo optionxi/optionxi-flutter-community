@@ -869,14 +869,14 @@ class _OrdersPageState extends State<OrdersPage>
                     dividerColor, cardColor)
                 .animate()
                 .fadeIn(
-                  duration: Duration(milliseconds: 300),
-                  delay: Duration(milliseconds: index * 50),
+                  duration: Duration(milliseconds: 100),
+                  delay: Duration(milliseconds: index * 10),
                 )
                 .slideY(
                   begin: 0.1,
                   end: 0,
-                  duration: Duration(milliseconds: 300),
-                  delay: Duration(milliseconds: index * 50),
+                  duration: Duration(milliseconds: 100),
+                  delay: Duration(milliseconds: index * 10),
                 ),
           );
         },
@@ -998,8 +998,9 @@ class _OrdersPageState extends State<OrdersPage>
                     secondaryTextColor),
                 if (order['status'] != 'rejected')
                   _buildDetailItem(
-                      'Value',
-                      order['rupees'],
+                      'Price',
+                      // order['rupees'],
+                      order['executedPrice'].toString(),
                       Icons.currency_rupee_rounded,
                       textColor,
                       secondaryTextColor),
@@ -1007,8 +1008,7 @@ class _OrdersPageState extends State<OrdersPage>
                     Icons.category_rounded, textColor, secondaryTextColor),
               ],
             ),
-            if (order['status'] == 'completed' &&
-                order['totalCharges'] != null) ...[
+            if (order['status'] == 'completed' && order['rupees'] != null) ...[
               const SizedBox(height: 12),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -1021,14 +1021,20 @@ class _OrdersPageState extends State<OrdersPage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text('Total Charges:',
-                        style:
-                            TextStyle(fontSize: 12, color: secondaryTextColor)),
-                    Text('₹${order['totalCharges'].toStringAsFixed(2)}',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: textColor)),
+                    Text(
+                      order['rupees'] != null
+                          ? 'Total Value:'
+                          : 'Total Charges:',
+                      style: TextStyle(fontSize: 12, color: secondaryTextColor),
+                    ),
+                    Text(
+                      '${order['rupees']}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: textColor,
+                      ),
+                    ),
                   ],
                 ),
               ),

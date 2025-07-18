@@ -1,12 +1,13 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/Components/cust_notice_section.dart';
+import 'package:optionxi/Components/cust_top_tutors.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
-import 'package:optionxi/Main_Pages/act_leaderboard.dart';
+import 'package:optionxi/Components/home_top_leaderboard.dart';
+import 'package:optionxi/Components/trending_stocks_section.dart';
+import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Main_Pages/act_search_stocks.dart';
-import 'package:optionxi/Main_Pages/act_traderprofile.dart';
-import 'package:optionxi/Main_Pages/act_tradingideas.dart';
-import 'package:optionxi/Main_Pages/cust_top_stocks_component.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -21,39 +22,7 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
       FirebaseAuth.instance.currentUser?.displayName ?? "OptionXi";
 
   late AnimationController _controller;
-  late TabController _tabController;
   final ThemeController themeController = Get.put(ThemeController());
-
-  final List<GroupData> yourGroups = [
-    GroupData(
-      name: "Nifty and Bank",
-      memberCount: 11,
-      activityCount: "110+ trades",
-      color: Color(0xFF2962FF),
-      isLeader: true,
-    ),
-    GroupData(
-      name: "Nifty 50 Stocks",
-      memberCount: 8,
-      activityCount: "130+ trades",
-      color: Color(0xFF6200EA),
-      isLeader: true,
-    ),
-    GroupData(
-      name: "Nifty 200 Stocks",
-      memberCount: 8,
-      activityCount: "130+ trades",
-      color: Color(0xFF2962FF),
-      isLeader: true,
-    ),
-    GroupData(
-      name: "FnO Stocks",
-      memberCount: 8,
-      activityCount: "130+ trades",
-      color: Color(0xFF6200EA),
-      isLeader: true,
-    ),
-  ];
 
   @override
   void initState() {
@@ -62,55 +31,13 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     )..forward();
-    _tabController = TabController(length: 2, vsync: this);
     // themeController.initTheme();
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _tabController.dispose();
     super.dispose();
-  }
-
-  void _showInfoDialog() {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text(
-            'About Signal Count',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'The signal count represents the number of technical screeners that have identified this stock with a bullish/bearish trend.',
-                style: const TextStyle(fontSize: 14, height: 1.5),
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'A higher signal count indicates stronger consensus across multiple technical indicators, suggesting a higher probability of price movement in the bullish/bearish direction.',
-                style: const TextStyle(fontSize: 14, height: 1.5),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'This metric combines various technical analyses to provide a comprehensive view of market sentiment, helping you identify stocks with the strongest directional signals.',
-                style: TextStyle(fontSize: 14, height: 1.5),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Got it'),
-            ),
-          ],
-        );
-      },
-    );
   }
 
   @override
@@ -198,102 +125,45 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     //       curve: Interval(0.3, 0.5, curve: Curves.easeOut),
                     //     ),
                     //   ),
-                    //   child: _buildYourGroupsSection(),
+                    //   child: buildTradingIdeas(context, _controller),
                     // ),
+                    NoticesSection(),
+                    TrendingStocksSection(),
                     const SizedBox(height: 24),
-                    SlideTransition(
-                      position: Tween<Offset>(
-                        begin: Offset(0, 0.8),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: _controller,
-                          curve: Interval(0.3, 0.5, curve: Curves.easeOut),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Trending Stocks",
-                            style: Theme.of(context)
-                                .textTheme
-                                .titleLarge
-                                ?.copyWith(
-                                  fontSize: 20,
-                                ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Header
-                    SlideTransition(
-                      position: Tween<Offset>(
-                        begin: Offset(0, 0.9),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: _controller,
-                          curve: Interval(0.3, 0.5, curve: Curves.easeOut),
-                        ),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment
-                            .start, // Good for multi-line text alignment
-
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'These stock selections are filtered using technical indicators and are provided for educational purposes only. They do not constitute financial advice.',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: _showInfoDialog,
-                            child: Container(
-                              padding: const EdgeInsets.all(4),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.withValues(alpha: 0.1),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(
-                                Icons.info_outline,
-                                size: 16,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _buildStocksTabSection(),
+                    TradingTutorsScreen(),
                     const SizedBox(height: 24),
                     InkWell(
-                        onTap: () async {
+                      onTap: () async {
+                        try {
+                          final String email = 'optionxi24@gmail.com';
+                          final String subject = 'Algo Trading';
+                          final String body =
+                              'Hello, Kindly guide me through the process of deploying algo in cloud.';
+
                           final Uri emailLaunchUri = Uri(
                             scheme: 'mailto',
-                            path: 'optionxi24@gmail.com',
-                            // Optional query parameters:
+                            path: email,
                             queryParameters: {
-                              'subject': 'Algo Trading',
-                              'body':
-                                  'Hello, Kindly guide me through the process of deploying algo in cloud,'
+                              'subject': subject,
+                              'body': body,
                             },
                           );
 
                           if (await canLaunchUrl(emailLaunchUri)) {
-                            await launchUrl(emailLaunchUri);
+                            await launchUrl(
+                              emailLaunchUri,
+                              mode: LaunchMode.externalApplication,
+                            );
                           } else {
                             print('Could not launch email client');
+                            // Optional: Show a snackbar or dialog to inform user
                           }
-                        },
-                        child: _buildCtaSection()),
+                        } catch (e) {
+                          print('Error launching email: $e');
+                        }
+                      },
+                      child: _buildCtaSection(),
+                    ),
                     const SizedBox(height: 24),
                     // SlideTransition(
                     //   position: Tween<Offset>(
@@ -307,6 +177,8 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     //   ),
                     //   child: _buildOtherGroupsSection(),
                     // ),
+                    LeaderboardWidgetMain(),
+                    // const SizedBox(height: 24),
                   ],
                 );
               },
@@ -314,87 +186,6 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildStocksTabSection() {
-    return Column(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Theme.of(context).shadowColor.withValues(alpha: 0.08),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: TabBar(
-            controller: _tabController,
-            indicator: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.secondary,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            indicatorSize: TabBarIndicatorSize.tab,
-            dividerColor: Colors.transparent,
-            labelColor: Colors.white,
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
-            labelStyle: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-            unselectedLabelStyle: const TextStyle(
-              fontWeight: FontWeight.w500,
-              fontSize: 16,
-            ),
-            tabs: const [
-              Tab(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.trending_up, size: 20),
-                    SizedBox(width: 8),
-                    Text('Bullish'),
-                  ],
-                ),
-              ),
-              Tab(
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.trending_down, size: 20),
-                    SizedBox(width: 8),
-                    Text('Bearish'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        AnimatedBuilder(
-          animation: _tabController,
-          builder: (context, _) {
-            return IndexedStack(
-              index: _tabController.index,
-              children: const [
-                TopStocksHeatMap(category: 'bullish'),
-                TopStocksHeatMap(category: 'bearish'),
-              ],
-            );
-          },
-        ),
-      ],
     );
   }
 
@@ -418,9 +209,14 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(40),
                 ),
-                child: Icon(Icons.currency_exchange, color: Colors.white),
+                child: CircleAvatar(
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  backgroundImage:
+                      const AssetImage('assets/images/option_xi_w.png')
+                          as ImageProvider,
+                ),
               ),
               const SizedBox(width: 12),
               Text(
@@ -434,7 +230,10 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
           ),
           Row(
             children: [
-              _buildIconButton(Icons.notifications_outlined),
+              // _buildIconButton(Icons.notifications_outlined,
+              //     onPressed: gotoNofitication),
+              _buildNotificationIcon(Icons.notifications_outlined,
+                  onPressed: gotoNofitication),
               const SizedBox(width: 8),
               Obx(() => _buildIconButton(
                     themeController.isDarkMode
@@ -444,12 +243,8 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                   )),
               const SizedBox(width: 8),
               InkWell(
-                onTap: () {
-                  // Navigator.push(
-                  //   context,
-                  //   MaterialPageRoute(
-                  //       builder: (context) => TraderProfilePage()),
-                  // );
+                onTap: () async {
+                  // await BadgeService.incrementNotificationsBadge();
                 },
                 child: Container(
                   decoration: BoxDecoration(
@@ -461,7 +256,7 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(40),
                   ),
                   padding: EdgeInsets.all(2),
                   child: CircleAvatar(
@@ -491,13 +286,86 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
       ),
       child: IconButton(
         icon: Icon(icon),
-        onPressed: onPressed ??
-            () {
-              // GlobalSnackBarGet().showGetSucess(
-              //     "Comming Soon", "Please wait while our team iworks on it");
-            },
+        onPressed: onPressed,
         color: Theme.of(context).iconTheme.color,
       ),
+    );
+  }
+
+  Widget _buildNotificationIcon(IconData icon, {VoidCallback? onPressed}) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        GestureDetector(
+          onTap: onPressed ??
+              () {
+                // GlobalSnackBarGet().showGetSucess(
+                //     "Comming Soon", "Please wait while our team iworks on it");
+              },
+          child: Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: IconButton(
+              icon: Icon(
+                icon,
+                color: Theme.of(context).iconTheme.color,
+              ),
+              onPressed: null, // Disabled since GestureDetector handles the tap
+            ),
+          ),
+        ),
+        Positioned(
+          right: -4,
+          top: -4,
+          child: StreamBuilder<int>(
+            stream: BadgeService
+                .notificationsStreamWithInitial, // Use the enhanced stream
+            builder: (context, snapshot) {
+              // Show loading state while waiting for initial data
+              if (!snapshot.hasData) {
+                return const SizedBox.shrink();
+              }
+
+              final count = snapshot.data!;
+              if (count == 0) return const SizedBox.shrink();
+
+              return Container(
+                // Add minimum width and height to ensure circular shape
+                constraints: const BoxConstraints(
+                  minWidth: 20,
+                  minHeight: 20,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.red,
+                  shape: BoxShape.circle, // This makes it a perfect circle
+                ),
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(4),
+                    child: Text(
+                      count.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        )
+      ],
     );
   }
 
@@ -518,176 +386,6 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
               ),
         ),
       ],
-    );
-  }
-
-  Widget _buildYourGroupsSection() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Trading Communities",
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontSize: 20,
-                  ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (context) => TradingIdeasPage()));
-              },
-              child: Text(
-                "See All",
-                style: TextStyle(color: Theme.of(context).colorScheme.primary),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        SizedBox(
-          height: 180,
-          child: ListView.builder(
-            physics: BouncingScrollPhysics(),
-            scrollDirection: Axis.horizontal,
-            itemCount: yourGroups.length,
-            itemBuilder: (context, index) {
-              return InkWell(
-                  onTap: () {
-                    Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => TradingIdeasPage()));
-                  },
-                  child: _buildGroupCard(yourGroups[index], index));
-            },
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGroupCard(GroupData group, int index) {
-    return SlideTransition(
-      position: Tween<Offset>(
-        begin: Offset(0.2, 0),
-        end: Offset.zero,
-      ).animate(
-        CurvedAnimation(
-          parent: _controller,
-          curve:
-              Interval(0.1 * index, 0.1 * index + 0.2, curve: Curves.easeOut),
-        ),
-      ),
-      child: Container(
-        width: 220,
-        margin: const EdgeInsets.only(right: 16),
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [group.color, group.color.withValues(alpha: 0.8)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: group.color.withValues(alpha: 0.3),
-              blurRadius: 8,
-              offset: Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const Icon(Icons.bar_chart, color: Colors.white),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    group.name,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            if (group.isLeader)
-              Container(
-                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.star, color: Colors.yellow, size: 16),
-                    SizedBox(width: 4),
-                    Text(
-                      "Leader",
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ],
-                ),
-              ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 72,
-                  height: 24,
-                  child: Stack(
-                    children: [
-                      for (var i = 0; i < 3; i++)
-                        Positioned(
-                          left: i * 20.0,
-                          child: Container(
-                            decoration: BoxDecoration(
-                              border: Border.all(color: group.color, width: 2),
-                              shape: BoxShape.circle,
-                            ),
-                            child: const CircleAvatar(
-                              radius: 12,
-                              backgroundColor: Colors.white,
-                              child: Icon(Icons.person,
-                                  size: 16, color: Colors.black87),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-                Text(
-                  "+${group.memberCount}",
-                  style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                group.activityCount,
-                style: TextStyle(color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -734,8 +432,9 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     path: 'optionxi24@gmail.com',
                     // Optional query parameters:
                     queryParameters: {
-                      'subject': 'Your Subject',
-                      'body': 'Hello, this is the body of the email.'
+                      'subject': 'Deploy my algo - OptionXi',
+                      'body':
+                          'Kindly help me deploy the algo, my mobile number is '
                     },
                   );
 
@@ -787,220 +486,13 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
     );
   }
 
-  Widget _buildOtherGroupsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              "Intraday Leaderboard",
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontSize: 20,
-                  ),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (context) => LeaderboardPage()));
-              },
-              child: Text(
-                "See All",
-                style: TextStyle(color: Theme.of(context).colorScheme.primary),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TraderProfilePage()),
-            );
-          },
-          child: _buildOtherGroupItem(
-            "Jibin Victor",
-            "Member",
-            Icons.person_4_rounded,
-          ),
-        ),
-        InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TraderProfilePage()),
-            );
-          },
-          child: _buildOtherGroupItem(
-            "Madara Uchiha",
-            "Elite Member",
-            Icons.person_4_rounded,
-          ),
-        ),
-        InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TraderProfilePage()),
-            );
-          },
-          child: _buildOtherGroupItem(
-            "Ittachi",
-            "Member",
-            Icons.person_4_rounded,
-          ),
-        ),
-        InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TraderProfilePage()),
-            );
-          },
-          child: _buildOtherGroupItem(
-            "Izuna",
-            "Member",
-            Icons.person_4_rounded,
-          ),
-        ),
-        InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => TraderProfilePage()),
-            );
-          },
-          child: _buildOtherGroupItem(
-            "Konan",
-            "Elite Member",
-            Icons.person_4_rounded,
-          ),
-        ),
-      ],
+  void gotoNofitication() async {
+    await BadgeService.clearNotificationsBadge();
+    await Navigator.pushNamed(
+      context,
+      '/messages',
+      arguments: {},
     );
+    setState(() {});
   }
-
-  Widget _buildOtherGroupItem(String name, String role, IconData icon) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).shadowColor.withValues(alpha: 0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-        border: Border.all(
-          color:
-              Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.12),
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  Theme.of(context).colorScheme.primary,
-                  Theme.of(context).colorScheme.secondary,
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .primary
-                      .withValues(alpha: 0.3),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2),
-                ),
-              ],
-            ),
-            child: Icon(icon,
-                color: Theme.of(context).colorScheme.onPrimary, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).colorScheme.onSurface,
-                      ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surfaceVariant,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    role,
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Material(
-            color: Colors.transparent,
-            borderRadius: BorderRadius.circular(20),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () {},
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Icon(
-                  Icons.more_horiz,
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withValues(alpha: 0.6),
-                  size: 22,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class GroupData {
-  final String name;
-  final int memberCount;
-  final String activityCount;
-  final Color color;
-  final bool isLeader;
-
-  GroupData({
-    required this.name,
-    required this.memberCount,
-    required this.activityCount,
-    required this.color,
-    required this.isLeader,
-  });
 }

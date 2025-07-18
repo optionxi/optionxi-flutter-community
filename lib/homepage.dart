@@ -13,7 +13,14 @@ import 'package:optionxi/Main_Frags/frag_watchlist.dart';
 import 'package:optionxi/Main_Frags/frag_profile.dart';
 
 class Homepage extends StatefulWidget {
-  const Homepage({Key? key}) : super(key: key);
+  final int initialIndex;
+  final int? tradeFragIndex;
+
+  const Homepage({
+    Key? key,
+    this.initialIndex = 0,
+    this.tradeFragIndex,
+  }) : super(key: key);
 
   @override
   State<Homepage> createState() => _HomepageState();
@@ -30,6 +37,8 @@ class _HomepageState extends State<Homepage> {
   @override
   void initState() {
     super.initState();
+    currentIndex = widget.initialIndex; // Set initial index
+
     fetchRemoteConfig();
   }
 
@@ -42,7 +51,9 @@ class _HomepageState extends State<Homepage> {
       case 0:
         return TradingHomeScreen();
       case 1:
-        return VirtualTradingFragment();
+        return VirtualTradingFragment(
+          initialFragIndex: widget.tradeFragIndex, // Pass the fragment index
+        );
       case 2:
         return WatchlistPage();
       case 3:
@@ -57,11 +68,13 @@ class _HomepageState extends State<Homepage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AnimatedSwitcher(
-        duration: 400.ms,
-        transitionBuilder: (child, animation) =>
-            FadeTransition(opacity: animation, child: child),
-        child: getPage(currentIndex), // <-- rebuilt dynamically
+      body: SafeArea(
+        child: AnimatedSwitcher(
+          duration: 400.ms,
+          transitionBuilder: (child, animation) =>
+              FadeTransition(opacity: animation, child: child),
+          child: getPage(currentIndex), // <-- rebuilt dynamically
+        ),
       ),
       bottomNavigationBar: CustomBottomNavBar(
         currentIndex: currentIndex,

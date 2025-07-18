@@ -35,9 +35,10 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
   void _copyUrl() {
     Clipboard.setData(ClipboardData(text: widget.url));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('URL copied to clipboard'),
-        duration: Duration(seconds: 2),
+      SnackBar(
+        content: const Text('URL copied to clipboard'),
+        duration: const Duration(seconds: 2),
+        backgroundColor: Theme.of(context).colorScheme.inverseSurface,
       ),
     );
   }
@@ -45,6 +46,7 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
   void _showMoreOptions() {
     showModalBottomSheet(
       context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -53,16 +55,32 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
           child: Wrap(
             children: [
               ListTile(
-                leading: const Icon(Icons.open_in_browser),
-                title: const Text('Open in External Browser'),
+                leading: Icon(
+                  Icons.open_in_browser,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                title: Text(
+                  'Open in External Browser',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   _openInExternalBrowser();
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.copy),
-                title: const Text('Copy URL'),
+                leading: Icon(
+                  Icons.copy,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                title: Text(
+                  'Copy URL',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
                 onTap: () {
                   Navigator.pop(context);
                   _copyUrl();
@@ -77,12 +95,16 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final brightness = theme.brightness;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         elevation: 0,
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black87,
+        backgroundColor: colorScheme.background,
+        foregroundColor: colorScheme.onBackground,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, size: 20),
           onPressed: _handleBackPress,
@@ -93,9 +115,10 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
           children: [
             Text(
               _currentTitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
+                color: colorScheme.onBackground,
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -104,7 +127,7 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
                 Uri.parse(widget.url).host,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: colorScheme.onBackground.withOpacity(0.6),
                   fontWeight: FontWeight.w400,
                 ),
                 overflow: TextOverflow.ellipsis,
@@ -123,7 +146,9 @@ class _BrowserLite_VState extends State<BrowserLite_V> {
             tooltip: 'More Options',
           ),
         ],
-        systemOverlayStyle: SystemUiOverlayStyle.dark,
+        systemOverlayStyle: brightness == Brightness.dark
+            ? SystemUiOverlayStyle.light
+            : SystemUiOverlayStyle.dark,
       ),
       body: SafeArea(
         child: Column(

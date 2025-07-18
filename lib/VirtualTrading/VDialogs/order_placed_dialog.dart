@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:optionxi/Helpers/badge_service.dart';
 
 void showOrderConfiramationDialog(BuildContext context, String whichorder) {
   final theme = Theme.of(context);
@@ -29,24 +31,26 @@ void showOrderConfiramationDialog(BuildContext context, String whichorder) {
         //       style: GoogleFonts.inter(color: theme.colorScheme.primary)),
         // ),
         ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Please check the orders tab',
-                    style:
-                        GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
-                backgroundColor: theme.colorScheme
-                    .primary, // SnackBar consistent with primary color
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                duration: Duration(milliseconds: 1500),
-                margin: EdgeInsets.only(bottom: 70), // Add bottom margin
-              ),
-            );
-            Navigator.pop(context);
+            // ScaffoldMessenger.of(context).showSnackBar(
+            //   SnackBar(
+            //     content: Text('Please check the orders tab',
+            //         style:
+            //             GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
+            //     backgroundColor: theme.colorScheme
+            //         .primary, // SnackBar consistent with primary color
+            //     behavior: SnackBarBehavior.floating,
+            //     shape: RoundedRectangleBorder(
+            //       borderRadius: BorderRadius.circular(12),
+            //     ),
+            //     duration: Duration(milliseconds: 1500),
+            //     margin: EdgeInsets.only(bottom: 70), // Add bottom margin
+            //   ),
+            // );
+            // Navigator.pop(context);
+            await BadgeService.incrementPortfolioBadge();
+            Get.offAllNamed('/trade/orders');
           },
           child: Text('Okay', style: GoogleFonts.inter()),
           style: ElevatedButton.styleFrom(

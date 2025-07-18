@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-void showSubscriptionRequiredDialog(BuildContext context) {
+void showSubscriptionRequiredDialog(
+    BuildContext context, String title, String description) {
   final theme = Theme.of(context);
   showDialog(
     context: context,
@@ -11,12 +12,12 @@ void showSubscriptionRequiredDialog(BuildContext context) {
         borderRadius: BorderRadius.circular(20),
       ),
       title: Text(
-        'Premium Feature',
+        title,
         style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
       ),
       content: Text(
-        'This feature is only available to subscribed users. Contact customer support',
+        description,
         style: GoogleFonts.inter(
           color:
               theme.colorScheme.onSurface.withOpacity(0.8), // Use theme colors
@@ -29,8 +30,10 @@ void showSubscriptionRequiredDialog(BuildContext context) {
         //       style: GoogleFonts.inter(color: theme.colorScheme.primary)),
         // ),
         ElevatedButton(
-          onPressed: () {
+          onPressed: () async {
             Navigator.pop(context);
+            //  await BadgeService.incrementPortfolioBadge();
+            // Get.offAllNamed('/trade/orders');
           },
           child: Text('Okay', style: GoogleFonts.inter()),
           style: ElevatedButton.styleFrom(

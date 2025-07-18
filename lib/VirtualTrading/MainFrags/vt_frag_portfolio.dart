@@ -1030,7 +1030,7 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  dateFormatter.format(trade.executionTime),
+                  dateFormatter.format(trade.executionTime.toLocal()),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
@@ -1046,7 +1046,7 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  timeFormatter.format(trade.executionTime),
+                  timeFormatter.format(trade.executionTime.toLocal()),
                   style: GoogleFonts.inter(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,

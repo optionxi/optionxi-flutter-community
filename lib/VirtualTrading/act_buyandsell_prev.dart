@@ -2,13 +2,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
+import 'package:get/get.dart';
 import 'package:optionxi/Helpers/constants.dart';
+import 'package:optionxi/Helpers/conversions.dart';
 import 'package:optionxi/Helpers/lotsize_helper.dart';
+import 'package:optionxi/Main_Pages/act_atlas_page.dart';
+import 'package:optionxi/VirtualTrading/VComponents/cust_colorful_action_button.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/order_placed_dialog.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/subscription_required_dialog.dart';
 import 'package:optionxi/VirtualTrading/buyandsell_prev_loading.dart';
 import 'package:optionxi/browser_lite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class BuyandSellPagePrev extends StatefulWidget {
   final String? stockname;
@@ -36,10 +41,12 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   String _productType = 'INTRADAY'; // INTRADAY or NORMAL
   bool _isSubscribed = false;
   bool _isLoading = true;
+  bool _datafound = true;
   bool _isPlacingOrder = false;
 
   // Financial Data
-  double _availableBalance = 0.0;
+  double _originalAvailableBalance = Constants.INITAL_BAL_PREV;
+  double _projectedBalance = Constants.INITAL_BAL_PREV;
   double _marginRequired = 0.0;
   bool _hasShortPosition = false;
   int _shortPositionQuantity = 0;
@@ -90,9 +97,19 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
 
       if (mounted) {
         setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load data: $e')),
-        );
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //     // SnackBar(content: Text('Failed to load data: $e')),
+        //     SnackBar(
+        //   content: Text(
+        //     'Failed to load data',
+        //   ),
+        //   // SnackBar consistent with primary color
+        //   behavior: SnackBarBehavior.floating,
+        //   shape: RoundedRectangleBorder(
+        //     borderRadius: BorderRadius.circular(12),
+        //   ),
+        // ));
+        _datafound = false;
       }
     }
   }
@@ -156,7 +173,8 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
             .single();
         if (mounted) {
           setState(() {
-            _availableBalance = (response['balance'] ?? 0.0).toDouble();
+            _originalAvailableBalance = (response['balance'] ?? 0.0).toDouble();
+            _projectedBalance = _originalAvailableBalance;
           });
         }
       } catch (e) {
@@ -231,28 +249,26 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
         .subscribe();
   }
 
-  // Calculates the margin required for an order
+// Calculates the margin required for an order
   void _calculateMargin() {
     final qty = int.tryParse(_qtyController.text) ?? 0;
 
-    int lot = 1; // Default for EQ
-    if (widget.segment == "FNO") {
-      if (widget.stockname.toString().toUpperCase().startsWith("BANKNIFTY")) {
-        lot = 15; // Changed from 25 to 15
-      } else if (widget.stockname
-          .toString()
-          .toUpperCase()
-          .startsWith("NIFTY")) {
-        lot = 15; // Changed from 25 to 15
-      }
-    }
+    int lotsize = getLotSize(
+      segment: widget.segment,
+      stockName: widget.stockname,
+    );
 
     final price = _priceType == 'LIMIT'
         ? (double.tryParse(_limitController.text) ?? _currentPrice)
         : _currentPrice;
 
     setState(() {
-      _marginRequired = price * qty * lot;
+      _marginRequired = price * qty * lotsize;
+      if (_orderType == 'BUY') {
+        _projectedBalance = _originalAvailableBalance - _marginRequired;
+      } else {
+        _projectedBalance = _originalAvailableBalance + _marginRequired;
+      }
     });
   }
 
@@ -271,7 +287,32 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     if (!_formKey.currentState!.validate()) return;
 
     if (!_isSubscribed && (_priceType != 'MKT' || _productType == 'NORMAL')) {
-      showSubscriptionRequiredDialog(context);
+      showSubscriptionRequiredDialog(context, 'Premium Feature',
+          'This feature is only available to subscribed users. Contact customer support');
+      return;
+    }
+
+    // Check the indiantime, if 9:15am-3:30pm or 4pm-10:15pm, continue,
+    // Else call showSubscriptionRequiredDialog
+    // Get current time in IST
+    final ist = tz.getLocation('Asia/Kolkata');
+    final now = tz.TZDateTime.now(ist);
+
+    final morningStart =
+        tz.TZDateTime(ist, now.year, now.month, now.day, 9, 15);
+    final afternoonEnd =
+        tz.TZDateTime(ist, now.year, now.month, now.day, 15, 30);
+    final eveningStart =
+        tz.TZDateTime(ist, now.year, now.month, now.day, 16, 0);
+    final nightEnd = tz.TZDateTime(ist, now.year, now.month, now.day, 22, 15);
+
+    final isMarketHours =
+        (now.isAfter(morningStart) && now.isBefore(afternoonEnd)) ||
+            (now.isAfter(eveningStart) && now.compareTo(nightEnd) <= 0);
+
+    if (!isMarketHours) {
+      showSubscriptionRequiredDialog(context, 'Market Hours',
+          'Place orders only on market hours, 9:15 AM-3:30 PM or after market 4:00 PM-10:15 PM');
       return;
     }
 
@@ -347,7 +388,6 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     super.dispose();
   }
 
-  // Main Build Method
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -358,7 +398,6 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
           isDark ? const Color(0xFF0E0E0E) : const Color(0xFFF5F5F5),
       appBar: AppBar(
         title: Text(
-          // widget.stockname ?? 'Stock Trading',
           "Place Order",
           style: TextStyle(
             fontWeight: FontWeight.w600,
@@ -370,101 +409,98 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
         iconTheme: IconThemeData(
           color: isDark ? Colors.white : Colors.black87,
         ),
+        // Add chart button to app bar
+        actions: [
+          IconButton(
+            onPressed: () => _navigateToChart(context),
+            icon: Icon(
+              Icons.trending_up_rounded,
+              color: isDark ? Colors.white : Colors.black87,
+            ),
+            tooltip: 'View Chart',
+          ),
+        ],
       ),
-      body: _isLoading
-          ? StockTradingSkeleton(isDark: isDark)
-          : Column(
-              children: [
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          InkWell(
-                              onTap: () {
-                                if (widget.segment == "EQ") {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                        builder: (context) => BrowserLite_V(
-                                            "https://in.tradingview.com/chart/?symbol=NSE%3A" +
-                                                widget.stockname.toString())),
-                                  );
-                                }
-                                if (widget.segment == "FNO") {
-                                  if (widget.stockname
-                                      .toString()
-                                      .toUpperCase()
-                                      .startsWith("BANKNIFTY")) {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => BrowserLite_V(
-                                              "https://in.tradingview.com/chart/?symbol=" +
-                                                  "BANKNIFTY")),
-                                    );
-                                  } else {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                          builder: (context) => BrowserLite_V(
-                                              "https://in.tradingview.com/chart/?symbol=" +
-                                                  "NIFTY")),
-                                    );
-                                  }
-                                }
-                              },
-                              child: _buildStockInfoCard(isDark)),
-                          if (_hasShortPosition && _orderType == 'BUY') ...[
+      body: SafeArea(
+        child: _isLoading
+            ? StockTradingSkeleton(isDark: isDark)
+            : Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Stock info card with integrated chart and alerts buttons
+                            _buildStockInfoCardWithActions(isDark),
+                            if (_hasShortPosition && _orderType == 'BUY') ...[
+                              const SizedBox(height: 20),
+                              _buildShortPositionInfoCard(isDark),
+                            ],
+
                             const SizedBox(height: 20),
-                            _buildShortPositionInfoCard(isDark),
+                            _buildQuantityInput(isDark),
+                            const SizedBox(height: 20),
+
+                            _buildOrderTypeSelection(isDark),
+                            const SizedBox(height: 32),
+                            _buildProductTypeSelection(isDark),
+                            const SizedBox(height: 32),
+
+                            _buildPriceTypeSelection(isDark),
+                            const SizedBox(height: 32),
+                            // _buildBalanceCard(isDark),
+                            // const SizedBox(height: 20),
+                            if (_priceType != 'MKT') _buildPriceInputs(isDark),
+                            // _buildStockInfoCardWithActions(isDark),
                           ],
-                          const SizedBox(height: 20),
-                          _buildOrderTypeSelection(isDark),
-                          const SizedBox(height: 20),
-                          // NEW: Product Type Selection
-                          _buildProductTypeSelection(isDark),
-                          const SizedBox(height: 20),
-                          _buildQuantityInput(isDark),
-                          const SizedBox(height: 20),
-                          _buildPriceTypeSelection(isDark),
-                          const SizedBox(height: 16),
-                          if (_priceType != 'MKT') _buildPriceInputs(isDark),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-                // Sticky Bottom Bar
-                const SizedBox(height: 20),
-                // _buildBalanceCard(isDark),
-                // const SizedBox(height: 10),
-                _buildBottomBar(isDark),
-              ],
-            ),
+                  // Sticky Bottom Bar
+                  const SizedBox(height: 20),
+                  _buildBalanceCard(isDark),
+                  const SizedBox(height: 4),
+                  _buildBottomBuyandSellButton(isDark),
+                ],
+              ),
+      ),
     );
   }
 
-  // --- UI Builder Widgets ---
-
-  Widget _buildStockInfoCard(bool isDark) {
-    final Color gainColor = Colors.green.shade600;
-    final Color lossColor = Colors.red.shade600;
+// New method that combines stock info with action buttons
+  Widget _buildStockInfoCardWithActions(bool isDark) {
+    final Color gainColor =
+        isDark ? Colors.green.shade400 : Colors.green.shade700;
+    final Color lossColor = isDark ? Colors.red.shade400 : Colors.red.shade700;
     final Color changeColor = _percentChange >= 0 ? gainColor : lossColor;
 
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE0E0E0)),
+          color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5E5),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.3)
+                : Colors.grey.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
+          // Stock info section
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -474,9 +510,10 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                   Text(
                     widget.stockname ?? 'Unknown Stock',
                     style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87),
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+                    ),
                   ),
                 ],
               ),
@@ -494,14 +531,14 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                     placeholder: (context, url) => ClipRRect(
                       borderRadius: BorderRadius.circular(25),
                       child: Image.asset(
-                        'assets/images/option_xi_w.png',
+                        'assets/images/stockdefault.png',
                         fit: BoxFit.cover,
                       ),
                     ),
                     errorWidget: (context, url, error) => ClipRRect(
                       borderRadius: BorderRadius.circular(25),
                       child: Image.asset(
-                        'assets/images/option_xi_w.png',
+                        'assets/images/stockdefault.png',
                         fit: BoxFit.cover,
                       ),
                     ),
@@ -510,10 +547,11 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                   Text(
                     widget.segment ?? 'EQ',
                     style: TextStyle(
-                        fontSize: 14,
-                        color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                      color: isDark ? Colors.grey[300] : Colors.grey[600],
+                    ),
                   ),
-                  // Spacer to push price and percent change to the right
                   const Spacer(),
                   // Price and Percent Change
                   Column(
@@ -522,16 +560,31 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                       Text(
                         '₹${_currentPrice.toStringAsFixed(2)}',
                         style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : Colors.black87),
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF1A1A1A),
+                        ),
                       ),
-                      Text(
-                        '${_percentChange >= 0 ? '▲' : '▼'} ${_percentChange.abs().toStringAsFixed(2)}%',
-                        style: TextStyle(
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: changeColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: changeColor.withOpacity(0.3),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          '${_percentChange >= 0 ? '▲' : '▼'} ${_percentChange.abs().toStringAsFixed(2)}%',
+                          style: TextStyle(
                             fontSize: 14,
                             color: changeColor,
-                            fontWeight: FontWeight.w600),
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -549,6 +602,42 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
               _buildOhlcItem('Low', _low.toStringAsFixed(2), isDark),
               _buildOhlcItem(
                   'Prev. Close', _prevClose.toStringAsFixed(2), isDark),
+            ],
+          ),
+          const Divider(height: 24),
+          // Action buttons row
+          Row(
+            children: [
+              Expanded(
+                child: buildColorfulActionButton(
+                  context,
+                  isDark,
+                  'Chart',
+                  Icons.trending_up_rounded,
+                  () => _navigateToChart(context),
+                  true, // isChart button
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: buildColorfulActionButton(
+                  context,
+                  isDark,
+                  'Alerts',
+                  Icons.analytics_outlined,
+                  () {
+                    if (widget.segment == "FNO") {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => AtlasOutputPage()));
+                    } else {
+                      Get.toNamed('/alerts/${widget.stockname}');
+                    }
+                  },
+                  false, // isChart button
+                ),
+              ),
             ],
           ),
         ],
@@ -654,7 +743,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
           ),
           const SizedBox(width: 12),
           Text(
-            'Available Balance:',
+            'Virtual Balance:',
             style: TextStyle(
               fontSize: 16,
               color: isDark ? Colors.grey[300] : Colors.grey[700],
@@ -662,7 +751,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
           ),
           const Spacer(),
           Text(
-            '₹${_availableBalance.toStringAsFixed(2)}',
+            '₹${convertToKMB(_projectedBalance.toStringAsFixed(2))}',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.bold,
@@ -672,6 +761,27 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
         ],
       ),
     );
+  }
+
+  void _navigateToChart(BuildContext context) {
+    final String chartUrl = _getChartUrl();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BrowserLite_V(chartUrl),
+      ),
+    );
+  }
+
+  String _getChartUrl() {
+    if (widget.segment == "FNO") {
+      return widget.stockname.toString().startsWith("BANK")
+          ? "https://in.tradingview.com/chart/?symbol=BANKNIFTY"
+          : "https://in.tradingview.com/chart/?symbol=NIFTY";
+    }
+
+    return "https://in.tradingview.com/chart/?symbol=NSE%3A${widget.stockname}";
   }
 
   Widget _buildProductTypeSelection(bool isDark) {
@@ -698,7 +808,8 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
               if (_isSubscribed) {
                 setState(() => _productType = type);
               } else {
-                showSubscriptionRequiredDialog(context);
+                showSubscriptionRequiredDialog(context, 'Premium Feature',
+                    'This feature is only available to subscribed users. Contact customer support');
               }
             }),
           ],
@@ -736,9 +847,12 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   Widget _buildTypeButton(String type, Color color, bool isDark) {
     final isSelected = _orderType == type;
     return GestureDetector(
-      onTap: () => setState(() => _orderType = type),
+      onTap: () => setState(() {
+        _orderType = type;
+        _calculateMargin();
+      }),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14),
+        padding: const EdgeInsets.symmetric(vertical: 8),
         decoration: BoxDecoration(
           color: isSelected ? color.withOpacity(0.15) : Colors.transparent,
           borderRadius: type == 'BUY'
@@ -777,25 +891,137 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextFormField(
-          controller: _qtyController,
-          keyboardType: TextInputType.number,
-          decoration: _inputDecoration(
+        Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: isDark
+                    ? Colors.black.withOpacity(0.3)
+                    : Colors.grey.withOpacity(0.15),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+                spreadRadius: 0,
+              ),
+              BoxShadow(
+                color: isDark
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.white.withOpacity(0.8),
+                blurRadius: 8,
+                offset: const Offset(0, -2),
+                spreadRadius: 0,
+              ),
+            ],
+            border: Border.all(
+              color: isDark
+                  ? Colors.grey[700]!.withOpacity(0.5)
+                  : Colors.grey[300]!.withOpacity(0.6),
+              width: 1,
+            ),
+          ),
+          child: TextFormField(
+            controller: _qtyController,
+            keyboardType: TextInputType.number,
+            style: TextStyle(
+              color: isDark ? Colors.white : Colors.grey[800],
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0.5,
+            ),
+            decoration: InputDecoration(
               labelText: 'Quantity',
-              prefixIcon: Icons.format_list_numbered,
-              isDark: isDark),
-          style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-          validator: (value) {
-            if (value == null || value.isEmpty) return 'Please enter quantity';
-            final int? qty = int.tryParse(value);
-            if (qty == null || qty <= 0) return 'Enter a valid quantity';
-            if (_orderType == 'SELL' &&
-                _hasShortPosition &&
-                qty > _shortPositionQuantity) {
-              return 'Cannot sell more than your short position';
-            }
-            return null;
-          },
+              labelStyle: TextStyle(
+                color: isDark ? Colors.grey[400] : Colors.grey[600],
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.3,
+              ),
+              floatingLabelStyle: TextStyle(
+                color: isDark ? Colors.blue[300] : Colors.blue[600],
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              // helperText:
+              //     'Enter number of units (e.g., 1, 2)',
+              // helperStyle: TextStyle(
+              //   color: isDark ? Colors.grey[500] : Colors.grey[600],
+              //   fontSize: 12,
+              // ),
+              prefixIcon: Container(
+                margin: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.blue[400]!.withOpacity(0.15)
+                      : Colors.blue[50]!.withOpacity(0.8),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  Icons.format_list_numbered_rounded,
+                  color: isDark ? Colors.blue[300] : Colors.blue[600],
+                  size: 20,
+                ),
+              ),
+              hintText: 'Enter number of units (e.g., 1, 2)',
+              hintStyle: TextStyle(
+                color: isDark ? Colors.grey[500] : Colors.grey[500],
+                fontSize: 14,
+                fontWeight: FontWeight.w400,
+              ),
+              filled: true,
+              fillColor: Colors.transparent,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide.none,
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: isDark ? Colors.blue[300]! : Colors.blue[500]!,
+                  width: 2,
+                ),
+              ),
+              errorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: isDark ? Colors.red[300]! : Colors.red[500]!,
+                  width: 2,
+                ),
+              ),
+              focusedErrorBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+                borderSide: BorderSide(
+                  color: isDark ? Colors.red[300]! : Colors.red[500]!,
+                  width: 2,
+                ),
+              ),
+              errorStyle: TextStyle(
+                color: isDark ? Colors.red[300] : Colors.red[600],
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 20,
+                vertical: 18,
+              ),
+            ),
+            validator: (value) {
+              if (value == null || value.isEmpty)
+                return 'Please enter quantity';
+              final int? qty = int.tryParse(value);
+              if (qty == null || qty <= 0) return 'Enter a valid quantity';
+              if (_orderType == 'SELL' &&
+                  _hasShortPosition &&
+                  qty > _shortPositionQuantity) {
+                return 'Cannot sell more than your short position';
+              }
+              return null;
+            },
+          ),
         ),
 
         // Add lot size info and total shares display
@@ -836,7 +1062,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Note: Enter lot quantity, not individual shares. For example, if you want 75 shares, enter 5 (since 5 lots × 15 = 75 shares).',
+                  'Note: Enter lot quantity, not individual shares. For example, if you want ${lotSize * 5} shares, enter 5 (since 5 lots × $lotSize = ${lotSize * 5} shares).',
                   style: TextStyle(
                     fontSize: 12,
                     color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -875,7 +1101,8 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
               if (isEnabled) {
                 setState(() => _priceType = selectedType);
               } else {
-                showSubscriptionRequiredDialog(context);
+                showSubscriptionRequiredDialog(context, 'Premium Feature',
+                    'This feature is only available to subscribed users. Contact customer support');
               }
             });
           }).toList(),
@@ -963,9 +1190,9 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     );
   }
 
-  Widget _buildBottomBar(bool isDark) {
+  Widget _buildBottomBuyandSellButton(bool isDark) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
         border: Border(
@@ -977,6 +1204,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(height: 8),
           _buildMarginInfo(isDark),
           const SizedBox(height: 16),
           _buildPlaceOrderButton(),
@@ -1000,6 +1228,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
           ),
         ),
         Text(
+          // '₹${convertToKMB(_marginRequired.toStringAsFixed(2))}',
           '₹${_marginRequired.toStringAsFixed(2)}',
           style: TextStyle(
             fontSize: 18,
@@ -1016,7 +1245,11 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: _isPlacingOrder ? null : _placeOrder,
+        onPressed: _isPlacingOrder
+            ? null
+            : _datafound
+                ? _placeOrder
+                : null,
         style: ElevatedButton.styleFrom(
           backgroundColor:
               _orderType == 'BUY' ? Colors.green.shade600 : Colors.red.shade600,
@@ -1032,7 +1265,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                 child: CircularProgressIndicator(
                     color: Colors.white, strokeWidth: 3))
             : Text(
-                '${_orderType.toUpperCase()}',
+                _datafound ? '${_orderType.toUpperCase()}' : "No Data Found",
                 style:
                     const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),

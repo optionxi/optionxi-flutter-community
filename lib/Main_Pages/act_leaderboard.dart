@@ -1,5 +1,7 @@
 // Modified _buildContent method in your LeaderboardPage
 
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Components/custom_leaderboard_loading.dart';
@@ -289,14 +291,24 @@ class ModernLeaderboardCard extends StatelessWidget {
     required this.index,
     required this.controller,
   }) : super(key: key);
+
   @override
   Widget build(BuildContext context) {
+    // Fix the animation interval calculation to prevent values > 1.0
+    // final maxItems = 30; // Maximum expected items
+    final delayIncrement = 0.05; // Smaller increment to fit more items
+    final maxDelay = 0.8; // Maximum delay to ensure we don't exceed 1.0
+    final animationDuration = 0.2; // Duration for each item's animation
+
+    final startTime = math.min(index * delayIncrement, maxDelay);
+    final endTime = math.min(startTime + animationDuration, 1.0);
+
     final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: controller,
         curve: Interval(
-          index * 0.1,
-          0.1 + index * 0.1,
+          startTime,
+          endTime,
           curve: Curves.easeOut,
         ),
       ),
@@ -318,7 +330,10 @@ class ModernLeaderboardCard extends StatelessWidget {
         case 3:
           return Colors.brown.shade300;
         default:
-          return Theme.of(context).colorScheme.primary.withValues(alpha: 0.7);
+          return Theme.of(context)
+              .colorScheme
+              .primary
+              .withAlpha(179); // 0.7 alpha
       }
     }
 
@@ -348,7 +363,7 @@ class ModernLeaderboardCard extends StatelessWidget {
             height: iconSize,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: getRankColor().withValues(alpha: 0.2),
+              color: getRankColor().withAlpha(51), // 0.2 alpha
             ),
             child: Center(
               child: Text(
@@ -379,7 +394,7 @@ class ModernLeaderboardCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(16),
               side: entry.rank <= 3
                   ? BorderSide(
-                      color: getRankColor().withValues(alpha: 0.3),
+                      color: getRankColor().withAlpha(77), // 0.3 alpha
                       width: 2,
                     )
                   : BorderSide.none,
@@ -390,7 +405,7 @@ class ModernLeaderboardCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(16),
                       gradient: LinearGradient(
                         colors: [
-                          getRankColor().withValues(alpha: 0.05),
+                          getRankColor().withAlpha(13), // 0.05 alpha
                           Colors.transparent,
                         ],
                         begin: Alignment.topLeft,
@@ -457,7 +472,7 @@ class ModernLeaderboardCard extends StatelessWidget {
                           height: avatarSize,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: getRankColor().withValues(alpha: 0.2),
+                            color: getRankColor().withAlpha(51), // 0.2 alpha
                             border: entry.rank <= 3
                                 ? Border.all(
                                     color: getRankColor(),

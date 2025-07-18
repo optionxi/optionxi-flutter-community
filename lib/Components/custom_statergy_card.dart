@@ -60,7 +60,7 @@ class StrategyCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    '$time - $timeAgo',
+                    '$timeAgo',
                     style: TextStyle(
                       fontSize: 12,
                       color: theme.textTheme.bodyMedium?.color,

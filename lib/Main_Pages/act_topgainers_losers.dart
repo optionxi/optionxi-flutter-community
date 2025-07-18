@@ -171,7 +171,7 @@ class _TopGainersLosersPageState extends State<TopGainersLosersPage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.trending_up, size: 20),
+                    Icon(Icons.trending_up, size: 18),
                     SizedBox(width: 8),
                     Text('Gainers'),
                   ],
@@ -181,7 +181,7 @@ class _TopGainersLosersPageState extends State<TopGainersLosersPage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.trending_down, size: 20),
+                    Icon(Icons.trending_down, size: 18),
                     SizedBox(width: 8),
                     Text('Losers'),
                   ],
@@ -191,7 +191,7 @@ class _TopGainersLosersPageState extends State<TopGainersLosersPage>
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.bar_chart, size: 20),
+                    Icon(Icons.bar_chart, size: 18),
                     SizedBox(width: 8),
                     Text('Volume'),
                   ],
@@ -998,7 +998,7 @@ class StockCard extends StatelessWidget {
                                 20), // Circular for consistency with placeholder
                             child: Image.asset(
                               // Ensure this asset exists in your project
-                              'assets/images/option_xi_w.png',
+                              'assets/images/stockdefault.png',
                               height: 40,
                               width: 40,
                               fit: BoxFit.cover,
@@ -1187,7 +1187,7 @@ class StockDetailBottomSheet extends StatelessWidget {
                     errorWidget: (context, url, error) => ClipRRect(
                       borderRadius: BorderRadius.circular(25),
                       child: Image.asset(
-                        'assets/images/option_xi_w.png', // Ensure this asset exists
+                        'assets/images/stockdefault.png', // Ensure this asset exists
                         height: 50,
                         width: 50,
                         fit: BoxFit.cover,

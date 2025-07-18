@@ -35,14 +35,14 @@ class NotificationService {
         iOS: DarwinNotificationDetails());
   }
 
-  notificationDetailsOrders() {
-    return const NotificationDetails(
-        android: AndroidNotificationDetails(
-            'order_notification', 'Order Notifications',
-            channelDescription: "To show notification for orders",
-            importance: Importance.max),
-        iOS: DarwinNotificationDetails());
-  }
+  // notificationDetailsOrders() {
+  //   return const NotificationDetails(
+  //       android: AndroidNotificationDetails(
+  //           'order_notification', 'Order Notifications',
+  //           channelDescription: "To show notification for orders",
+  //           importance: Importance.max),
+  //       iOS: DarwinNotificationDetails());
+  // }
 
   Future showNotificationBasic(
       {int id = 0, String? title, String? body, String? payLoad}) async {
@@ -51,10 +51,10 @@ class NotificationService {
         id, title, body, await notificationDetailsBasic());
   }
 
-  Future showNotificationOrders(
-      {int id = 0, String? title, String? body, String? payLoad}) async {
-    print("Showing notificaiton Orders");
-    return notificationsPlugin.show(
-        id, title, body, await showNotificationOrders());
-  }
+  // Future showNotificationOrders(
+  //     {int id = 0, String? title, String? body, String? payLoad}) async {
+  //   print("Showing notificaiton Orders");
+  //   return notificationsPlugin.show(
+  //       id, title, body, await showNotificationOrders());
+  // }
 }

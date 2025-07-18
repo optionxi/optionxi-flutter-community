@@ -5,15 +5,14 @@ import 'package:google_fonts/google_fonts.dart';
 // Simple alternative using PageView for infinite scrolling
 Widget buildScrollingText(BuildContext context) {
   const String text =
-      'Previous day data • As per SEBI and NSE Regulations • Educational Purpose • ';
-
+      'Previous day data • As per SEBI and NSE regulations • Educational purpose • No real money • Virutal trade • ';
   return Container(
     height: 32,
     color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
     child: _CustomMarqueeText(
       text: text,
       style: GoogleFonts.poppins(
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: FontWeight.w500,
         color: Theme.of(context).colorScheme.primary,
       ),
@@ -40,9 +39,10 @@ class _CustomMarqueeText extends StatefulWidget {
 class _CustomMarqueeTextState extends State<_CustomMarqueeText>
     with SingleTickerProviderStateMixin {
   late ScrollController _scrollController;
-  late Timer _timer;
+  Timer? _timer;
   double _offset = 0.0;
   double _maxScrollExtent = 0.0;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -50,12 +50,21 @@ class _CustomMarqueeTextState extends State<_CustomMarqueeText>
     _scrollController = ScrollController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startScrolling();
+      if (!_isDisposed) {
+        _startScrolling();
+      }
     });
   }
 
   void _startScrolling() {
+    if (_isDisposed) return;
+
     _timer = Timer.periodic(const Duration(milliseconds: 50), (timer) {
+      if (_isDisposed) {
+        timer.cancel();
+        return;
+      }
+
       if (_maxScrollExtent > 0) {
         _offset += widget.velocity * 0.05; // 50ms intervals
 
@@ -63,7 +72,7 @@ class _CustomMarqueeTextState extends State<_CustomMarqueeText>
           _offset = 0.0;
         }
 
-        if (_scrollController.hasClients) {
+        if (_scrollController.hasClients && !_isDisposed) {
           _scrollController.jumpTo(_offset);
         }
       }
@@ -72,7 +81,9 @@ class _CustomMarqueeTextState extends State<_CustomMarqueeText>
 
   @override
   void dispose() {
-    _timer.cancel();
+    _isDisposed = true;
+    _timer?.cancel();
+    _timer = null;
     _scrollController.dispose();
     super.dispose();
   }
@@ -88,7 +99,7 @@ class _CustomMarqueeTextState extends State<_CustomMarqueeText>
       child: Builder(
         builder: (context) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
+            if (_scrollController.hasClients && !_isDisposed) {
               _maxScrollExtent = _scrollController.position.maxScrollExtent / 2;
             }
           });
@@ -130,6 +141,7 @@ class _InfiniteScrollingTextState extends State<_InfiniteScrollingText>
   late String _displayText;
   double _textWidth = 0;
   double _containerWidth = 0;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -145,48 +157,63 @@ class _InfiniteScrollingTextState extends State<_InfiniteScrollingText>
 
     // Calculate text width after first frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _calculateTextWidth();
+      if (!_isDisposed) {
+        _calculateTextWidth();
+      }
     });
   }
 
   void _calculateTextWidth() {
+    if (_isDisposed) return;
+
     final TextPainter textPainter = TextPainter(
       text: TextSpan(text: widget.text, style: widget.style),
       textDirection: TextDirection.ltr,
     );
     textPainter.layout();
 
-    setState(() {
-      _textWidth = textPainter.width;
-    });
+    if (!_isDisposed) {
+      setState(() {
+        _textWidth = textPainter.width;
+      });
 
-    // Start animation after calculating width
-    _startAnimation();
+      // Start animation after calculating width
+      _startAnimation();
+    }
+
+    // Clean up TextPainter
+    textPainter.dispose();
   }
 
   void _startAnimation() {
+    if (_isDisposed) return;
+
     if (_textWidth > 0 && _containerWidth > 0) {
       // Calculate duration based on text width and desired speed
       final duration = Duration(
         milliseconds: ((_textWidth / widget.speed) * 1000).round(),
       );
 
-      _controller.duration = duration;
+      if (!_isDisposed) {
+        _controller.duration = duration;
 
-      _animation = Tween<double>(
-        begin: 0.0,
-        end: -_textWidth,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Curves.linear,
-      ));
+        _animation = Tween<double>(
+          begin: 0.0,
+          end: -_textWidth,
+        ).animate(CurvedAnimation(
+          parent: _controller,
+          curve: Curves.linear,
+        ));
 
-      _controller.repeat();
+        _controller.repeat();
+      }
     }
   }
 
   @override
   void dispose() {
+    _isDisposed = true;
+    _controller.stop();
     _controller.dispose();
     super.dispose();
   }
@@ -198,7 +225,7 @@ class _InfiniteScrollingTextState extends State<_InfiniteScrollingText>
         if (_containerWidth != constraints.maxWidth) {
           _containerWidth = constraints.maxWidth;
           // Restart animation when container width changes
-          if (_textWidth > 0) {
+          if (_textWidth > 0 && !_isDisposed) {
             _startAnimation();
           }
         }

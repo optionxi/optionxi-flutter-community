@@ -13,9 +13,7 @@ class StockTradingSkeleton extends StatefulWidget {
 class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     with TickerProviderStateMixin {
   late AnimationController _shimmerController;
-  late AnimationController _fadeController;
-  late Animation<double> _shimmerAnimation;
-  late Animation<double> _fadeAnimation;
+  late Animation<double> _animation;
 
   @override
   void initState() {
@@ -23,76 +21,116 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
 
     // Shimmer animation for loading elements
     _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 2000),
+      duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-
-    // Subtle fade animation for static elements
-    _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 3000),
-      vsync: this,
-    );
-
-    _shimmerAnimation = Tween<double>(
-      begin: -2.0,
-      end: 2.0,
-    ).animate(CurvedAnimation(
-      parent: _shimmerController,
-      curve: Curves.easeInOutSine,
-    ));
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.4,
-      end: 0.8,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
 
     _shimmerController.repeat();
-    _fadeController.repeat(reverse: true);
+    _animation =
+        Tween<double>(begin: 0.0, end: 2.0).animate(_shimmerController);
   }
 
   @override
   void dispose() {
     _shimmerController.dispose();
-    _fadeController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: Listenable.merge([_shimmerController, _fadeController]),
-      builder: (context, child) {
-        return Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildStockInfoSkeleton(),
-                    const SizedBox(height: 24),
-                    _buildOrderTypeSection(),
-                    const SizedBox(height: 24),
-                    _buildProductTypeSection(),
-                    const SizedBox(height: 24),
-                    _buildQuantitySection(),
-                    const SizedBox(height: 24),
-                    _buildPriceTypeSection(),
-                    const SizedBox(height: 20),
-                    _buildPriceInputsSection(),
-                  ],
-                ),
-              ),
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildStockInfoSkeleton(),
+                const SizedBox(height: 20),
+                _buildQuantityInputSkeleton(),
+                const SizedBox(height: 20),
+                _buildOrderTypeSelectionSkeleton(),
+                const SizedBox(height: 20),
+                _buildProductTypeSelectionSkeleton(),
+                const SizedBox(height: 20),
+                _buildPriceTypeSelectionSkeleton(),
+              ],
             ),
-            const SizedBox(height: 16),
-            // _buildBalanceSection(),
-            // const SizedBox(height: 12),
-            _buildBottomSection(),
-          ],
+          ),
+        ),
+        _buildVirtualBalance(),
+        const SizedBox(height: 4),
+        _buildBottomBarSkeleton(),
+      ],
+    );
+  }
+
+  Container _buildVirtualBalance() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: widget.isDark ? Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color:
+              widget.isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE0E0E0),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.account_balance_wallet_outlined,
+            color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
+          ),
+          const SizedBox(width: 12),
+          Text(
+            'Virtual Balance:',
+            style: TextStyle(
+              fontSize: 16,
+              color: widget.isDark ? Colors.grey[300] : Colors.grey[700],
+            ),
+          ),
+          const Spacer(),
+          _buildShimmerBox(90, 20, borderRadius: 6),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShimmerBox(
+    double width,
+    double height, {
+    double borderRadius = 8,
+    bool isCircular = false,
+  }) {
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        return Container(
+          width: width,
+          height: height,
+          decoration: BoxDecoration(
+            borderRadius: isCircular
+                ? BorderRadius.circular(width / 2)
+                : BorderRadius.circular(borderRadius),
+            gradient: LinearGradient(
+              colors: widget.isDark
+                  ? [
+                      Colors.grey[800]!,
+                      Colors.grey[700]!,
+                      Colors.grey[800]!,
+                    ]
+                  : [
+                      Colors.grey[300]!,
+                      Colors.grey[200]!,
+                      Colors.grey[300]!,
+                    ],
+              stops: const [0.0, 0.5, 1.0],
+              begin: Alignment(-1.0 + _animation.value, 0.0),
+              end: Alignment(-0.5 + _animation.value, 0.0),
+            ),
+          ),
         );
       },
     );
@@ -100,10 +138,14 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
 
   Widget _buildStockInfoSkeleton() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color:
+              widget.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5E5),
+        ),
         boxShadow: [
           BoxShadow(
             color: widget.isDark
@@ -115,67 +157,87 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header section with shimmer
           Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Animated stock icon
-              _buildShimmerBox(52, 52, isCircular: true),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Animated stock name
-                    _buildShimmerBox(140, 18, borderRadius: 6),
-                    const SizedBox(height: 8),
-                    // Static segment badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: Colors.blue.withOpacity(0.2),
-                        ),
-                      ),
+              _buildShimmerBox(48, 48, isCircular: true),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildShimmerBox(120, 20, borderRadius: 6),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: 40,
+                    height: 18,
+                    decoration: BoxDecoration(
+                      color:
+                          (widget.isDark ? Colors.grey[700] : Colors.grey[200])!
+                              .withOpacity(0.5),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Center(
                       child: Text(
                         'EQ',
                         style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.blue.shade600,
-                        ),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: widget.isDark
+                                ? Colors.grey[300]
+                                : Colors.grey[600]),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              const Spacer(),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Animated price
-                  _buildShimmerBox(100, 18, borderRadius: 6),
-                  const SizedBox(height: 8),
-                  // Animated percentage
-                  _buildShimmerBox(70, 16, borderRadius: 4),
+                  _buildShimmerBox(100, 24, borderRadius: 6),
+                  const SizedBox(height: 6),
+                  _buildShimmerBox(70, 22, borderRadius: 12),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 20),
-          Divider(
-            color: widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-          ),
-          const SizedBox(height: 16),
-          // OHLC with mixed static/loading
+          const Divider(height: 24),
+          // OHLC section with shimmer
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _buildOhlcItem('Open', true),
-              _buildOhlcItem('High', false), // Static
-              _buildOhlcItem('Low', false), // Static
-              _buildOhlcItem('Prev Close', true),
+              _buildOhlcItemSkeleton('Open'),
+              _buildOhlcItemSkeleton('High'),
+              _buildOhlcItemSkeleton('Low'),
+              _buildOhlcItemSkeleton('Prev. Close'),
+            ],
+          ),
+          const Divider(height: 24),
+          // Static action buttons
+          Row(
+            children: [
+              Expanded(
+                child: _buildColorfulActionButton(
+                  context,
+                  widget.isDark,
+                  'View Chart',
+                  Icons.trending_up_rounded,
+                  true, // isChart button
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildColorfulActionButton(
+                  context,
+                  widget.isDark,
+                  'Alerts',
+                  Icons.analytics_outlined,
+                  false, // isChart button
+                ),
+              ),
             ],
           ),
         ],
@@ -183,108 +245,113 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     );
   }
 
-  Widget _buildOhlcItem(String label, bool isAnimated) {
+  Widget _buildOhlcItemSkeleton(String title) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: widget.isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        const SizedBox(height: 6),
-        if (isAnimated)
-          _buildShimmerBox(55, 16, borderRadius: 4)
-        else
-          AnimatedOpacity(
-            opacity: _fadeAnimation.value,
-            duration: const Duration(milliseconds: 200),
-            child: Container(
-              width: 55,
-              height: 16,
-              decoration: BoxDecoration(
-                color:
-                    widget.isDark ? Colors.grey.shade700 : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
-          ),
+        Text(title,
+            style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+        const SizedBox(height: 4),
+        _buildShimmerBox(60, 16, borderRadius: 4),
       ],
     );
   }
 
-  Widget _buildOrderTypeSection() {
+  Widget _buildColorfulActionButton(
+    BuildContext context,
+    bool isDark,
+    String label,
+    IconData icon,
+    bool isChart,
+  ) {
+    final List<Color> gradientColors = isChart
+        ? isDark
+            ? [
+                const Color(0xFF4A90E2),
+                const Color(0xFF357ABD),
+              ]
+            : [
+                const Color(0xFF5BA7F7),
+                const Color(0xFF4A90E2),
+              ]
+        : isDark
+            ? [
+                const Color(0xFFFF6B6B),
+                const Color(0xFFE55A5A),
+              ]
+            : [
+                const Color(0xFFFF8A80),
+                const Color(0xFFFF6B6B),
+              ];
+
+    return Container(
+      height: 50,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: gradientColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: Colors.white),
+            const SizedBox(width: 10),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildQuantityInputSkeleton() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Static section title
+        // Static Label
         Text(
-          'Order Type',
+          'Quantity',
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
             color: widget.isDark ? Colors.white : Colors.black87,
           ),
         ),
-        const SizedBox(height: 12),
-        // Static BUY/SELL buttons
+        const SizedBox(height: 8),
+        // Shimmer Box for TextFormField
         Container(
+          height: 56,
           decoration: BoxDecoration(
-            color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
+            color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color:
-                  widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
+              color: widget.isDark
+                  ? const Color(0xFF2E2E2E)
+                  : const Color(0xFFE0E0E0),
             ),
           ),
           child: Row(
             children: [
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.1),
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      bottomLeft: Radius.circular(12),
-                    ),
-                  ),
-                  child: Text(
-                    'BUY',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green.shade600,
-                    ),
-                  ),
-                ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12.0),
+                child: Icon(Icons.format_list_numbered,
+                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
               ),
-              Container(
-                width: 1,
-                height: 40,
-                color:
-                    widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-              ),
-              Expanded(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: Text(
-                    'SELL',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: widget.isDark
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                    ),
-                  ),
-                ),
-              ),
+              _buildShimmerBox(100, 20, borderRadius: 6),
             ],
           ),
         ),
@@ -292,75 +359,130 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     );
   }
 
-  Widget _buildProductTypeSection() {
+  Widget _buildOrderTypeSelectionSkeleton() {
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+            color: widget.isDark
+                ? const Color(0xFF2E2E2E)
+                : const Color(0xFFE0E0E0)),
+      ),
+      child: Row(
+        children: [
+          // Static BUY Button (Selected state)
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.15),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(12),
+                  bottomLeft: Radius.circular(12),
+                ),
+              ),
+              child: Text(
+                'BUY',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green.shade600,
+                ),
+              ),
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 35,
+            color: widget.isDark
+                ? const Color(0xFF2E2E2E)
+                : const Color(0xFFE0E0E0),
+          ),
+          // Static SELL Button (Unselected state)
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              decoration: const BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.only(
+                  topRight: Radius.circular(12),
+                  bottomRight: Radius.circular(12),
+                ),
+              ),
+              child: Text(
+                'SELL',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProductTypeSelectionSkeleton() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Product Type',
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
             color: widget.isDark ? Colors.white : Colors.black87,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Row(
           children: [
-            // Static selected chip
+            // Static INTRADAY chip (selected)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: Colors.blue.shade600,
-                borderRadius: BorderRadius.circular(25),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.blue.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+                color:
+                    widget.isDark ? Colors.blue.shade700 : Colors.blue.shade600,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: widget.isDark
+                        ? Colors.blue.shade600
+                        : Colors.blue.shade500),
               ),
               child: const Text(
                 'INTRADAY',
                 style: TextStyle(
                   color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
                 ),
               ),
             ),
             const SizedBox(width: 12),
-            // Static unselected chip
+            // Static NORMAL chip (locked)
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
-                borderRadius: BorderRadius.circular(25),
+                color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: widget.isDark
-                      ? Colors.grey.shade700
-                      : Colors.grey.shade300,
-                ),
+                    color: widget.isDark
+                        ? const Color(0xFF2E2E2E)
+                        : Colors.grey.shade300),
               ),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     'NORMAL',
-                    style: TextStyle(
-                      color: widget.isDark
-                          ? Colors.grey.shade400
-                          : Colors.grey.shade600,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
+                    style: TextStyle(color: Colors.grey.shade600),
                   ),
-                  const SizedBox(width: 6),
-                  Icon(
-                    Icons.lock_outline,
-                    size: 16,
-                    color: Colors.orange.shade600,
+                  const Padding(
+                    padding: EdgeInsets.only(left: 6),
+                    child: Icon(Icons.lock, size: 14, color: Colors.grey),
                   ),
                 ],
               ),
@@ -371,214 +493,89 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     );
   }
 
-  Widget _buildQuantitySection() {
+  Widget _buildPriceTypeSelectionSkeleton() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Quantity',
+          'Order Type',
           style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
             color: widget.isDark ? Colors.white : Colors.black87,
           ),
         ),
-        const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          decoration: BoxDecoration(
-            color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color:
-                  widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-            ),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                Icons.format_list_numbered_rounded,
-                color:
-                    widget.isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-                size: 20,
-              ),
-              const SizedBox(width: 12),
-              // Animated quantity placeholder
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  child: _buildShimmerBox(80, 16, borderRadius: 4),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildPriceTypeSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Price Type',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: widget.isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         Wrap(
           spacing: 12,
           runSpacing: 8,
           children: [
-            _buildPriceChip('MKT', true, false),
-            _buildPriceChip('LIMIT', false, true),
-            _buildPriceChip('SL', false, true),
-            _buildPriceChip('SLM', false, true),
+            _buildStaticChip('MKT', true),
+            _buildStaticChip('LIMIT', false, isLocked: true),
+            _buildStaticChip('SL', false, isLocked: true),
+            _buildStaticChip('SLM', false, isLocked: true),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildPriceChip(String label, bool isSelected, bool isLocked) {
+  Widget _buildStaticChip(String type, bool isSelected,
+      {bool isLocked = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: isSelected
-            ? Colors.blue.shade600
-            : (widget.isDark ? const Color(0xFF1A1A1A) : Colors.white),
+            ? (widget.isDark ? Colors.blue.shade700 : Colors.blue.shade600)
+            : (widget.isDark ? const Color(0xFF1E1E1E) : Colors.white),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isSelected
-              ? Colors.blue.shade600
-              : (widget.isDark ? Colors.grey.shade700 : Colors.grey.shade300),
-        ),
+            color: isSelected
+                ? (widget.isDark ? Colors.blue.shade600 : Colors.blue.shade500)
+                : (widget.isDark
+                    ? const Color(0xFF2E2E2E)
+                    : Colors.grey.shade300)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            label,
+            type,
             style: TextStyle(
               color: isSelected
                   ? Colors.white
-                  : (widget.isDark
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade600),
-              fontWeight: FontWeight.w600,
-              fontSize: 14,
+                  : isLocked
+                      ? Colors.grey.shade600
+                      : (widget.isDark ? Colors.white70 : Colors.black87),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
             ),
           ),
-          if (isLocked) ...[
-            const SizedBox(width: 6),
-            Icon(
-              Icons.lock_outline,
-              size: 14,
-              color: Colors.orange.shade600,
+          if (isLocked)
+            const Padding(
+              padding: EdgeInsets.only(left: 6),
+              child: Icon(Icons.lock, size: 14, color: Colors.grey),
             ),
-          ],
         ],
       ),
     );
   }
 
-  Widget _buildPriceInputsSection() {
+  Widget _buildBottomBarSkeleton() {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.currency_rupee_rounded,
-            color: widget.isDark ? Colors.grey.shade500 : Colors.grey.shade600,
-            size: 20,
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Market Price',
-            style: TextStyle(
-              color:
-                  widget.isDark ? Colors.grey.shade400 : Colors.grey.shade600,
-              fontSize: 16,
-            ),
-          ),
-          const Spacer(),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            child: _buildShimmerBox(60, 16, borderRadius: 4),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBalanceSection() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.account_balance_wallet_rounded,
-                color: Colors.green.shade600,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Text(
-              'Available Balance',
-              style: TextStyle(
-                fontSize: 16,
-                color:
-                    widget.isDark ? Colors.grey.shade300 : Colors.grey.shade700,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const Spacer(),
-            _buildShimmerBox(100, 20, borderRadius: 6),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomSection() {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
         border: Border(
           top: BorderSide(
-            color: widget.isDark ? Colors.grey.shade800 : Colors.grey.shade200,
-          ),
+              color: widget.isDark
+                  ? const Color(0xFF2E2E2E)
+                  : const Color(0xFFE0E0E0)),
         ),
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          const SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -586,78 +583,34 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
                 'Margin Required',
                 style: TextStyle(
                   fontSize: 16,
-                  color: widget.isDark
-                      ? Colors.grey.shade400
-                      : Colors.grey.shade600,
-                  fontWeight: FontWeight.w500,
+                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
               ),
-              _buildShimmerBox(80, 18, borderRadius: 4),
+              _buildShimmerBox(80, 20, borderRadius: 6),
             ],
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 16),
+          // Static BUY button appearance
           Container(
             width: double.infinity,
-            height: 56,
+            height: 52,
             decoration: BoxDecoration(
               color: Colors.green.shade600,
               borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.green.withOpacity(0.3),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
             ),
             child: const Center(
               child: Text(
                 'BUY',
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
             ),
           ),
+          const SizedBox(height: 32),
         ],
       ),
-    );
-  }
-
-  Widget _buildShimmerBox(double width, double height,
-      {double borderRadius = 8, bool isCircular = false}) {
-    return AnimatedBuilder(
-      animation: _shimmerAnimation,
-      builder: (context, child) {
-        return Container(
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            borderRadius: isCircular
-                ? BorderRadius.circular(width / 2)
-                : BorderRadius.circular(borderRadius),
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: widget.isDark
-                  ? [
-                      const Color(0xFF2A2A2A),
-                      const Color(0xFF3A3A3A),
-                      const Color(0xFF2A2A2A),
-                    ]
-                  : [
-                      Colors.grey.shade300,
-                      Colors.grey.shade200,
-                      Colors.grey.shade300,
-                    ],
-              stops: const [0.0, 0.5, 1.0],
-              transform: GradientRotation(_shimmerAnimation.value),
-            ),
-          ),
-        );
-      },
     );
   }
 }

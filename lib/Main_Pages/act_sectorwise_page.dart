@@ -28,6 +28,43 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
     _fetchData();
   }
 
+  // Helper method to get theme-aware colors
+  Color _getPositiveColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF00FF88)
+        : const Color(0xFF00B85F);
+  }
+
+  Color _getNegativeColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFFFF4444)
+        : const Color(0xFFE53935);
+  }
+
+  Color _getCardColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF1E1E1F)
+        : Colors.white;
+  }
+
+  Color _getSecondaryCardColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF2D2D2F)
+        : const Color(0xFFF5F5F5);
+  }
+
+  Color _getSkeletonColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF2A2A2B)
+        : const Color(0xFFE0E0E0);
+  }
+
+  Color _getSkeletonBaseColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF1A1A1B)
+        : const Color(0xFFF0F0F0);
+  }
+
   Widget _buildAdvanceDeclineRatio(SectorTrend sector) {
     double ratio = sector.negativeStocks > 0
         ? sector.positiveStocks / sector.negativeStocks
@@ -38,19 +75,21 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
 
     if (ratio > 3) {
       ratioText = 'Very Strong';
-      ratioColor = const Color(0xFF00FF88);
+      ratioColor = _getPositiveColor(context);
     } else if (ratio > 2) {
       ratioText = 'Strong';
-      ratioColor = const Color(0xFF00DD66);
+      ratioColor = _getPositiveColor(context).withOpacity(0.9);
     } else if (ratio > 1.5) {
       ratioText = 'Moderate';
-      ratioColor = const Color(0xFFFFAA00);
+      ratioColor = Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFFFFAA00)
+          : const Color(0xFFFF8F00);
     } else if (ratio > 0.5) {
       ratioText = 'Weak';
-      ratioColor = const Color(0xFFFF6666);
+      ratioColor = _getNegativeColor(context).withOpacity(0.8);
     } else {
       ratioText = 'Very Weak';
-      ratioColor = const Color(0xFFFF4444);
+      ratioColor = _getNegativeColor(context);
     }
 
     return Column(
@@ -58,8 +97,9 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
       children: [
         Text(
           'A/D Ratio',
-          style: const TextStyle(
-            color: Colors.grey,
+          style: TextStyle(
+            color:
+                Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
             fontSize: 10,
           ),
         ),
@@ -199,20 +239,24 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0A0A0B),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1A1A1B),
-        title: const Text(
+        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+        elevation: 0,
+        title: Text(
           'Sector Trends',
           style: TextStyle(
-            color: Colors.white,
+            color: Theme.of(context).textTheme.headlineSmall?.color,
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: Icon(
+              Icons.refresh,
+              color: Theme.of(context).iconTheme.color,
+            ),
             onPressed: _fetchData,
           ),
         ],
@@ -226,7 +270,9 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                     children: [
                       Text(
                         'Error: $_error',
-                        style: const TextStyle(color: Colors.red),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 16),
@@ -247,11 +293,11 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
         Container(
           margin: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: Theme.of(context).cardColor,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: Theme.of(context).shadowColor.withValues(alpha: 0.08),
+                color: Theme.of(context).shadowColor.withOpacity(0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 2),
               ),
@@ -272,8 +318,8 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
             ),
             indicatorSize: TabBarIndicatorSize.tab,
             dividerColor: Colors.transparent,
-            labelColor: Colors.white,
-            unselectedLabelColor: Theme.of(context).colorScheme.onSurface,
+            labelColor: Theme.of(context).colorScheme.onPrimary,
+            unselectedLabelColor: Theme.of(context).textTheme.bodyLarge?.color,
             labelStyle: const TextStyle(
               fontWeight: FontWeight.bold,
               fontSize: 16,
@@ -332,7 +378,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
           margin: const EdgeInsets.all(16),
           height: 50,
           decoration: BoxDecoration(
-            color: const Color(0xFF1A1A1B),
+            color: _getSkeletonBaseColor(context),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Row(
@@ -341,7 +387,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                 child: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2B),
+                    color: _getSkeletonColor(context),
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
@@ -350,7 +396,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                 child: Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF2A2A2B),
+                    color: _getSkeletonColor(context),
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
@@ -368,7 +414,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                 margin: const EdgeInsets.only(bottom: 12),
                 height: 140,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF1A1A1B),
+                  color: _getSkeletonBaseColor(context),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Padding(
@@ -382,7 +428,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                             width: 150,
                             height: 20,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2A2B),
+                              color: _getSkeletonColor(context),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -391,7 +437,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                             width: 60,
                             height: 20,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2A2B),
+                              color: _getSkeletonColor(context),
                               borderRadius: BorderRadius.circular(10),
                             ),
                           ),
@@ -404,7 +450,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                             width: 50,
                             height: 30,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2A2B),
+                              color: _getSkeletonColor(context),
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
@@ -413,7 +459,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                             width: 50,
                             height: 30,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF2A2A2B),
+                              color: _getSkeletonColor(context),
                               borderRadius: BorderRadius.circular(8),
                             ),
                           ),
@@ -424,7 +470,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                         width: double.infinity,
                         height: 8,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2A2A2B),
+                          color: _getSkeletonColor(context),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),
@@ -448,12 +494,23 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
             Icon(
               isBullish ? Icons.trending_up : Icons.trending_down,
               size: 64,
-              color: Colors.grey,
+              color: Theme.of(context)
+                  .textTheme
+                  .bodyLarge
+                  ?.color
+                  ?.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
               'No ${isBullish ? 'bullish' : 'bearish'} sectors found',
-              style: const TextStyle(color: Colors.grey, fontSize: 16),
+              style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.color
+                    ?.withOpacity(0.7),
+                fontSize: 16,
+              ),
             ),
           ],
         ),
@@ -489,15 +546,15 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      const Color(0xFF1E1E1F),
-                      const Color(0xFF2D2D2F),
+                      _getCardColor(context),
+                      _getSecondaryCardColor(context),
                     ],
                     stops: const [0.0, 1.0],
                   ),
                   borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.3),
+                      color: Theme.of(context).shadowColor.withOpacity(0.15),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -519,12 +576,12 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                             end: Alignment.bottomCenter,
                             colors: isPositive
                                 ? [
-                                    const Color(0xFF00FF88),
-                                    const Color(0xFF00CC6A),
+                                    _getPositiveColor(context),
+                                    _getPositiveColor(context).withOpacity(0.8),
                                   ]
                                 : [
-                                    const Color(0xFFFF4444),
-                                    const Color(0xFFCC3333),
+                                    _getNegativeColor(context),
+                                    _getNegativeColor(context).withOpacity(0.8),
                                   ],
                           ),
                           borderRadius: const BorderRadius.only(
@@ -552,8 +609,11 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                                   children: [
                                     Text(
                                       sector.sectorName,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .headlineSmall
+                                            ?.color,
                                         fontSize: 20,
                                         fontWeight: FontWeight.w700,
                                         letterSpacing: -0.5,
@@ -564,14 +624,21 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                                       padding: const EdgeInsets.symmetric(
                                           horizontal: 8, vertical: 4),
                                       decoration: BoxDecoration(
-                                        color:
-                                            Colors.white.withValues(alpha: 0.1),
+                                        color: Theme.of(context)
+                                            .textTheme
+                                            .bodyLarge
+                                            ?.color
+                                            ?.withOpacity(0.1),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
                                       child: Text(
                                         '${sector.totalStocks} stocks',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
+                                        style: TextStyle(
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .bodyMedium
+                                              ?.color
+                                              ?.withOpacity(0.8),
                                           fontSize: 12,
                                           fontWeight: FontWeight.w500,
                                         ),
@@ -595,33 +662,33 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                                       gradient: LinearGradient(
                                         colors: isPositive
                                             ? [
-                                                const Color(0xFF00FF88)
-                                                    .withValues(alpha: 0.2),
-                                                const Color(0xFF00FF88)
-                                                    .withValues(alpha: 0.1),
+                                                _getPositiveColor(context)
+                                                    .withOpacity(0.2),
+                                                _getPositiveColor(context)
+                                                    .withOpacity(0.1),
                                               ]
                                             : [
-                                                const Color(0xFFFF4444)
-                                                    .withValues(alpha: 0.2),
-                                                const Color(0xFFFF4444)
-                                                    .withValues(alpha: 0.1),
+                                                _getNegativeColor(context)
+                                                    .withOpacity(0.2),
+                                                _getNegativeColor(context)
+                                                    .withOpacity(0.1),
                                               ],
                                       ),
                                       borderRadius: BorderRadius.circular(16),
                                       border: Border.all(
                                         color: isPositive
-                                            ? const Color(0xFF00FF88)
-                                                .withValues(alpha: 0.3)
-                                            : const Color(0xFFFF4444)
-                                                .withValues(alpha: 0.3),
+                                            ? _getPositiveColor(context)
+                                                .withOpacity(0.3)
+                                            : _getNegativeColor(context)
+                                                .withOpacity(0.3),
                                       ),
                                     ),
                                     child: Text(
                                       '${isPositive ? '+' : ''}${sector.averageChange.toStringAsFixed(2)}%',
                                       style: TextStyle(
                                         color: isPositive
-                                            ? const Color(0xFF00FF88)
-                                            : const Color(0xFFFF4444),
+                                            ? _getPositiveColor(context)
+                                            : _getNegativeColor(context),
                                         fontWeight: FontWeight.w700,
                                         fontSize: 18,
                                         letterSpacing: -0.5,
@@ -649,7 +716,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                                   'Gainers',
                                   sector.positiveStocks.toString(),
                                   '${upPercentage.toStringAsFixed(0)}%',
-                                  const Color(0xFF00FF88),
+                                  _getPositiveColor(context),
                                   Icons.trending_up_rounded,
                                 ),
                               ),
@@ -659,7 +726,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                                   'Losers',
                                   sector.negativeStocks.toString(),
                                   '${downPercentage.toStringAsFixed(0)}%',
-                                  const Color(0xFFFF4444),
+                                  _getNegativeColor(context),
                                   Icons.trending_down_rounded,
                                 ),
                               ),
@@ -688,10 +755,10 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: color.withValues(alpha: 0.2),
+          color: color.withOpacity(0.2),
         ),
       ),
       child: Column(
@@ -704,7 +771,11 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
               Text(
                 title,
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.color
+                      ?.withOpacity(0.8),
                   fontSize: 12,
                   fontWeight: FontWeight.w500,
                 ),
@@ -722,7 +793,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
               Text(
                 count,
                 style: TextStyle(
-                  color: Colors.white,
+                  color: Theme.of(context).textTheme.bodyLarge?.color,
                   fontSize: 14,
                   fontWeight: FontWeight.w700,
                 ),
@@ -756,8 +827,12 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
           children: [
             Text(
               'Trend Strength',
-              style: const TextStyle(
-                color: Colors.white70,
+              style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.color
+                    ?.withOpacity(0.8),
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -766,8 +841,8 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
               '${(clampedStrength * 100).toStringAsFixed(0)}%',
               style: TextStyle(
                 color: isBullish
-                    ? const Color(0xFF00FF88)
-                    : const Color(0xFFFF4444),
+                    ? _getPositiveColor(context)
+                    : _getNegativeColor(context),
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -780,7 +855,11 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
             Container(
               height: 6,
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.1),
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.color
+                    ?.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(3),
               ),
             ),
@@ -793,21 +872,21 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
                 gradient: LinearGradient(
                   colors: isBullish
                       ? [
-                          const Color(0xFF00FF88),
-                          const Color(0xFF00CC6A),
+                          _getPositiveColor(context),
+                          _getPositiveColor(context).withOpacity(0.8),
                         ]
                       : [
-                          const Color(0xFFFF4444),
-                          const Color(0xFFCC3333),
+                          _getNegativeColor(context),
+                          _getNegativeColor(context).withOpacity(0.8),
                         ],
                 ),
                 borderRadius: BorderRadius.circular(3),
                 boxShadow: [
                   BoxShadow(
                     color: (isBullish
-                            ? const Color(0xFF00FF88)
-                            : const Color(0xFFFF4444))
-                        .withValues(alpha: 0.4),
+                            ? _getPositiveColor(context)
+                            : _getNegativeColor(context))
+                        .withOpacity(0.4),
                     blurRadius: 4,
                     offset: const Offset(0, 0),
                   ),

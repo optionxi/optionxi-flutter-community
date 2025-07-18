@@ -121,14 +121,14 @@ class _WatchlistItemState extends State<WatchlistItem> {
               placeholder: (context, url) => ClipRRect(
                 borderRadius: BorderRadius.circular(25),
                 child: Image.asset(
-                  'assets/images/option_xi_w.png',
+                  'assets/images/stockdefault.png',
                   fit: BoxFit.cover,
                 ),
               ),
               errorWidget: (context, url, error) => ClipRRect(
                 borderRadius: BorderRadius.circular(25),
                 child: Image.asset(
-                  'assets/images/option_xi_w.png',
+                  'assets/images/stockdefault.png',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -273,7 +273,7 @@ class _WatchlistItemState extends State<WatchlistItem> {
                       errorWidget: (context, url, error) => ClipRRect(
                         borderRadius: BorderRadius.circular(25),
                         child: Image.asset(
-                          'assets/images/option_xi_w.png',
+                          'assets/images/stockdefault.png',
                           fit: BoxFit.cover,
                         ),
                       ),
@@ -386,7 +386,10 @@ class _WatchlistItemState extends State<WatchlistItem> {
                               MaterialPageRoute(
                                   builder: (context) => BrowserLite_V(
                                       "https://in.tradingview.com/chart/?symbol=NSE%3A" +
-                                          stock.symbol.toString().split("-")[0].split(":")[1])),
+                                          stock.symbol
+                                              .toString()
+                                              .split("-")[0]
+                                              .split(":")[1])),
                             );
                           },
                           child: Padding(

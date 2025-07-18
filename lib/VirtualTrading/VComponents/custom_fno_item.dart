@@ -166,35 +166,47 @@ class _FNOItemState extends State<FNOItem> with TickerProviderStateMixin {
     return Row(
       children: [
         // Stock Icon with pulsating effect
-        AnimatedBuilder(
-          animation: _containerPulseController,
-          builder: (context, child) {
-            return Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: isPositive
-                    ? Colors.green.withOpacity(
-                        _containerPulseController.isAnimating ? 0.2 : 0.1)
-                    : Colors.red.withOpacity(
-                        _containerPulseController.isAnimating ? 0.2 : 0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: isPositive
-                      ? Colors.green.withOpacity(
-                          _containerPulseController.isAnimating ? 0.4 : 0.2)
-                      : Colors.red.withOpacity(
-                          _containerPulseController.isAnimating ? 0.4 : 0.2),
-                  width: 1,
-                ),
-              ),
-              child: Icon(
-                Icons.trending_up,
-                color: isPositive ? Colors.green : Colors.red,
-                size: 24,
-              ),
-            );
-          },
+        // AnimatedBuilder(
+        //   animation: _containerPulseController,
+        //   builder: (context, child) {
+        //     return Container(
+        //       width: 48,
+        //       height: 48,
+        //       decoration: BoxDecoration(
+        //         color: isPositive
+        //             ? Colors.green.withOpacity(
+        //                 _containerPulseController.isAnimating ? 0.2 : 0.1)
+        //             : Colors.red.withOpacity(
+        //                 _containerPulseController.isAnimating ? 0.2 : 0.1),
+        //         borderRadius: BorderRadius.circular(12),
+        //         border: Border.all(
+        //           color: isPositive
+        //               ? Colors.green.withOpacity(
+        //                   _containerPulseController.isAnimating ? 0.4 : 0.2)
+        //               : Colors.red.withOpacity(
+        //                   _containerPulseController.isAnimating ? 0.4 : 0.2),
+        //           width: 1,
+        //         ),
+        //       ),
+        //       child: Icon(
+        //         Icons.trending_up,
+        //         color: isPositive ? Colors.green : Colors.red,
+        //         size: 24,
+        //       ),
+        //     );
+        //   },
+        // ),
+
+        Container(
+          height: 48,
+          width: 48,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(25),
+            child: Image.asset(
+              'assets/images/stockdefault.png',
+              fit: BoxFit.cover,
+            ),
+          ),
         ),
         const SizedBox(width: 16),
 

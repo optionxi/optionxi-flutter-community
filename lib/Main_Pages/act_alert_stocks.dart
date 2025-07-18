@@ -1,22 +1,30 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:optionxi/Components/cust_alert_item.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
 import 'package:optionxi/DataModels/sample_stock_symbols.dart';
-import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Main_Pages/act_search_stocks_alerts.dart';
 import 'dart:async';
-import 'package:timeago/timeago.dart' as timeago;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// Alert Model class
 class AlertModel {
   final int id;
   final String date;
   final String description;
   final String? symbol;
   final String? sentiment;
+  final double? close;
+  final double? prevClose;
+  final double? pcnt;
+  final double? high;
+  final double? low;
+  final double? week52High;
+  final double? week52Low;
+  final double? prevDayLow;
+  final double? prevDayHigh;
+  final double? volume;
+  final double? sma5Volume;
+  final double? open;
   final String createdAt;
   final String updatedAt;
 
@@ -26,6 +34,18 @@ class AlertModel {
     required this.description,
     this.symbol,
     this.sentiment,
+    this.close,
+    this.prevClose,
+    this.pcnt,
+    this.high,
+    this.low,
+    this.week52High,
+    this.week52Low,
+    this.prevDayLow,
+    this.prevDayHigh,
+    this.volume,
+    this.sma5Volume,
+    this.open,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -37,6 +57,18 @@ class AlertModel {
       description: json['description'] ?? '',
       symbol: json['symbol'],
       sentiment: json['sentiment'],
+      close: (json['close'] as num?)?.toDouble(),
+      prevClose: (json['prev_close'] as num?)?.toDouble(),
+      pcnt: (json['pcnt'] as num?)?.toDouble(),
+      high: (json['high'] as num?)?.toDouble(),
+      low: (json['low'] as num?)?.toDouble(),
+      week52High: (json['52_week_high'] as num?)?.toDouble(),
+      week52Low: (json['52_week_low'] as num?)?.toDouble(),
+      prevDayLow: (json['prev_day_low'] as num?)?.toDouble(),
+      prevDayHigh: (json['prev_day_high'] as num?)?.toDouble(),
+      volume: (json['volume'] as num?)?.toDouble(),
+      sma5Volume: (json['sma_5_volume'] as num?)?.toDouble(),
+      open: (json['open'] as num?)?.toDouble(),
       createdAt: json['created_at'] ?? '',
       updatedAt: json['updated_at'] ?? '',
     );
@@ -547,231 +579,6 @@ class _StockAlertsPageState extends State<StockAlertsPage>
     );
   }
 
-  Widget _buildAlertItem(AlertModel alert, int index) {
-    // Determine styles based on sentiment
-    final isBullish = alert.sentiment == 'bullish';
-    final Color borderColor =
-        isBullish ? Colors.green.shade200 : Colors.red.shade200;
-    final Color bgColor = isBullish ? Colors.green.shade50 : Colors.red.shade50;
-    final Color tagColor =
-        isBullish ? Colors.green.shade700 : Colors.red.shade700;
-    final Color tagBgColor =
-        isBullish ? Colors.green.shade100 : Colors.red.shade100;
-
-    final DateTime alertDatetime = DateTime.parse(alert.createdAt).toLocal();
-
-    // Get full stock name if available
-    String displaySymbol = alert.symbol ?? 'Market Alert';
-
-    if (alert.symbol != null && totalStocks.containsKey(alert.symbol)) {
-      displaySymbol =
-          totalStocks[alert.symbol]?['full_stock_name'] ?? alert.symbol!;
-    }
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0.0, end: 1.0),
-      duration: Duration(milliseconds: 300 + (index * 100)),
-      builder: (context, value, child) {
-        return Transform.translate(
-          offset: Offset(20 * (1 - value), 0),
-          child: Opacity(
-            opacity: value,
-            child: child,
-          ),
-        );
-      },
-      child: Container(
-        margin: EdgeInsets.only(bottom: 16),
-        decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Theme.of(context).cardColor
-              : bgColor,
-          border: Border.all(color: borderColor),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 8,
-              offset: Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            borderRadius: BorderRadius.circular(12),
-            onTap: () {
-              // Navigate to alert details page
-              if (alert.symbol != null) {
-                String? fullKey;
-
-                // Find the full key (like "NSE:20MICRONS-EQ") that contains the symbol
-                totalStocks.forEach((key, value) {
-                  if (key.contains(alert.symbol!)) {
-                    fullKey = key;
-                  }
-                });
-
-                if (fullKey != null) {
-                  print("Navigate to alert details for $fullKey");
-                  Get.toNamed('/stocks/${fullKey!.toUpperCase()}');
-                } else {
-                  print(
-                      "Stock symbol ${alert.symbol} not found in totalStocks.");
-                }
-              }
-            },
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Stock Logo
-                  CachedNetworkImage(
-                    height: 48,
-                    width: 48,
-                    imageUrl: Constants.OptionXiS3Loc +
-                        alert.symbol.toString() +
-                        ".png",
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Image.asset(
-                        'assets/images/option_xi_w.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Image.asset(
-                        'assets/images/option_xi_w.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  // Container(
-                  //   width: 60,
-                  //   height: 60,
-                  //   decoration: BoxDecoration(
-                  //     color: Theme.of(context).cardColor,
-                  //     borderRadius: BorderRadius.circular(12),
-                  //     border: Border.all(
-                  //       color: Theme.of(context).dividerColor,
-                  //       width: 1,
-                  //     ),
-                  //   ),
-                  //   child: Center(
-                  //     child: Text(
-                  //       stockInitials,
-                  //       style: TextStyle(
-                  //         fontWeight: FontWeight.bold,
-                  //         fontSize: 18,
-                  //       ),
-                  //     ),
-                  //   ),
-                  // ),
-                  SizedBox(width: 16),
-                  // Alert Content
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Title and Sentiment Tag
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                displaySymbol,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            if (alert.sentiment != null)
-                              Container(
-                                padding: EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: tagBgColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  alert.sentiment!.toUpperCase(),
-                                  style: TextStyle(
-                                    color: tagColor,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        // Description
-                        Text(
-                          alert.description,
-                          style: TextStyle(
-                            color:
-                                Theme.of(context).textTheme.bodyMedium?.color,
-                            fontSize: 14,
-                          ),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        SizedBox(height: 12),
-                        // Time Info
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  Icons.access_time,
-                                  size: 16,
-                                  color: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.color,
-                                ),
-                                SizedBox(width: 4),
-                                Text(
-                                  timeago.format(alertDatetime),
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodySmall
-                                        ?.color,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            Text(
-                              DateFormat('h:mm a').format(alertDatetime),
-                              style: TextStyle(
-                                color: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.color,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildPagination() {
     final int totalPages = (_totalCount / pageSize).ceil();
 
@@ -996,14 +803,26 @@ class _StockAlertsPageState extends State<StockAlertsPage>
                   : _alerts.isEmpty
                       ? _buildEmptyState()
                       : ListView.builder(
-                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           itemCount: _alerts.length,
                           itemBuilder: (context, index) {
-                            return _buildAlertItem(_alerts[index], index);
+                            // The chronologically previous alert is the *next* item in the list
+                            // because the list is sorted from newest to oldest.
+                            final prevAlert = (index + 1 < _alerts.length)
+                                ? _alerts[index + 1]
+                                : null;
+
+                            // Pass the current alert and the chronologically previous alert.
+                            return AlertItem(
+                              alert: _alerts[index],
+                              prevAlert: _selectedStock == "all"
+                                  ? null
+                                  : prevAlert, // Pass the correct previous alert here
+                              index: index,
+                            );
                           },
                         ),
             ),
-
             // Pagination
             if (!_isLoading && _alerts.isNotEmpty) _buildPagination(),
           ],

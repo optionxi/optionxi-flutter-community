@@ -31,9 +31,10 @@ void showConnectionDialog(BuildContext context, String brokerName) {
         ElevatedButton(
           onPressed: () {
             Navigator.pop(context);
+
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('This feature will be comming soon for all users',
+                content: Text('This feature will be comming soon!, Stay tuned',
                     style:
                         GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
                 backgroundColor: theme.colorScheme
