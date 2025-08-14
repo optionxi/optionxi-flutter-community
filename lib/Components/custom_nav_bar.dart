@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'dart:ui';
@@ -53,12 +54,12 @@ class CustomBottomNavBar extends StatelessWidget {
               children: [
                 _buildNavItem(0, Icons.home_outlined, Icons.home_rounded,
                     "Home", context),
-                _buildNavItem(1, Icons.trending_up_outlined, Icons.trending_up,
-                    "Trade", context),
-                _buildNavItem(2, Icons.bookmark_border,
-                    Icons.bookmark_border_rounded, "Watchlist", context),
-                _buildNavItem(3, Icons.troubleshoot_outlined,
-                    Icons.troubleshoot_rounded, "Tools", context),
+                _buildNavItem(1, FontAwesomeIcons.calendarDay,
+                    FontAwesomeIcons.calendarDay, "Prev", context),
+                _buildNavItem(2, FontAwesomeIcons.chartLine,
+                    FontAwesomeIcons.chartLine, "Live", context),
+                _buildNavItem(3, FontAwesomeIcons.toolbox,
+                    FontAwesomeIcons.toolbox, "Tools", context),
                 _buildNavItem(4, Icons.person_outline, Icons.person_rounded,
                     "Profile", context),
               ],

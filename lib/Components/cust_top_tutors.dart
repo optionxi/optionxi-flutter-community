@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:optionxi/Main_Pages/act_tutor_detail_page.dart';
 
 class TradingTutor {
+  final int id;
   final String name;
   final String title;
   final String image;
@@ -14,8 +16,10 @@ class TradingTutor {
   final String bio;
   final double price;
   final List<String> achievements;
+  final bool verified;
 
   TradingTutor({
+    required this.id,
     required this.name,
     required this.title,
     required this.image,
@@ -27,113 +31,121 @@ class TradingTutor {
     required this.bio,
     required this.price,
     required this.achievements,
+    required this.verified,
   });
+
+  factory TradingTutor.fromJson(Map<String, dynamic> json) {
+    return TradingTutor(
+      id: json['id'],
+      name: json['name'] ?? '',
+      title: json['title'] ?? '',
+      image: json['image'] ?? '',
+      description: json['description'] ?? '',
+      rating: (json['rating'] ?? 0.0).toDouble(),
+      students: json['students'] ?? 0,
+      experience: json['experience'] ?? '',
+      specialties: json['specialties'] != null
+          ? List<String>.from(json['specialties'])
+          : [],
+      bio: json['bio'] ?? '',
+      price: (json['price'] ?? 0.0).toDouble(),
+      achievements: json['achievements'] != null
+          ? List<String>.from(json['achievements'])
+          : [],
+      verified: json['verified'] ?? false,
+    );
+  }
 }
 
-class TradingTutorsScreen extends StatelessWidget {
-  final List<TradingTutor> tutors = [
-    TradingTutor(
-      name: "Sarah Chen",
-      title: "Forex & Crypto Expert",
-      image:
-          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&h=400&fit=crop&crop=face",
-      description:
-          "Professional forex trader with 8+ years experience in currency markets",
-      rating: 4.9,
-      students: 1250,
-      experience: "8+ years",
-      specialties: [
-        "Forex",
-        "Cryptocurrency",
-        "Technical Analysis",
-        "Risk Management"
-      ],
-      bio:
-          "Sarah is a seasoned forex trader who has been actively trading for over 8 years. She specializes in major currency pairs and has developed a unique scalping strategy that has helped hundreds of students achieve consistent profits. Her approach combines technical analysis with fundamental market understanding.",
-      price: 99.99,
-      achievements: [
-        "Certified Financial Analyst (CFA)",
-        "8+ years of profitable trading",
-        "Featured in Trading Magazine",
-        "Developed proprietary trading algorithm"
-      ],
-    ),
-    TradingTutor(
-      name: "Nikhil Mathew",
-      title: "Stock Market Strategist",
-      image:
-          "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=400&fit=crop&crop=face",
-      description:
-          "Wall Street veteran specializing in equity trading and market analysis",
-      rating: 4.8,
-      students: 980,
-      experience: "12+ years",
-      specialties: ["Stocks", "Options", "Swing Trading", "Market Analysis"],
-      bio:
-          "Marcus brings over 12 years of Wall Street experience to his teaching. He has worked at major investment banks and now shares his knowledge with aspiring traders. His focus is on building sustainable trading strategies that work in both bull and bear markets.",
-      price: 149.99,
-      achievements: [
-        "Former Goldman Sachs analyst",
-        "12+ years Wall Street experience",
-        "Author of 'Smart Trading Strategies'",
-        "Managed 50M+ portfolio"
-      ],
-    ),
-    TradingTutor(
-      name: "Emily Watson",
-      title: "Day Trading Specialist",
-      image:
-          "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop&crop=face",
-      description:
-          "Expert day trader with proven track record in high-frequency trading",
-      rating: 4.7,
-      students: 750,
-      experience: "6+ years",
-      specialties: ["Day Trading", "Scalping", "Chart Patterns", "Psychology"],
-      bio:
-          "Emily is a full-time day trader who has mastered the art of quick, profitable trades. She focuses on teaching the psychological aspects of trading and how to maintain discipline in fast-paced market conditions. Her students learn to identify high-probability setups and manage risk effectively.",
-      price: 79.99,
-      achievements: [
-        "6+ years of consistent day trading",
-        "Developed 'Quick Strike' method",
-        "Featured in Forbes",
-        "90%+ win rate on scalping trades"
-      ],
-    ),
-  ];
+class TopTradingTutorsScreen extends StatefulWidget {
+  @override
+  _TopTradingTutorsScreenState createState() => _TopTradingTutorsScreenState();
+}
+
+class _TopTradingTutorsScreenState extends State<TopTradingTutorsScreen> {
+  List<TradingTutor> tutors = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchTutors();
+  }
+
+  Future<void> _fetchTutors() async {
+    try {
+      final response = await Supabase.instance.client
+          .from('tutorslist')
+          .select('*')
+          .eq('verified', true)
+          .order('rating', ascending: false);
+
+      if (response.isNotEmpty) {
+        setState(() {
+          tutors = response.map((json) => TradingTutor.fromJson(json)).toList();
+        });
+      }
+    } catch (e) {
+      // Silently handle errors - don't show error messages as requested
+      print('Error fetching tutors: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    // If no tutors, don't show anything (no error, no loading)
+    if (tutors.isEmpty) {
+      return SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Top Trading Tutors',
-                style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onBackground,
-                ),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Learn from the best traders in the industry',
-                style: TextStyle(
-                  fontSize: 16,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
-            ],
-          ),
+          padding: const EdgeInsets.all(4.0),
+          child: _buildHeader(context),
         ),
         SizedBox(height: 16),
         TutorCarousel(tutors: tutors),
+      ],
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Top Tutors',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Learn the basics from the masters',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
+            ),
+          ],
+        ),
+        TextButton(
+          onPressed: () {
+            // Navigator.push(
+            //   context,
+            //   MaterialPageRoute(
+            //     builder: (context) => const TopRecommendedStockPage(),
+            //   ),
+            // );
+          },
+          child: const Text('View All'),
+        ),
       ],
     );
   }
@@ -150,39 +162,53 @@ class TutorCarousel extends StatefulWidget {
 
 class _TutorCarouselState extends State<TutorCarousel> {
   late final PageController _pageController;
-  late final Timer _timer;
+  Timer? _timer;
   int _currentPage = 0;
 
   @override
   void initState() {
     super.initState();
-    _pageController =
-        PageController(viewportFraction: 0.85, initialPage: _currentPage);
-    _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
-      if (_currentPage < widget.tutors.length - 1) {
-        _currentPage++;
-      } else {
-        _currentPage = 0;
-      }
-      if (_pageController.hasClients) {
-        _pageController.animateToPage(
-          _currentPage,
-          duration: Duration(milliseconds: 600),
-          curve: Curves.easeInOut,
-        );
-      }
-    });
+    if (widget.tutors.isNotEmpty) {
+      _pageController =
+          PageController(viewportFraction: 0.85, initialPage: _currentPage);
+      _startAutoScroll();
+    }
+  }
+
+  void _startAutoScroll() {
+    if (widget.tutors.length > 1) {
+      _timer = Timer.periodic(Duration(seconds: 5), (Timer timer) {
+        if (_currentPage < widget.tutors.length - 1) {
+          _currentPage++;
+        } else {
+          _currentPage = 0;
+        }
+        if (_pageController.hasClients) {
+          _pageController.animateToPage(
+            _currentPage,
+            duration: Duration(milliseconds: 600),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
-    _timer.cancel();
-    _pageController.dispose();
+    _timer?.cancel();
+    if (widget.tutors.isNotEmpty) {
+      _pageController.dispose();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.tutors.isEmpty) {
+      return SizedBox.shrink();
+    }
+
     return Column(
       children: [
         SizedBox(
@@ -204,25 +230,29 @@ class _TutorCarouselState extends State<TutorCarousel> {
           ),
         ),
         SizedBox(height: 20),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(
-            widget.tutors.length,
-            (index) => AnimatedContainer(
-              duration: Duration(milliseconds: 300),
-              margin: EdgeInsets.symmetric(horizontal: 4),
-              width: _currentPage == index ? 24 : 8,
-              height: 8,
-              decoration: BoxDecoration(
-                color: _currentPage == index
-                    ? Theme.of(context).primaryColor
-                    : Colors.grey.withOpacity(0.5),
-                borderRadius: BorderRadius.circular(4),
-              ),
-            ),
+        if (widget.tutors.length > 1) buildDotNavigation(context),
+      ],
+    );
+  }
+
+  Row buildDotNavigation(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(
+        widget.tutors.length,
+        (index) => AnimatedContainer(
+          duration: Duration(milliseconds: 300),
+          margin: EdgeInsets.symmetric(horizontal: 4),
+          width: _currentPage == index ? 24 : 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: _currentPage == index
+                ? Theme.of(context).primaryColor
+                : Colors.grey.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(4),
           ),
         ),
-      ],
+      ),
     );
   }
 }
@@ -264,10 +294,15 @@ class TutorCard extends StatelessWidget {
             Row(
               children: [
                 Hero(
-                  tag: 'tutor_image_${tutor.name}',
+                  tag: 'tutor_image_${tutor.id}',
                   child: CircleAvatar(
                     radius: 32,
-                    backgroundImage: NetworkImage(tutor.image),
+                    backgroundImage: tutor.image.isNotEmpty
+                        ? NetworkImage(tutor.image)
+                        : null,
+                    child: tutor.image.isEmpty
+                        ? Icon(Icons.person, size: 32)
+                        : null,
                   ),
                 ),
                 SizedBox(width: 16),

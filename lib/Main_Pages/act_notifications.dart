@@ -5,6 +5,7 @@ import 'package:optionxi/DataModels/sample_stock_symbols.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Main_Pages/act_atlas_page.dart';
+import 'package:optionxi/Main_Pages/act_leaderboard.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
@@ -459,6 +460,14 @@ class _NotificationPageState extends State<NotificationPage>
 
                   Get.toNamed('/stocks/$matchedKey');
                 }
+                if (notification.stockName.toLowerCase() == "leaderboard") {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => LeaderboardPage(),
+                    ),
+                  );
+                }
               }
             }
           },
@@ -533,7 +542,6 @@ class _NotificationPageState extends State<NotificationPage>
                     // Content
                     Expanded(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           // Title and unread indicator
                           Row(
@@ -570,20 +578,6 @@ class _NotificationPageState extends State<NotificationPage>
                             ],
                           ),
                           const SizedBox(height: 8),
-
-                          // Description
-                          Text(
-                            notification.description,
-                            style: TextStyle(
-                              fontSize: 15,
-                              color: isDark
-                                  ? Colors.white.withOpacity(0.8)
-                                  : Colors.black.withOpacity(0.75),
-                              height: 1.4,
-                            ),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
                         ],
                       ),
                     ),
@@ -591,7 +585,19 @@ class _NotificationPageState extends State<NotificationPage>
                 ),
 
                 const SizedBox(height: 16),
-
+                Text(
+                  notification.description,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.8)
+                        : Colors.black.withOpacity(0.75),
+                    height: 1.4,
+                  ),
+                  // maxLines: 7,
+                  // overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 16),
                 // Stock chips and stock icon section
                 if (notification.stockData.isNotEmpty ||
                     notification.stockName.isNotEmpty)
@@ -744,22 +750,20 @@ class _NotificationPageState extends State<NotificationPage>
     final now = DateTime.now();
     final difference = now.difference(dateTime);
 
-    if (difference.inDays == 0) {
-      // Today - show time
-      final hour = dateTime.hour;
-      final minute = dateTime.minute.toString().padLeft(2, '0');
-      final period = hour >= 12 ? 'PM' : 'AM';
-      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-      return '$displayHour:$minute $period';
-    } else if (difference.inDays == 1) {
-      // Yesterday
-      return 'Yesterday';
-    } else if (difference.inDays < 7) {
-      // This week - show day name
-      final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-      return weekdays[dateTime.weekday - 1];
+    final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final dayName = weekdays[dateTime.weekday - 1];
+
+    final hour = dateTime.hour;
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    final formattedTime = '$displayHour:$minute $period';
+
+    if (difference.inDays < 7) {
+      // Within the last 7 days - show weekday and time
+      return '$dayName, $formattedTime';
     } else {
-      // Older - show date
+      // Older - show full date
       return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
     }
   }

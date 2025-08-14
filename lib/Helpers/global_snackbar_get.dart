@@ -133,7 +133,8 @@ class GlobalSnackBarGet {
     );
   }
 
-  void showGetSuccessOnTop(String head, String title) {
+  void showGetSuccessOnTop(String head, String title,
+      {Color? backgroundColor}) {
     Get.snackbar(
       '',
       '',
@@ -156,7 +157,8 @@ class GlobalSnackBarGet {
         ),
       ),
       snackPosition: SnackPosition.TOP,
-      backgroundColor: _successBackground,
+      backgroundColor:
+          backgroundColor ?? _successBackground, // <-- uses default if null
       borderRadius: _borderRadius,
       margin: _defaultMargin,
       padding: _padding,
@@ -167,7 +169,7 @@ class GlobalSnackBarGet {
       reverseAnimationCurve: Curves.easeInCubic,
       animationDuration: _animationDuration,
       overlayBlur: 2.0,
-      overlayColor: Colors.black.withValues(alpha: 0.05),
+      overlayColor: Colors.black.withOpacity(0.05),
       icon: Icon(
         Icons.check_circle_outline_rounded,
         color: Colors.green.shade300,

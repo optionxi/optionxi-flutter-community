@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:optionxi/Components/cust_top_tutors.dart';
+import 'package:optionxi/Helpers/open_url.dart';
 
 class TutorDetailPage extends StatelessWidget {
   final TradingTutor tutor;
@@ -14,7 +15,7 @@ class TutorDetailPage extends StatelessWidget {
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
-              expandedHeight: 350,
+              expandedHeight: 400,
               pinned: true,
               stretch: true,
               backgroundColor: Colors.transparent,
@@ -87,24 +88,31 @@ class TutorDetailPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 8),
-                        Container(
+                        Padding(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.primary.withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: theme.colorScheme.primary.withOpacity(0.2),
-                              width: 1,
+                              horizontal: 32, vertical: 6),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primary.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color:
+                                    theme.colorScheme.primary.withOpacity(0.2),
+                                width: 1,
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            tutor.title,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: theme.colorScheme.primary,
-                              letterSpacing: 0.2,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16, vertical: 8),
+                              child: Text(
+                                tutor.title,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                  color: theme.colorScheme.primary,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
                             ),
                           ),
                         ),
@@ -338,7 +346,7 @@ class TutorDetailPage extends StatelessWidget {
               ),
               SizedBox(height: 4),
               Text(
-                '\$${tutor.price}/session',
+                '\₹${tutor.price}/session',
                 style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                   color: theme.colorScheme.primary,
@@ -348,13 +356,16 @@ class TutorDetailPage extends StatelessWidget {
           ),
           ElevatedButton(
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Booking session with ${tutor.name}'),
-                  backgroundColor: theme.colorScheme.primary,
-                  behavior: SnackBarBehavior.floating,
-                ),
-              );
+              // ScaffoldMessenger.of(context).showSnackBar(
+              //   SnackBar(
+              //     content: Text('Booking session with ${tutor.name}'),
+              //     backgroundColor: theme.colorScheme.primary,
+              //     behavior: SnackBarBehavior.floating,
+              //   ),
+              // );
+              // https://www.oharipadanam.com/s/store
+
+              OpenHelper.open_url("https://www.oharipadanam.com/s/store");
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: theme.colorScheme.primary,

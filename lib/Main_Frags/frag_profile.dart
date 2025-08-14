@@ -5,6 +5,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Auth_Service/auth_service.dart';
+import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_virtual_balance_section.dart';
 import 'package:optionxi/Helpers/open_url.dart';
 import 'package:optionxi/Main_Pages/act_leaderboard.dart';
@@ -15,7 +16,6 @@ import 'package:optionxi/Main_Pages/act_tradingideas.dart';
 import 'package:optionxi/MobileLink/link_phone_screen.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
 import 'package:optionxi/VirtualTrading/act_broker_connectpage.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class TradingProfilePage extends StatefulWidget {
   @override
@@ -125,6 +125,12 @@ class _TradingProfilePageState extends State<TradingProfilePage>
             children: [
               _buildHeader(theme),
               BalanceCard(),
+              // Padding(
+              //   padding: const EdgeInsets.all(16.0),
+              //   child: LeaderboardWidgetMain(),
+              // ),
+              // TopTradingTutorsScreen(),
+              // const SizedBox(height: 24),
               // ProfileStatsWidget(),
               _buildOptionsLists(theme),
               InkWell(
@@ -156,7 +162,7 @@ class _TradingProfilePageState extends State<TradingProfilePage>
               onTap: () {
                 // Navigator.push(
                 //   context,
-                //   MaterialPageRoute(builder: (context) => TraderProfilePage()),
+                //   MaterialPageRoute(builder: (context) => ContributorsPage()),
                 // );
               },
               child: Stack(
@@ -251,9 +257,11 @@ class _TradingProfilePageState extends State<TradingProfilePage>
                 "Trading",
                 [
                   OptionItem("Leaderboard", FontAwesomeIcons.trophy,
-                      badgeText: "New", onTap: goToLeaderBoardPage),
-                  OptionItem("Connect Algo", FontAwesomeIcons.robot,
+                      badgeText: "Beta", onTap: goToLeaderBoardPage),
+                  OptionItem("Broker Connect", FontAwesomeIcons.robot,
                       badgeText: "Beta", onTap: gotoBrokerConnect),
+                  OptionItem("Oraganisations", FontAwesomeIcons.building,
+                      badgeText: "Soon", onTap: showCommingSoon),
                   OptionItem("Live virtual trading", Icons.bolt,
                       badgeText: "Soon", onTap: showCommingSoon),
                   OptionItem(
@@ -312,7 +320,10 @@ class _TradingProfilePageState extends State<TradingProfilePage>
             _buildSection(
                 "Preferences",
                 [
-                  // OptionItem("Notifications", Icons.notifications_outlined),
+                  OptionItem("Feature Request", Icons.settings, onTap: () {
+                    OpenHelper.open_url(
+                        "https://app.optionxi.com/feature-request");
+                  }),
                   OptionItem("Webview", Icons.language, onTap: () {
                     OpenHelper.open_url("https://app.optionxi.com");
                   }),
@@ -333,21 +344,7 @@ class _TradingProfilePageState extends State<TradingProfilePage>
                   ),
                   OptionItem("Customer Support", Icons.help_outline,
                       onTap: () async {
-                    final Uri emailLaunchUri = Uri(
-                      scheme: 'mailto',
-                      path: 'optionxi24@gmail.com',
-                      // Optional query parameters:
-                      queryParameters: {
-                        'subject': 'Customer Support',
-                        'body': 'Hello team, I would like to ask about '
-                      },
-                    );
-
-                    if (await canLaunchUrl(emailLaunchUri)) {
-                      await launchUrl(emailLaunchUri);
-                    } else {
-                      print('Could not launch email client');
-                    }
+                    showContactOptions(context);
                   }),
                 ],
                 theme),

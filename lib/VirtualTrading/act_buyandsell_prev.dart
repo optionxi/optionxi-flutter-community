@@ -35,6 +35,8 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   final _slController = TextEditingController();
   final _triggerController = TextEditingController();
 
+  bool _isExpanded = false;
+
   // State Variables
   late String _orderType;
   String _priceType = 'MKT'; // MKT, LIMIT, SL, SLM
@@ -472,7 +474,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     );
   }
 
-// New method that combines stock info with action buttons
+// Sleek method that combines stock info with expandable details
   Widget _buildStockInfoCardWithActions(bool isDark) {
     final Color gainColor =
         isDark ? Colors.green.shade400 : Colors.green.shade700;
@@ -480,10 +482,10 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     final Color changeColor = _percentChange >= 0 ? gainColor : lossColor;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      // margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5E5),
           width: 1,
@@ -491,154 +493,322 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
         boxShadow: [
           BoxShadow(
             color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+                ? Colors.black.withOpacity(0.4)
+                : Colors.grey.withOpacity(0.15),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         children: [
-          // Stock info section
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          // Main stock info section
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isExpanded = !_isExpanded;
+              });
+            },
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
                 children: [
-                  Text(
-                    widget.stockname ?? 'Unknown Stock',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Stock Icon
-                  CachedNetworkImage(
-                    height: 48,
-                    width: 48,
-                    imageUrl: Constants.OptionXiS3Loc +
-                        widget.stockname.toString() +
-                        ".png",
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Image.asset(
-                        'assets/images/stockdefault.png',
-                        fit: BoxFit.cover,
+                  // Top row: Stock name, icon, and price info
+                  Row(
+                    children: [
+                      // Stock Icon
+                      Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: CachedNetworkImage(
+                            height: 52,
+                            width: 52,
+                            imageUrl: Constants.OptionXiS3Loc +
+                                widget.stockname.toString() +
+                                ".png",
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) => Image.asset(
+                              'assets/images/stockdefault.png',
+                              fit: BoxFit.cover,
+                            ),
+                            errorWidget: (context, url, error) => Image.asset(
+                              'assets/images/stockdefault.png',
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
                       ),
-                    ),
-                    errorWidget: (context, url, error) => ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Image.asset(
-                        'assets/images/stockdefault.png',
-                        fit: BoxFit.cover,
+                      const SizedBox(width: 16),
+
+                      // Stock name and segment
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              widget.stockname ?? 'Unknown Stock',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1A1A1A),
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? const Color(0xFF2A2A2A)
+                                    : const Color(0xFFF5F5F5),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                widget.segment ?? 'EQ',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color: isDark
+                                      ? Colors.grey[300]
+                                      : Colors.grey[600],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+
+                      // Price and change
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            '₹${_currentPrice.toStringAsFixed(2)}',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                              color: isDark
+                                  ? Colors.white
+                                  : const Color(0xFF1A1A1A),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: changeColor.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: changeColor.withOpacity(0.3),
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  _percentChange >= 0
+                                      ? Icons.arrow_upward_rounded
+                                      : Icons.arrow_downward_rounded,
+                                  size: 14,
+                                  color: changeColor,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${_percentChange.abs().toStringAsFixed(2)}%',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: changeColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Text(
-                    widget.segment ?? 'EQ',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.grey[300] : Colors.grey[600],
-                    ),
-                  ),
-                  const Spacer(),
-                  // Price and Percent Change
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+
+                  // Expand/collapse indicator
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        '₹${_currentPrice.toStringAsFixed(2)}',
+                        _isExpanded
+                            ? 'Tap to hide details'
+                            : 'Tap to view details',
                         style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF1A1A1A),
+                          fontSize: 12,
+                          color: isDark ? Colors.grey[400] : Colors.grey[500],
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: changeColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: changeColor.withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          '${_percentChange >= 0 ? '▲' : '▼'} ${_percentChange.abs().toStringAsFixed(2)}%',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: changeColor,
-                            fontWeight: FontWeight.w600,
-                          ),
+                      const SizedBox(width: 4),
+                      AnimatedRotation(
+                        turns: _isExpanded ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 200),
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: isDark ? Colors.grey[400] : Colors.grey[500],
                         ),
                       ),
                     ],
                   ),
                 ],
               ),
-            ],
+            ),
           ),
-          const Divider(height: 24),
-          // O-H-L-C Details
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildOhlcItem('Open', _open.toStringAsFixed(2), isDark),
-              _buildOhlcItem('High', _high.toStringAsFixed(2), isDark),
-              _buildOhlcItem('Low', _low.toStringAsFixed(2), isDark),
-              _buildOhlcItem(
-                  'Prev. Close', _prevClose.toStringAsFixed(2), isDark),
-            ],
+
+          // Expandable OHLC section
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+            height: _isExpanded ? null : 0,
+            child: AnimatedOpacity(
+              opacity: _isExpanded ? 1.0 : 0.0,
+              duration: const Duration(milliseconds: 200),
+              child: _isExpanded
+                  ? Column(
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 20),
+                          height: 1,
+                          color: isDark
+                              ? const Color(0xFF2A2A2A)
+                              : const Color(0xFFE5E5E5),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(20),
+                          child: Column(
+                            children: [
+                              // First row: Open and High
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildOhlcItem('Open',
+                                        _open.toStringAsFixed(2), isDark),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildOhlcItem('High',
+                                        _high.toStringAsFixed(2), isDark),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              // Second row: Low and Previous Close
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildOhlcItem(
+                                        'Low', _low.toStringAsFixed(2), isDark),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: _buildOhlcItem('Prev. Close',
+                                        _prevClose.toStringAsFixed(2), isDark),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : const SizedBox.shrink(),
+            ),
           ),
-          const Divider(height: 24),
-          // Action buttons row
-          Row(
-            children: [
-              Expanded(
-                child: buildColorfulActionButton(
-                  context,
-                  isDark,
-                  'Chart',
-                  Icons.trending_up_rounded,
-                  () => _navigateToChart(context),
-                  true, // isChart button
+
+          // Action buttons section
+          Container(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+            child: Row(
+              children: [
+                Expanded(
+                  child: buildModernActionButton(
+                    context,
+                    isDark,
+                    'Chart',
+                    Icons.trending_up_rounded,
+                    () => _navigateToChart(context),
+                    true, // isChart button
+                  ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: buildColorfulActionButton(
-                  context,
-                  isDark,
-                  'Alerts',
-                  Icons.analytics_outlined,
-                  () {
-                    if (widget.segment == "FNO") {
-                      Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                              builder: (context) => AtlasOutputPage()));
-                    } else {
-                      Get.toNamed('/alerts/${widget.stockname}');
-                    }
-                  },
-                  false, // isChart button
+                const SizedBox(width: 16),
+                Expanded(
+                  child: buildModernActionButton(
+                    context,
+                    isDark,
+                    'Alerts',
+                    Icons.analytics_outlined,
+                    () {
+                      if (widget.segment == "FNO") {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => AtlasOutputPage()));
+                      } else {
+                        Get.toNamed('/alerts/${widget.stockname}');
+                      }
+                    },
+                    false, // isChart button
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+// Enhanced OHLC item builder with better styling for 2x2 grid
+  Widget _buildOhlcItem(String label, String value, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF8F8F8),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEEEEEE),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark ? Colors.grey[400] : Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '₹$value',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: isDark ? Colors.white : const Color(0xFF1A1A1A),
+            ),
           ),
         ],
       ),
@@ -709,21 +879,21 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
     );
   }
 
-  Widget _buildOhlcItem(String title, String value, bool isDark) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-        const SizedBox(height: 2),
-        Text(value,
-            style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white70 : Colors.black87)),
-      ],
-    );
-  }
+  // Widget _buildOhlcItem(String title, String value, bool isDark) {
+  //   return Column(
+  //     crossAxisAlignment: CrossAxisAlignment.start,
+  //     children: [
+  //       Text(title,
+  //           style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
+  //       const SizedBox(height: 2),
+  //       Text(value,
+  //           style: TextStyle(
+  //               fontSize: 14,
+  //               fontWeight: FontWeight.w600,
+  //               color: isDark ? Colors.white70 : Colors.black87)),
+  //     ],
+  //   );
+  // }
 
   Widget _buildBalanceCard(bool isDark) {
     return Container(

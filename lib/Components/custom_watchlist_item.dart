@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Components/custom_animated_price.dart';
@@ -9,6 +10,7 @@ import 'package:optionxi/DataModels/sample_stock_symbols.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/volume_formater.dart';
 import 'package:optionxi/Main_Pages/act_stock_detail.dart';
+import 'package:optionxi/VirtualTradeJournal/add_basket_page.dart';
 import 'package:optionxi/browser_lite.dart';
 
 class WatchlistItem extends StatefulWidget {
@@ -352,79 +354,65 @@ class _WatchlistItemState extends State<WatchlistItem> {
               // Price Section - Updated with AnimatedPriceWidget
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
+                child: AnimatedPriceWidget(
+                  price: widget.stock.close,
+                  previousPrice: previousClose,
+                  wasUp: wasUp,
+                  style: priceTextStyle,
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Divider(color: Theme.of(context).dividerColor),
+              ),
+
+              // Quick Action Section - Chart and Details as clickable rows
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
                   children: [
-                    // Price section on the left
-                    Expanded(
-                      child: AnimatedPriceWidget(
-                        price: widget.stock.close,
-                        previousPrice: previousClose,
-                        wasUp: wasUp,
-                        style: priceTextStyle,
-                      ),
+                    _buildActionRow(
+                      context,
+                      Icons.candlestick_chart_outlined,
+                      'View Chart',
+                      'See price trends and technical analysis',
+                      isDark,
+                      () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: (context) => BrowserLite_V(
+                                  "https://in.tradingview.com/chart/?symbol=NSE%3A" +
+                                      stock.symbol
+                                          .toString()
+                                          .split("-")[0]
+                                          .split(":")[1])),
+                        );
+                      },
                     ),
-                    // View chart button on the right
-                    Container(
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.grey[800] : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-                          width: 1,
-                        ),
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () {
-                            // Add your TradingView chart navigation logic here
-                            // Get.toNamed('/tradingview/${stock.symbol}');
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => BrowserLite_V(
-                                      "https://in.tradingview.com/chart/?symbol=NSE%3A" +
-                                          stock.symbol
-                                              .toString()
-                                              .split("-")[0]
-                                              .split(":")[1])),
-                            );
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.candlestick_chart_outlined,
-                                  size: 16,
-                                  color: isDark
-                                      ? Colors.grey[300]
-                                      : Colors.grey[700],
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  'View Chart',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDark
-                                        ? Colors.grey[300]
-                                        : Colors.grey[700],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
+                    const SizedBox(height: 4),
+                    _buildActionRow(
+                      context,
+                      Icons.analytics_outlined,
+                      'Stock Details',
+                      'View comprehensive stock information',
+                      isDark,
+                      () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => StockDetailPage(
+                                      stockname:
+                                          _getActualStockSymbol(stock.symbol),
+                                    )));
+                      },
                     ),
                   ],
                 ),
               ),
+
+              const SizedBox(height: 16),
 
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -447,76 +435,12 @@ class _WatchlistItemState extends State<WatchlistItem> {
                 ),
               ),
 
-              // Action Buttons
+              // Prominent Action Button - Add to Virtual Basket
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   children: [
-                    Container(
-                      width: double.infinity,
-                      height: 44,
-                      margin: const EdgeInsets.only(
-                          bottom: 16, right: 16, left: 16),
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => StockDetailPage(
-                                        stockname:
-                                            _getActualStockSymbol(stock.symbol),
-                                      )));
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          shadowColor: Colors.transparent,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ).copyWith(
-                          overlayColor:
-                              MaterialStateProperty.resolveWith<Color?>(
-                            (Set<MaterialState> states) {
-                              if (states.contains(MaterialState.pressed)) {
-                                return Colors.white.withValues(alpha: 0.1);
-                              }
-                              if (states.contains(MaterialState.hovered)) {
-                                return Colors.white.withValues(alpha: 0.05);
-                              }
-                              return null;
-                            },
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.analytics_outlined,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'View Stock Details',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              Icons.arrow_forward_ios,
-                              size: 14,
-                              color: Colors.white,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
+                    addToVirtualJournal(context, stock, theme),
                   ],
                 ),
               ),
@@ -525,6 +449,191 @@ class _WatchlistItemState extends State<WatchlistItem> {
           ),
         );
       },
+    );
+  }
+
+  Container addToVirtualJournal(
+      BuildContext context, DataStockModel stock, ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.secondary,
+            theme.colorScheme.secondary.withValues(alpha: 0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+            offset: const Offset(0, 4),
+            blurRadius: 12,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            // Add haptic feedback for better UX
+            HapticFeedback.lightImpact();
+
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AddToBasketPage(stock: stock),
+              ),
+            );
+
+            Navigator.pop(context);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Animated basket icon with modern styling
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.shopping_basket_outlined,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Main text with improved typography
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Add to Virtual Basket',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      Text(
+                        'Track performance without real investment',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withValues(alpha: 0.8),
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Modern arrow with subtle animation hint
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionRow(
+    BuildContext context,
+    IconData icon,
+    String title,
+    String subtitle,
+    bool isDark,
+    VoidCallback onTap,
+  ) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: Theme.of(context).dividerColor.withValues(alpha: 0.3),
+              width: 0.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: Theme.of(context).textTheme.titleLarge?.color,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w400,
+                        color: Theme.of(context).textTheme.titleSmall?.color,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Theme.of(context).textTheme.titleSmall?.color,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

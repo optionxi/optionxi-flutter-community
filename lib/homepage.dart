@@ -9,8 +9,8 @@ import 'package:optionxi/Helpers/update_helper.dart';
 import 'package:optionxi/Main_Frags/frag_home.dart';
 import 'package:optionxi/Main_Frags/frag_virtualtrading.dart';
 import 'package:optionxi/Main_Frags/frag_tools.dart';
-import 'package:optionxi/Main_Frags/frag_watchlist.dart';
 import 'package:optionxi/Main_Frags/frag_profile.dart';
+import 'package:optionxi/VirtualTradeJournal/frag_watchlist_main.dart';
 
 class Homepage extends StatefulWidget {
   final int initialIndex;
@@ -55,7 +55,7 @@ class _HomepageState extends State<Homepage> {
           initialFragIndex: widget.tradeFragIndex, // Pass the fragment index
         );
       case 2:
-        return WatchlistPage();
+        return WatchlistFragmentMain();
       case 3:
         return AdvancedTradingToolsPage();
       case 4:

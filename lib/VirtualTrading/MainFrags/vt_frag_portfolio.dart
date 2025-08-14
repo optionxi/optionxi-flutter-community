@@ -3,14 +3,16 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/Helpers/conversions.dart';
+import 'package:optionxi/Main_Pages/act_leaderboard.dart';
 import 'package:optionxi/VirtualTrading/VComponents/cust_pulsating_effect.dart';
 import 'package:optionxi/VirtualTrading/VControllers/portfolio_prev_controller.dart';
-import 'package:optionxi/VirtualTrading/VDatabaseSupabase/db_read_supabase_prev_portfolio.dart';
+import 'package:optionxi/VirtualTrading/VDataModel/v_holdings.dart';
 import 'package:optionxi/VirtualTrading/act_buyandsell_prev.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class PortfolioFragmentPrev extends StatefulWidget {
-  const PortfolioFragmentPrev({Key? key}) : super(key: key);
+  final LeaderboardEntry? user;
+  const PortfolioFragmentPrev(this.user, {Key? key}) : super(key: key);
 
   @override
   State<PortfolioFragmentPrev> createState() => _PortfolioFragmentPrevState();
@@ -19,12 +21,17 @@ class PortfolioFragmentPrev extends StatefulWidget {
 class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
     with TickerProviderStateMixin {
   late TabController _tabController;
-  final PortfolioController controller = Get.put(PortfolioController());
+  late PortfolioController controller;
+  // final PortfolioController controller = Get.put(PortfolioController());
+  // final PortfolioController controller = Get.put(PortfolioController(suid: widget.user?.suid));
+
   bool isStatsExpanded = false;
 
   @override
   void initState() {
     super.initState();
+    // Safely use widget.user inside initState
+    controller = Get.put(PortfolioController(suid: widget.user?.suid));
     _tabController = TabController(length: 2, vsync: this);
   }
 
@@ -32,33 +39,74 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Obx(() {
-          return NestedScrollView(
-            headerSliverBuilder: (context, innerBoxIsScrolled) => [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    _buildHeader(),
-                    _buildCollapsibleStats(),
-                  ],
-                ),
-              ),
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: TabBarDelegate(
-                  tabBar: _buildTabBar(),
-                ),
-              ),
-            ],
-            body: controller.isLoading.value
-                ? Center(child: CircularProgressIndicator())
-                : _buildTabBarView(),
-          );
-        }),
-      ),
+      body: widget.user != null
+          ? _fragPortfolio()
+          : SafeArea(
+              child: _fragPortfolio(),
+            ),
     );
   }
+
+  Obx _fragPortfolio() {
+    return Obx(() {
+      return NestedScrollView(
+        headerSliverBuilder: (context, innerBoxIsScrolled) => [
+          SliverToBoxAdapter(
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildCollapsibleStats(),
+              ],
+            ),
+          ),
+          SliverPersistentHeader(
+            pinned: true,
+            delegate: TabBarDelegate(
+              tabBar: _buildTabBar(),
+            ),
+          ),
+        ],
+        body: controller.isLoading.value
+            ? Center(child: CircularProgressIndicator())
+            : _buildTabBarView(),
+      );
+    });
+  }
+
+  // @override
+  // Widget build(BuildContext context) {
+  //   return Obx(() {
+  //     if (controller.isLoading.value) {
+  //       return Center(child: CircularProgressIndicator());
+  //     }
+
+  //     return CustomScrollView(
+  //       // Use CustomScrollView instead of NestedScrollView
+  //       slivers: [
+  //         // Header section
+  //         SliverToBoxAdapter(
+  //           child: Column(
+  //             children: [
+  //               _buildHeader(),
+  //               _buildCollapsibleStats(),
+  //             ],
+  //           ),
+  //         ),
+  //         // Tab bar
+  //         SliverPersistentHeader(
+  //           pinned: true,
+  //           delegate: TabBarDelegate(
+  //             tabBar: _buildTabBar(),
+  //           ),
+  //         ),
+  //         // Tab content
+  //         SliverFillRemaining(
+  //           child: _buildTabBarView(),
+  //         ),
+  //       ],
+  //     );
+  //   });
+  // }
 
   Widget _buildHeader() {
     return Padding(
@@ -156,7 +204,7 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '₹${controller.totalInvestment.value.toStringAsFixed(2)}',
+                        '₹${convertToKMB(controller.totalInvestment.value.toStringAsFixed(2))}',
                         style: GoogleFonts.inter(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -1137,7 +1185,7 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '$pnlPrefix₹${trade.profitLoss.toStringAsFixed(2)}',
+                            '$pnlPrefix₹${convertToKMB(trade.profitLoss.toStringAsFixed(2))}',
                             style: GoogleFonts.inter(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,

@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Helpers/conversions.dart';
+import 'package:optionxi/Main_Pages/act_leaderboard.dart';
+import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/VirtualTrading/VComponents/custom_collapsible_headers.dart';
 import 'package:optionxi/VirtualTrading/act_buyandsell_prev.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -12,7 +14,8 @@ typedef SubscriptionStatusCallback = void
     Function(RealtimeSubscribeStatus status, [Object? error]);
 
 class OrdersPage extends StatefulWidget {
-  const OrdersPage({Key? key}) : super(key: key);
+  final LeaderboardEntry? user;
+  const OrdersPage(this.user, {Key? key}) : super(key: key);
 
   @override
   _OrdersPageState createState() => _OrdersPageState();
@@ -234,6 +237,14 @@ class _OrdersPageState extends State<OrdersPage>
           ),
         ),
       );
+      final int uniqueId =
+          DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+      NotificationService().showNotificationBasic(
+        id: uniqueId,
+        title: "Order status",
+        body: message,
+      );
     }
 
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -244,7 +255,9 @@ class _OrdersPageState extends State<OrdersPage>
   }
 
   void _setupOrdersSubscriptions() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    final String? uid =
+        widget.user?.suid ?? FirebaseAuth.instance.currentUser?.uid;
+
     if (uid == null) return;
 
     // Unsubscribe from any existing channels
@@ -356,7 +369,9 @@ class _OrdersPageState extends State<OrdersPage>
         });
       }
 
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      // final uid = FirebaseAuth.instance.currentUser?.uid;
+      final String? uid =
+          widget.user?.suid ?? FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) {
         setState(() {
           _error = 'User not logged in';
@@ -425,7 +440,9 @@ class _OrdersPageState extends State<OrdersPage>
 
   Future<void> _fetchCompletedOrders() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      // final uid = FirebaseAuth.instance.currentUser?.uid;
+      final String? uid =
+          widget.user?.suid ?? FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
 
       final response = await _supabase
@@ -455,7 +472,9 @@ class _OrdersPageState extends State<OrdersPage>
 
   Future<void> _fetchRejectedOrders() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
+      // final uid = FirebaseAuth.instance.currentUser?.uid;
+      final String? uid =
+          widget.user?.suid ?? FirebaseAuth.instance.currentUser?.uid;
       if (uid == null) return;
 
       final response = await _supabase
@@ -583,36 +602,42 @@ class _OrdersPageState extends State<OrdersPage>
 
     return Scaffold(
       backgroundColor: backgroundColor,
-      body: SafeArea(
-        child: NestedScrollView(
-          headerSliverBuilder: (context, innerBoxIsScrolled) => [
-            // Collapsible header
-            SliverPersistentHeader(
-              floating: false,
-              pinned: false,
-              delegate: CollapsibleHeaderDelegate(
-                minHeight: 0,
-                maxHeight: 80, // Adjust based on your header height
-                child: _buildHeader(textColor),
-              ),
+      body: widget.user != null
+          ? _fragOrders(textColor)
+          : SafeArea(
+              child: _fragOrders(textColor),
             ),
-            // Pinned tab bar
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: TabBarDelegate(
-                tabBar: _buildTabBar(),
-              ),
-            ),
-          ],
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildOrdersTab(_allOrders),
-              _buildOrdersTab(_completedOrders),
-              _buildOrdersTab(_rejectedOrders),
-            ],
+    );
+  }
+
+  NestedScrollView _fragOrders(Color textColor) {
+    return NestedScrollView(
+      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        // Collapsible header
+        SliverPersistentHeader(
+          floating: false,
+          pinned: false,
+          delegate: CollapsibleHeaderDelegate(
+            minHeight: 0,
+            maxHeight: 80, // Adjust based on your header height
+            child: _buildHeader(textColor),
           ),
         ),
+        // Pinned tab bar
+        SliverPersistentHeader(
+          pinned: true,
+          delegate: TabBarDelegate(
+            tabBar: _buildTabBar(),
+          ),
+        ),
+      ],
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildOrdersTab(_allOrders),
+          _buildOrdersTab(_completedOrders),
+          _buildOrdersTab(_rejectedOrders),
+        ],
       ),
     );
   }

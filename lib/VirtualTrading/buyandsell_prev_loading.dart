@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:optionxi/VirtualTrading/VComponents/cust_colorful_action_button.dart';
 
 class StockTradingSkeleton extends StatefulWidget {
   final bool isDark;
@@ -220,21 +221,23 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
           Row(
             children: [
               Expanded(
-                child: _buildColorfulActionButton(
+                child: buildModernActionButton(
                   context,
                   widget.isDark,
                   'View Chart',
                   Icons.trending_up_rounded,
+                  () {},
                   true, // isChart button
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildColorfulActionButton(
+                child: buildModernActionButton(
                   context,
                   widget.isDark,
                   'Alerts',
                   Icons.analytics_outlined,
+                  () {},
                   false, // isChart button
                 ),
               ),
@@ -254,67 +257,6 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
         const SizedBox(height: 4),
         _buildShimmerBox(60, 16, borderRadius: 4),
       ],
-    );
-  }
-
-  Widget _buildColorfulActionButton(
-    BuildContext context,
-    bool isDark,
-    String label,
-    IconData icon,
-    bool isChart,
-  ) {
-    final List<Color> gradientColors = isChart
-        ? isDark
-            ? [
-                const Color(0xFF4A90E2),
-                const Color(0xFF357ABD),
-              ]
-            : [
-                const Color(0xFF5BA7F7),
-                const Color(0xFF4A90E2),
-              ]
-        : isDark
-            ? [
-                const Color(0xFFFF6B6B),
-                const Color(0xFFE55A5A),
-              ]
-            : [
-                const Color(0xFFFF8A80),
-                const Color(0xFFFF6B6B),
-              ];
-
-    return Container(
-      height: 50,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradientColors,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 20, color: Colors.white),
-            const SizedBox(width: 10),
-            Flexible(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

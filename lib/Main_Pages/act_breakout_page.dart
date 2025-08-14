@@ -535,7 +535,7 @@ class _BollingerBreakoutsPageState extends State<BollingerBreakoutsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.sentiment.toUpperCase(),
+                      "NIFTY50 IN " + item.sentiment.toUpperCase(),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: sentimentColor,

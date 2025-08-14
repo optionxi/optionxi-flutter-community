@@ -231,8 +231,8 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
 
     final List<Widget> pages = [
       FNOPage(),
-      OrdersPage(),
-      PortfolioFragmentPrev(),
+      OrdersPage(null),
+      PortfolioFragmentPrev(null),
       FragTradingHub(),
     ];
 

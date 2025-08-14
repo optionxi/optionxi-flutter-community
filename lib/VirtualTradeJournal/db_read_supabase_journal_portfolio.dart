@@ -1,16 +1,17 @@
 import 'dart:async';
-import 'package:optionxi/VirtualTrading/VDataModel/v_holdings.dart';
+import 'package:optionxi/VirtualTrading/VDataModel/v_holdings_journal.dart';
+import 'package:optionxi/VirtualTrading/VDataModel/v_tradehistory.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- SERVICE CLASS ---
-class PortfolioService {
+class PortfolioJournalService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // --- FETCH METHODS ---
   Future<double> fetchBalance(String suid) async {
     try {
       final response = await _supabase
-          .from('prev_balance')
+          .from('journal_balance')
           .select('balance')
           .eq('suid', suid)
           .maybeSingle();
@@ -24,35 +25,45 @@ class PortfolioService {
     }
   }
 
-  Future<List<Holding>> fetchHoldings(String suid) async {
+  Future<List<BasketUserHolding>> fetchHoldings(String suid) async {
     try {
-      final response =
-          await _supabase.from('prev_user_holdings').select().eq('suid', suid);
-      return (response as List).map((e) => Holding.fromJson(e)).toList();
+      final response = await _supabase
+          .from('journal_user_holdings')
+          .select()
+          .eq('suid', suid);
+      return (response as List)
+          .map((e) => BasketUserHolding.fromJson(e).copyWith(isshort: false))
+          .toList();
     } catch (e) {
       print('Error fetching holdings: $e');
       return [];
     }
   }
 
-  Future<List<Holding>> fetchShortPositions(String suid) async {
+  Future<List<BasketUserHolding>> fetchShortPositions(String suid) async {
     try {
       final response = await _supabase
-          .from('prev_short_positions')
+          .from('journal_short_positions')
           .select()
           .eq('suid', suid);
-      return (response as List).map((e) => Holding.fromJson(e)).toList();
+      return (response as List)
+          .map((e) => BasketUserHolding.fromJson(e).copyWith(isshort: true))
+          .toList();
     } catch (e) {
       print('Error fetching short positions: $e');
       return [];
     }
   }
 
-  Future<List<TradeHistory>> fetchTradeHistory(String suid) async {
+  Future<List<JournalTradeHistory>> fetchTradeHistory(String suid) async {
     try {
-      final response =
-          await _supabase.from('prev_trade_history').select().eq('suid', suid);
-      return (response as List).map((e) => TradeHistory.fromJson(e)).toList();
+      final response = await _supabase
+          .from('journal_trade_history')
+          .select()
+          .eq('suid', suid);
+      return (response as List)
+          .map((e) => JournalTradeHistory.fromJson(e))
+          .toList();
     } catch (e) {
       print('Error fetching trade history: $e');
       return [];
@@ -65,7 +76,7 @@ class PortfolioService {
 
   Stream<double> subscribeToBalance(String suid) {
     return _supabase
-        .from('prev_balance')
+        .from('journal_balance')
         .stream(primaryKey: ['id'])
         .eq('suid', suid) // Server-side filtering
         .map((payload) {
@@ -76,38 +87,42 @@ class PortfolioService {
         });
   }
 
-  Stream<List<Holding>> subscribeToHoldings(String suid) {
+  Stream<List<BasketUserHolding>> subscribeToHoldings(String suid) {
     return _supabase
-        .from('prev_user_holdings')
+        .from('journal_user_holdings')
         .stream(primaryKey: ['id'])
         .eq('suid', suid) // Server-side filtering
-        .map((payload) => payload.map((e) => Holding.fromJson(e)).toList());
+        .map((payload) => payload
+            .map((e) => BasketUserHolding.fromJson(e).copyWith(isshort: false))
+            .toList());
   }
 
-  Stream<List<Holding>> subscribeToShortPositions(String suid) {
+  Stream<List<BasketUserHolding>> subscribeToShortPositions(String suid) {
     return _supabase
-        .from('prev_short_positions')
+        .from('journal_short_positions')
         .stream(primaryKey: ['id'])
         .eq('suid', suid) // Apply server-side filter
-        .map((payload) => payload.map((e) => Holding.fromJson(e)).toList());
+        .map((payload) => payload
+            .map((e) => BasketUserHolding.fromJson(e).copyWith(isshort: true))
+            .toList());
   }
 
-  Stream<List<TradeHistory>> subscribeToTradeHistory(String suid) {
+  Stream<List<JournalTradeHistory>> subscribeToTradeHistory(String suid) {
     return _supabase
-        .from('prev_trade_history')
+        .from('journal_trade_history')
         .stream(primaryKey: ['id'])
         .eq('suid', suid) // Apply server-side filter
-        .map(
-            (payload) => payload.map((e) => TradeHistory.fromJson(e)).toList());
+        .map((payload) =>
+            payload.map((e) => JournalTradeHistory.fromJson(e)).toList());
   }
 
   Stream<List<Map<String, dynamic>>> subscribeToLiveNifty50() {
-    return _supabase.from('prev_nifty50_stocks').stream(primaryKey: ['symbol']);
+    return _supabase.from('live_5000_stocks').stream(primaryKey: ['symbol']);
   }
 
   Stream<List<Map<String, dynamic>>> subscribeToLiveFNO() {
     return _supabase
-        .from('prev_fno_bankandnifty')
+        .from('live_fno_bankandnifty')
         .stream(primaryKey: ['symbol']);
   }
 }

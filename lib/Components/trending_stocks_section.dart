@@ -1,8 +1,10 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Main_Pages/act_top_recommended_stock_page.dart';
 
 class TrendingStocksSection extends StatefulWidget {
@@ -181,7 +183,7 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
         } else {
           if (mounted) {
             setState(() {
-              error = 'No stock data available';
+              // error = 'No stock data available';
               isLoading = false;
             });
           }
@@ -189,7 +191,7 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
       } else {
         if (mounted) {
           setState(() {
-            error = 'No trending stocks found';
+            // error = 'No trending stocks found';
             isLoading = false;
           });
         }
@@ -482,7 +484,7 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
 
   Widget _buildStocksList(List<StockData> stocks, bool isBullish) {
     return SizedBox(
-      height: 220,
+      height: 230,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: stocks.length,
@@ -511,7 +513,7 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
-      width: 280,
+      width: 300,
       margin: const EdgeInsets.only(right: 16),
       child: Card(
         elevation: isDark ? 8 : 2,
@@ -555,6 +557,40 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Stock Icon
+                    Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: CachedNetworkImage(
+                          height: 48,
+                          width: 48,
+                          imageUrl:
+                              "${Constants.OptionXiS3Loc}${stock.symbol.replaceAll('-EQ', '').replaceAll('-BZ', '').replaceAll('NSE:', '')}.png",
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Image.asset(
+                            'assets/images/stockdefault.png',
+                            fit: BoxFit.cover,
+                          ),
+                          errorWidget: (context, url, error) => Image.asset(
+                            'assets/images/stockdefault.png',
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    ),
+                    SizedBox(
+                      width: 8,
+                    ),
                     Expanded(
                       child: Text(
                         stock.symbol
@@ -576,7 +612,7 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        stock.sentiment,
+                        stock.sentiment.replaceAll('ISH', ''),
                         style: TextStyle(
                           color: isBullish ? Colors.green : Colors.red,
                           fontWeight: FontWeight.w600,

@@ -134,18 +134,6 @@ class _FragTradingHubState extends State<FragTradingHub>
             ),
             SizedBox(height: 16),
             buildActionItem(
-              title: 'Live Virtual Trading',
-              subtitle: 'Trade with live data, broker connect',
-              icon: FontAwesomeIcons.chartLine,
-              color: Color(0xFF667EEA),
-              onTap: () {
-                showCommingSoon();
-              },
-              isDark: isDark,
-              badge: 'BETA',
-            ),
-            SizedBox(height: 12),
-            buildActionItem(
               title: 'Leaderboard',
               subtitle: 'Show top traders and rankings',
               icon: FontAwesomeIcons.trophy,
@@ -160,6 +148,18 @@ class _FragTradingHubState extends State<FragTradingHub>
             ),
             SizedBox(height: 12),
             buildActionItem(
+              title: 'Live Virtual Trading',
+              subtitle: 'Trade with live data, broker connect',
+              icon: FontAwesomeIcons.chartLine,
+              color: Color(0xFF667EEA),
+              onTap: () {
+                showCommingSoon();
+              },
+              isDark: isDark,
+              badge: 'BETA',
+            ),
+            SizedBox(height: 12),
+            buildActionItem(
               title: 'Organizational Request',
               subtitle: 'Request custom demo sessions & requirements',
               icon: FontAwesomeIcons.building,
@@ -171,7 +171,7 @@ class _FragTradingHubState extends State<FragTradingHub>
             ),
             SizedBox(height: 12),
             buildActionItem(
-              title: 'Connect Algo',
+              title: 'Broker Connect',
               subtitle: 'Deploy algo, place orders via app, needs API access',
               icon: FontAwesomeIcons.robot,
               color: Color(0xFF9B59B6),

@@ -7,14 +7,14 @@ import 'package:optionxi/Components/custom_watchlist_item.dart';
 import 'package:optionxi/Controllers/watchlist_controller.dart';
 import 'package:optionxi/Main_Pages/act_search_stocks.dart';
 
-class WatchlistPage extends StatefulWidget {
-  const WatchlistPage({Key? key}) : super(key: key);
+class WatchlistFragment extends StatefulWidget {
+  const WatchlistFragment({Key? key}) : super(key: key);
 
   @override
-  State<WatchlistPage> createState() => _WatchlistPageState();
+  State<WatchlistFragment> createState() => _WatchlistFragmentState();
 }
 
-class _WatchlistPageState extends State<WatchlistPage> {
+class _WatchlistFragmentState extends State<WatchlistFragment> {
   final WatchlistController watchlistController =
       Get.put(WatchlistController());
   @override

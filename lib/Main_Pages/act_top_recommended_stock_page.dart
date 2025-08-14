@@ -1,8 +1,7 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/Components/cust_stock_info_card.dart';
 import 'package:optionxi/Components/trending_stocks_section.dart';
-import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Main_Pages/cust_top_stocks_component.dart';
 
 class TopRecommendedStockPage extends StatefulWidget {
@@ -51,7 +50,7 @@ class _TopRecommendedStockPageState extends State<TopRecommendedStockPage>
                             Get.toNamed(
                                 '/stocks/${widget.stock!.symbol.toUpperCase()}');
                           },
-                          child: _buildStockInfo(context)),
+                          child: ModernStockCard(stock: widget.stock!)),
                       const SizedBox(height: 24),
                     ],
 
@@ -96,231 +95,6 @@ class _TopRecommendedStockPageState extends State<TopRecommendedStockPage>
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Card _buildStockInfo(BuildContext context) {
-    final bool isBullish = widget.stock!.sentiment == 'BULLISH';
-    final Color sentimentColor = isBullish ? Colors.green : Colors.red;
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Card(
-      elevation: 0,
-      color: Colors.transparent,
-      child: Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-            width: 1,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Row(
-                children: [
-                  // Stock logo
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: CachedNetworkImage(
-                      height: 44,
-                      width: 44,
-                      imageUrl: Constants.OptionXiS3Loc +
-                          widget.stock!.symbol
-                              .replaceAll('-EQ', '')
-                              .replaceAll('NSE:', '') +
-                          ".png",
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => Container(
-                        height: 44,
-                        width: 44,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Image.asset(
-                          'assets/images/stockdefault.png',
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      errorWidget: (context, url, error) => Container(
-                        height: 44,
-                        width: 44,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Image.asset(
-                          'assets/images/stockdefault.png',
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Stock info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.stock!.symbol
-                              .replaceAll('-EQ', '')
-                              .replaceAll('NSE:', ''),
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.w600,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '₹${widget.stock!.price.toStringAsFixed(2)}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineSmall
-                              ?.copyWith(
-                                fontWeight: FontWeight.w700,
-                                color: sentimentColor,
-                                letterSpacing: -0.3,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Sentiment indicator
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: sentimentColor.withOpacity(isDark ? 0.15 : 0.1),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      widget.stock!.sentiment,
-                      style: TextStyle(
-                        color: sentimentColor,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 11,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              // Description
-              Text(
-                widget.stock!.shortDescription,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(0.7),
-                      height: 1.4,
-                    ),
-              ),
-              if (widget.stock!.dataChecked.isNotEmpty) ...[
-                const SizedBox(height: 16),
-                // Signals
-                ...widget.stock!.dataChecked.map((signal) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            margin: const EdgeInsets.only(top: 2),
-                            height: 4,
-                            width: 4,
-                            decoration: BoxDecoration(
-                              color: sentimentColor,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              signal,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurface
-                                        .withOpacity(0.8),
-                                    fontWeight: FontWeight.w500,
-                                    height: 1.3,
-                                  ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    )),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width > 600;
-    final fontSize = isTablet ? 32.0 : 28.0;
-    return Container(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: Theme.of(context).dividerColor, width: 1),
-                  ),
-                  child: Icon(Icons.navigate_before,
-                      color: Theme.of(context).textTheme.titleSmall?.color),
-                ),
-              ),
-              SizedBox(width: 20),
-              Text(
-                "Trending Stocks",
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.titleLarge?.color,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          // Text(
-          //   "Where each traders are ranked according to their performance in virtual trading, this does not represent real trades.",
-          //   style: TextStyle(
-          //     color: Theme.of(context).textTheme.titleSmall?.color,
-          //     fontSize: descriptionSize,
-          //   ),
-          // ),
-        ],
       ),
     );
   }
@@ -443,6 +217,72 @@ class _TopRecommendedStockPageState extends State<TopRecommendedStockPage>
           ],
         );
       },
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final isTablet = MediaQuery.of(context).size.width > 600;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                height: 44,
+                width: 44,
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF2C2C2E) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: Theme.of(context).dividerColor.withOpacity(0.3),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: IconButton(
+                  onPressed: () => Navigator.pop(context),
+                  icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    "Trending Stocks",
+                    style: TextStyle(
+                      fontSize: isTablet ? 32.0 : 28.0,
+                      fontWeight: FontWeight.w800,
+                      color: Theme.of(context).textTheme.titleLarge?.color,
+                      letterSpacing: -0.8,
+                    ),
+                  ),
+                  Text(
+                    "Market insights & analysis",
+                    style: TextStyle(
+                      color: Theme.of(context)
+                          .textTheme
+                          .titleSmall
+                          ?.color
+                          ?.withOpacity(0.6),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }

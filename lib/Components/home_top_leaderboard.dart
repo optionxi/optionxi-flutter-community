@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:optionxi/Helpers/conversions.dart';
 import 'package:optionxi/Main_Pages/act_leaderboard.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -153,21 +152,25 @@ class EnhancedLeaderboardWidget extends StatelessWidget {
             ],
           ),
         ),
-        Container(
-          height: 280,
-          child: _buildTop3Podium(context, top3Entries),
+        InkWell(
+          onTap: onViewAll,
+          child: Container(
+            height: 280,
+            child: _buildTop3Podium(context, top3Entries),
+          ),
         ),
         const SizedBox(height: 16),
         // Ensure that we only build rows for the entries that exist in top3Entries
-        ...top3Entries.map((entry) => _buildLeaderboardRow(context, entry)),
-        const SizedBox(height: 16),
+        // ...top3Entries.map((entry) => _buildLeaderboardRow(context, entry)),
+        // const SizedBox(height: 16),
+        Divider(),
       ],
     );
   }
 
   Widget _buildLoadingState(BuildContext context) {
     return Container(
-      height: 400,
+      height: 200,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topCenter,
@@ -407,131 +410,6 @@ class EnhancedLeaderboardWidget extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-
-  Widget _buildLeaderboardRow(BuildContext context, LeaderboardEntry entry) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(
-        color: isDark
-            ? Colors.grey[900]?.withOpacity(0.3)
-            : Colors.white, // Adapts to light mode
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark
-              ? Colors.grey[800]!
-              : Colors.grey[200]!, // Adapts to light mode
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.2)
-                : Colors.grey.withOpacity(0.1), // Adapts to light mode
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Row(
-          children: [
-            // Rank badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary.withOpacity(0.2),
-                    Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                '#${entry.rank}',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Avatar
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: [
-                    Theme.of(context).colorScheme.primary.withOpacity(0.3),
-                    Theme.of(context).colorScheme.primary.withOpacity(0.1),
-                  ],
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(2.0),
-                child: Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isDark
-                        ? Colors.grey[900]
-                        : Colors.white, // Adapts to light mode
-                  ),
-                  child: ClipOval(
-                    child: entry.imgurl != null
-                        ? Image.network(
-                            entry.imgurl!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) {
-                              return _buildAvatarFallback(entry.displayname,
-                                  Theme.of(context).colorScheme.primary, 50);
-                            },
-                          )
-                        : _buildAvatarFallback(entry.displayname,
-                            Theme.of(context).colorScheme.primary, 50),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-
-            // Name and balance
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    entry.displayname,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    convertToKMB(entry.balance.toString()),
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 

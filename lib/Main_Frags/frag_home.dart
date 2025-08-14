@@ -1,15 +1,16 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_notice_section.dart';
 import 'package:optionxi/Components/cust_top_tutors.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
 import 'package:optionxi/Components/home_top_leaderboard.dart';
+// import 'package:optionxi/Components/trade_community_section.dart';
 import 'package:optionxi/Components/trending_stocks_section.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Main_Pages/act_search_stocks.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 class TradingHomeScreen extends StatefulWidget {
   @override
@@ -31,7 +32,6 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
       duration: const Duration(milliseconds: 1000),
       vsync: this,
     )..forward();
-    // themeController.initTheme();
   }
 
   @override
@@ -114,7 +114,8 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                         ],
                       ),
                     ),
-                    const SizedBox(height: 24),
+
+                    NoticesSection(),
                     // SlideTransition(
                     //   position: Tween<Offset>(
                     //     begin: Offset(0, 0.2),
@@ -127,58 +128,17 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     //   ),
                     //   child: buildTradingIdeas(context, _controller),
                     // ),
-                    NoticesSection(),
+                    // const SizedBox(height: 24),
+                    // Divider(),
                     TrendingStocksSection(),
                     const SizedBox(height: 24),
-                    TradingTutorsScreen(),
-                    const SizedBox(height: 24),
-                    InkWell(
-                      onTap: () async {
-                        try {
-                          final String email = 'optionxi24@gmail.com';
-                          final String subject = 'Algo Trading';
-                          final String body =
-                              'Hello, Kindly guide me through the process of deploying algo in cloud.';
-
-                          final Uri emailLaunchUri = Uri(
-                            scheme: 'mailto',
-                            path: email,
-                            queryParameters: {
-                              'subject': subject,
-                              'body': body,
-                            },
-                          );
-
-                          if (await canLaunchUrl(emailLaunchUri)) {
-                            await launchUrl(
-                              emailLaunchUri,
-                              mode: LaunchMode.externalApplication,
-                            );
-                          } else {
-                            print('Could not launch email client');
-                            // Optional: Show a snackbar or dialog to inform user
-                          }
-                        } catch (e) {
-                          print('Error launching email: $e');
-                        }
-                      },
-                      child: _buildCtaSection(),
-                    ),
-                    const SizedBox(height: 24),
-                    // SlideTransition(
-                    //   position: Tween<Offset>(
-                    //     begin: Offset(0, 0.2),
-                    //     end: Offset.zero,
-                    //   ).animate(
-                    //     CurvedAnimation(
-                    //       parent: _controller,
-                    //       curve: Interval(0.4, 0.6, curve: Curves.easeOut),
-                    //     ),
-                    //   ),
-                    //   child: _buildOtherGroupsSection(),
-                    // ),
-                    LeaderboardWidgetMain(),
+                    Divider(),
+                    TopTradingTutorsScreen(),
                     // const SizedBox(height: 24),
+                    Divider(),
+                    LeaderboardWidgetMain(),
+                    const SizedBox(height: 24),
+                    _buildCtaSection(),
                   ],
                 );
               },
@@ -389,6 +349,16 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
     );
   }
 
+  void gotoNofitication() async {
+    await BadgeService.clearNotificationsBadge();
+    await Navigator.pushNamed(
+      context,
+      '/messages',
+      arguments: {},
+    );
+    setState(() {});
+  }
+
   Widget _buildCtaSection() {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -425,74 +395,55 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
           const SizedBox(height: 24),
           Row(
             children: [
-              ElevatedButton(
-                onPressed: () async {
-                  final Uri emailLaunchUri = Uri(
-                    scheme: 'mailto',
-                    path: 'optionxi24@gmail.com',
-                    // Optional query parameters:
-                    queryParameters: {
-                      'subject': 'Deploy my algo - OptionXi',
-                      'body':
-                          'Kindly help me deploy the algo, my mobile number is '
-                    },
-                  );
-
-                  if (await canLaunchUrl(emailLaunchUri)) {
-                    await launchUrl(emailLaunchUri);
-                  } else {
-                    print('Could not launch email client');
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white,
-                  foregroundColor: Theme.of(context).colorScheme.primary,
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              // Main CTA Button
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => showContactOptions(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
                   ),
-                ),
-                child: Text(
-                  "Contact Support",
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.rocket_launch, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        "Get Started Now",
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
-              const SizedBox(width: 16),
-              // TextButton(
-              //   onPressed: () {},
-              //   child: Row(
-              //     children: [
-              //       Text(
-              //         "Learn More",
-              //         style: TextStyle(
-              //           color: Colors.white,
-              //           fontWeight: FontWeight.bold,
-              //         ),
-              //       ),
-              //       const SizedBox(width: 8),
-              //       Icon(
-              //         Icons.arrow_forward,
-              //         color: Colors.white,
-              //       ),
-              //     ],
-              //   ),
-              // ),
+              const SizedBox(width: 12),
+
+              // Contact Options Button
+              ElevatedButton(
+                onPressed: () => showContactOptions(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.15),
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.all(16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+                child: Icon(Icons.chat_bubble_outline, size: 20),
+              ),
             ],
           ),
         ],
       ),
     );
-  }
-
-  void gotoNofitication() async {
-    await BadgeService.clearNotificationsBadge();
-    await Navigator.pushNamed(
-      context,
-      '/messages',
-      arguments: {},
-    );
-    setState(() {});
   }
 }

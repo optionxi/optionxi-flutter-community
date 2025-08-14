@@ -2,8 +2,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/DataModels/dm_converter.dart';
+import 'package:optionxi/DataModels/dm_stock_model.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/volume_formater.dart';
+import 'package:optionxi/VirtualTradeJournal/add_basket_page.dart';
 import 'package:optionxi/VirtualTrading/VComponents/cust_colorful_action_button.dart';
 import 'package:optionxi/browser_lite.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
@@ -439,7 +442,7 @@ class _StockDetailPageState extends State<StockDetailPage>
                   child: Row(
                     children: [
                       Expanded(
-                        child: buildColorfulActionButton(
+                        child: buildModernActionButton(
                           context,
                           isDark,
                           'Chart',
@@ -461,7 +464,7 @@ class _StockDetailPageState extends State<StockDetailPage>
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: buildColorfulActionButton(
+                        child: buildModernActionButton(
                           context,
                           isDark,
                           'Alerts',
@@ -477,6 +480,8 @@ class _StockDetailPageState extends State<StockDetailPage>
                   ),
                 ),
               ),
+              SliverToBoxAdapter(
+                  child: addToVirtualJournal(context, stock, theme)),
               SliverToBoxAdapter(
                 child: _buildSyncfusionChartSection(context, isDark),
               ),
@@ -519,6 +524,119 @@ class _StockDetailPageState extends State<StockDetailPage>
       //   }
       //   return _buildBottomButtons(context, isDark);
       // }),
+    );
+  }
+
+  Container addToVirtualJournal(
+      BuildContext context, StockModel stock, ThemeData theme) {
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: [
+            theme.colorScheme.secondary,
+            theme.colorScheme.secondary.withValues(alpha: 0.8),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: theme.colorScheme.secondary.withValues(alpha: 0.3),
+            offset: const Offset(0, 4),
+            blurRadius: 12,
+            spreadRadius: 0,
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            // Add haptic feedback for better UX
+            HapticFeedback.lightImpact();
+            // Convert dm_stock to DataStockModel
+            final DataStockModel convertedStock =
+                convertDmStockToDataStockModel(stock);
+
+            await Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => AddToBasketPage(stock: convertedStock),
+              ),
+            );
+
+            Navigator.pop(context);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Animated basket icon with modern styling
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.shopping_basket_outlined,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 12),
+
+                // Main text with improved typography
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Add to Virtual Basket',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                      Text(
+                        'Track performance without real investment',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.white.withValues(alpha: 0.8),
+                          letterSpacing: 0.1,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // Modern arrow with subtle animation hint
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -687,9 +805,15 @@ class _StockDetailPageState extends State<StockDetailPage>
             padding: const EdgeInsets.all(8.0),
             child: Text("Couldn't fetch data for ${widget.stockname}"),
           ),
+          // Padding(
+          //   padding: const EdgeInsets.all(8.0),
+          //   child: Text("${errormessage}"),
+          // ),
           Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text("${errormessage}"),
+            padding: const EdgeInsets.all(16.0),
+            child: Text(
+                textAlign: TextAlign.center,
+                "Please try again later, If you are facing this issue again, kindly contact support at optionxi24@gmail.com"),
           ),
           SizedBox(height: 24),
           ElevatedButton(
@@ -1501,7 +1625,7 @@ class _StockDetailPageState extends State<StockDetailPage>
                 value,
                 style: TextStyle(
                   color: valueColor,
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
                 ),
               ),

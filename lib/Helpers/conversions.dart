@@ -52,9 +52,21 @@ String convertToKMB(String value) {
     // Between 1 million and 1 billion, convert to M
     double mValue = doubleValue / 1000000;
     return (isNegative ? '-' : '') + '${mValue.toStringAsFixed(2)}M';
-  } else {
-    // Above 1 billion, convert to B
+  } else if (doubleValue < 1000000000000) {
+    // Between 1 billion and 1 trillion, convert to B
     double bValue = doubleValue / 1000000000;
     return (isNegative ? '-' : '') + '${bValue.toStringAsFixed(2)}B';
+  } else if (doubleValue < 1000000000000000) {
+    // Between 1 trillion and 1 quadrillion, convert to T
+    double tValue = doubleValue / 1000000000000;
+    return (isNegative ? '-' : '') + '${tValue.toStringAsFixed(2)}T';
+  } else if (doubleValue < 1000000000000000000) {
+    // Between 1 quadrillion and 1 quintillion, convert to Q
+    double qValue = doubleValue / 1000000000000000;
+    return (isNegative ? '-' : '') + '${qValue.toStringAsFixed(2)}Q';
+  } else {
+    // Above 1 quintillion, convert to Qi
+    double qiValue = doubleValue / 1000000000000000000;
+    return (isNegative ? '-' : '') + '${qiValue.toStringAsFixed(2)}Qi';
   }
 }

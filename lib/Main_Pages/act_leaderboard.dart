@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Components/custom_leaderboard_loading.dart';
 import 'package:optionxi/Helpers/conversions.dart';
+import 'package:optionxi/Main_Pages/act_traderprofile.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
 
@@ -266,10 +267,20 @@ class _LeaderboardPageState extends State<LeaderboardPage>
           ...leaderboardEntries.asMap().entries.map((entry) {
             final index = entry.key;
             final leaderboardEntry = entry.value;
-            return ModernLeaderboardCard(
-              entry: leaderboardEntry,
-              index: index,
-              controller: _controller,
+            return InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) =>
+                          TraderProfilePage(leaderboardEntry)),
+                );
+              },
+              child: ModernLeaderboardCard(
+                entry: leaderboardEntry,
+                index: index,
+                controller: _controller,
+              ),
             );
           }).toList(),
           SizedBox(height: 20), // Bottom padding

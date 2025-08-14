@@ -625,7 +625,7 @@ class _StockScreenerPageState extends State<StockScreenerPage>
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Bullish Scanners',
+                                    'Bullish',
                                     style: theme.textTheme.labelLarge,
                                   ),
                                 ],
@@ -642,7 +642,7 @@ class _StockScreenerPageState extends State<StockScreenerPage>
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
-                                    'Bearish Scanners',
+                                    'Bearish',
                                     style: theme.textTheme.labelLarge,
                                   ),
                                 ],

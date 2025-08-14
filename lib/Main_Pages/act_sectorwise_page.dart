@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Main_Pages/act_sectorwise_stocks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -47,12 +48,6 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
         : Colors.white;
   }
 
-  Color _getSecondaryCardColor(BuildContext context) {
-    return Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF2D2D2F)
-        : const Color(0xFFF5F5F5);
-  }
-
   Color _getSkeletonColor(BuildContext context) {
     return Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF2A2A2B)
@@ -63,64 +58,6 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
     return Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF1A1A1B)
         : const Color(0xFFF0F0F0);
-  }
-
-  Widget _buildAdvanceDeclineRatio(SectorTrend sector) {
-    double ratio = sector.negativeStocks > 0
-        ? sector.positiveStocks / sector.negativeStocks
-        : sector.positiveStocks.toDouble();
-
-    String ratioText;
-    Color ratioColor;
-
-    if (ratio > 3) {
-      ratioText = 'Very Strong';
-      ratioColor = _getPositiveColor(context);
-    } else if (ratio > 2) {
-      ratioText = 'Strong';
-      ratioColor = _getPositiveColor(context).withOpacity(0.9);
-    } else if (ratio > 1.5) {
-      ratioText = 'Moderate';
-      ratioColor = Theme.of(context).brightness == Brightness.dark
-          ? const Color(0xFFFFAA00)
-          : const Color(0xFFFF8F00);
-    } else if (ratio > 0.5) {
-      ratioText = 'Weak';
-      ratioColor = _getNegativeColor(context).withOpacity(0.8);
-    } else {
-      ratioText = 'Very Weak';
-      ratioColor = _getNegativeColor(context);
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
-        Text(
-          'A/D Ratio',
-          style: TextStyle(
-            color:
-                Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
-            fontSize: 10,
-          ),
-        ),
-        Text(
-          '${ratio.toStringAsFixed(1)}:1',
-          style: TextStyle(
-            color: ratioColor,
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          ratioText,
-          style: TextStyle(
-            color: ratioColor,
-            fontSize: 9,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
   }
 
   @override
@@ -491,25 +428,47 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              isBullish ? Icons.trending_up : Icons.trending_down,
-              size: 64,
-              color: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.color
-                  ?.withOpacity(0.5),
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.color
+                    ?.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                isBullish
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+                size: 48,
+                color: Theme.of(context)
+                    .textTheme
+                    .bodyLarge
+                    ?.color
+                    ?.withOpacity(0.4),
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
-              'No ${isBullish ? 'bullish' : 'bearish'} sectors found',
+              'No ${isBullish ? 'bullish' : 'bearish'} sectors',
+              style: TextStyle(
+                color: Theme.of(context).textTheme.headlineSmall?.color,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Check back later for market updates',
               style: TextStyle(
                 color: Theme.of(context)
                     .textTheme
                     .bodyLarge
                     ?.color
-                    ?.withOpacity(0.7),
-                fontSize: 16,
+                    ?.withOpacity(0.6),
+                fontSize: 14,
               ),
             ),
           ],
@@ -518,7 +477,7 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       itemCount: sectors.length,
       itemBuilder: (context, index) {
         final sector = sectors[index];
@@ -527,210 +486,244 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
         final downPercentage =
             (sector.negativeStocks / sector.totalStocks * 100);
 
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          margin: const EdgeInsets.only(bottom: 16),
+        // Calculate trend strength for visual elements
+        final strength =
+            (isBullish ? sector.bullishScore : sector.bearishScore.abs()) / 100;
+        final clampedStrength = strength.clamp(0.0, 1.0);
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
               onTap: () {
+                // Add haptic feedback for modern feel
+                HapticFeedback.lightImpact();
                 Get.to(() => SectorStocksPage(
                       sectorName: sector.sectorName,
                       stocks: _sectorData[sector.sectorName] ?? [],
                     ));
               },
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(24),
               child: Container(
+                padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      _getCardColor(context),
-                      _getSecondaryCardColor(context),
-                    ],
-                    stops: const [0.0, 1.0],
+                  color: _getCardColor(context),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    width: 1,
                   ),
-                  borderRadius: BorderRadius.circular(20),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).shadowColor.withOpacity(0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      color: isPositive
+                          ? _getPositiveColor(context).withOpacity(0.08)
+                          : _getNegativeColor(context).withOpacity(0.08),
+                      blurRadius: 20,
+                      offset: const Offset(0, 8),
+                      spreadRadius: -4,
                     ),
                   ],
                 ),
-                child: Stack(
+                child: Column(
                   children: [
-                    // Animated trend indicator
-                    Positioned(
-                      left: 0,
-                      top: 0,
-                      bottom: 0,
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
-                        width: 5,
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: isPositive
-                                ? [
-                                    _getPositiveColor(context),
-                                    _getPositiveColor(context).withOpacity(0.8),
-                                  ]
-                                : [
-                                    _getNegativeColor(context),
-                                    _getNegativeColor(context).withOpacity(0.8),
-                                  ],
-                          ),
-                          borderRadius: const BorderRadius.only(
-                            topLeft: Radius.circular(20),
-                            bottomLeft: Radius.circular(20),
-                          ),
-                        ),
-                      ),
-                    ),
+                    // Header with sector name and performance
+                    Row(
+                      children: [
+                        // Sector icon/indicator
+                        // Container(
+                        //   width: 48,
+                        //   height: 48,
+                        //   decoration: BoxDecoration(
+                        //     gradient: LinearGradient(
+                        //       begin: Alignment.topLeft,
+                        //       end: Alignment.bottomRight,
+                        //       colors: isPositive
+                        //           ? [
+                        //               _getPositiveColor(context)
+                        //                   .withOpacity(0.15),
+                        //               _getPositiveColor(context)
+                        //                   .withOpacity(0.25),
+                        //             ]
+                        //           : [
+                        //               _getNegativeColor(context)
+                        //                   .withOpacity(0.15),
+                        //               _getNegativeColor(context)
+                        //                   .withOpacity(0.25),
+                        //             ],
+                        //     ),
+                        //     borderRadius: BorderRadius.circular(16),
+                        //   ),
+                        //   child: Icon(
+                        //     isPositive
+                        //         ? Icons.trending_up_rounded
+                        //         : Icons.trending_down_rounded,
+                        //     color: isPositive
+                        //         ? _getPositiveColor(context)
+                        //         : _getNegativeColor(context),
+                        //     size: 24,
+                        //   ),
+                        // ),
 
-                    Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Header Section
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        const SizedBox(width: 16),
+
+                        // Sector name and stock count
+                        Expanded(
+                          child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(
-                                flex: 3,
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      sector.sectorName,
-                                      style: TextStyle(
-                                        color: Theme.of(context)
-                                            .textTheme
-                                            .headlineSmall
-                                            ?.color,
-                                        fontSize: 20,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -0.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context)
-                                            .textTheme
-                                            .bodyLarge
-                                            ?.color
-                                            ?.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Text(
-                                        '${sector.totalStocks} stocks',
-                                        style: TextStyle(
-                                          color: Theme.of(context)
-                                              .textTheme
-                                              .bodyMedium
-                                              ?.color
-                                              ?.withOpacity(0.8),
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                              Text(
+                                sector.sectorName,
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.color,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -0.3,
                                 ),
                               ),
-
-                              // Performance badge and A/D ratio
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  // A/D ratio above the score
-                                  _buildAdvanceDeclineRatio(sector),
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 16, vertical: 10),
-                                    decoration: BoxDecoration(
-                                      gradient: LinearGradient(
-                                        colors: isPositive
-                                            ? [
-                                                _getPositiveColor(context)
-                                                    .withOpacity(0.2),
-                                                _getPositiveColor(context)
-                                                    .withOpacity(0.1),
-                                              ]
-                                            : [
-                                                _getNegativeColor(context)
-                                                    .withOpacity(0.2),
-                                                _getNegativeColor(context)
-                                                    .withOpacity(0.1),
-                                              ],
-                                      ),
-                                      borderRadius: BorderRadius.circular(16),
-                                      border: Border.all(
-                                        color: isPositive
-                                            ? _getPositiveColor(context)
-                                                .withOpacity(0.3)
-                                            : _getNegativeColor(context)
-                                                .withOpacity(0.3),
-                                      ),
-                                    ),
-                                    child: Text(
-                                      '${isPositive ? '+' : ''}${sector.averageChange.toStringAsFixed(2)}%',
-                                      style: TextStyle(
-                                        color: isPositive
-                                            ? _getPositiveColor(context)
-                                            : _getNegativeColor(context),
-                                        fontWeight: FontWeight.w700,
-                                        fontSize: 18,
-                                        letterSpacing: -0.5,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                ],
+                              const SizedBox(height: 2),
+                              Text(
+                                '${sector.totalStocks} stocks',
+                                style: TextStyle(
+                                  color: Theme.of(context)
+                                      .textTheme
+                                      .bodyLarge
+                                      ?.color
+                                      ?.withOpacity(0.6),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ],
                           ),
+                        ),
 
-                          const SizedBox(height: 20),
+                        // Performance percentage
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isPositive
+                                ? _getPositiveColor(context).withOpacity(0.12)
+                                : _getNegativeColor(context).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '${isPositive ? '+' : ''}${sector.averageChange.toStringAsFixed(2)}%',
+                            style: TextStyle(
+                              color: isPositive
+                                  ? _getPositiveColor(context)
+                                  : _getNegativeColor(context),
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
 
-                          // Trend strength indicator
-                          _buildEnhancedTrendIndicator(sector, isBullish),
+                    const SizedBox(height: 24),
 
-                          const SizedBox(height: 20),
+                    // Stats row
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildModernStatItem(
+                            'Gainers',
+                            sector.positiveStocks.toString(),
+                            '${upPercentage.toStringAsFixed(0)}%',
+                            _getPositiveColor(context),
+                            Icons.arrow_upward_rounded,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildModernStatItem(
+                            'Losers',
+                            sector.negativeStocks.toString(),
+                            '${downPercentage.toStringAsFixed(0)}%',
+                            _getNegativeColor(context),
+                            Icons.arrow_downward_rounded,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: _buildAdvanceDeclineCompact(sector),
+                        ),
+                      ],
+                    ),
 
-                          // Gainers and Losers in the same row
-                          Row(
-                            children: [
-                              Expanded(
-                                child: _buildEnhancedMetricCard(
-                                  'Gainers',
-                                  sector.positiveStocks.toString(),
-                                  '${upPercentage.toStringAsFixed(0)}%',
-                                  _getPositiveColor(context),
-                                  Icons.trending_up_rounded,
-                                ),
+                    const SizedBox(height: 20),
+
+                    // Modern trend strength bar
+                    Row(
+                      children: [
+                        Text(
+                          'Strength',
+                          style: TextStyle(
+                            color: Theme.of(context)
+                                .textTheme
+                                .bodyLarge
+                                ?.color
+                                ?.withOpacity(0.7),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${(clampedStrength * 100).toStringAsFixed(0)}%',
+                          style: TextStyle(
+                            color: isPositive
+                                ? _getPositiveColor(context)
+                                : _getNegativeColor(context),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 8),
+
+                    // Glassmorphism progress bar
+                    Container(
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.color
+                            ?.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: Row(
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 1200),
+                            curve: Curves.easeOutCubic,
+                            width: (MediaQuery.of(context).size.width - 88) *
+                                clampedStrength,
+                            height: 6,
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: isPositive
+                                    ? [
+                                        _getPositiveColor(context),
+                                        _getPositiveColor(context)
+                                            .withOpacity(0.7),
+                                      ]
+                                    : [
+                                        _getNegativeColor(context),
+                                        _getNegativeColor(context)
+                                            .withOpacity(0.7),
+                                      ],
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: _buildEnhancedMetricCard(
-                                  'Losers',
-                                  sector.negativeStocks.toString(),
-                                  '${downPercentage.toStringAsFixed(0)}%',
-                                  _getNegativeColor(context),
-                                  Icons.trending_down_rounded,
-                                ),
-                              ),
-                            ],
+                              borderRadius: BorderRadius.circular(3),
+                            ),
                           ),
                         ],
                       ),
@@ -745,155 +738,106 @@ class _SectorAnalysisPageState extends State<SectorAnalysisPage>
     );
   }
 
-  Widget _buildEnhancedMetricCard(
+  Widget _buildModernStatItem(
     String title,
     String count,
     String percentage,
     Color color,
     IconData icon,
   ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withOpacity(0.2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: color,
         ),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
-                      ?.color
-                      ?.withOpacity(0.8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              Icon(
-                icon,
-                size: 16,
-                color: color,
-              ),
-            ],
+        const SizedBox(height: 6),
+        Text(
+          count,
+          style: TextStyle(
+            color: Theme.of(context).textTheme.headlineSmall?.color,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
           ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                count,
-                style: TextStyle(
-                  color: Theme.of(context).textTheme.bodyLarge?.color,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                percentage,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
+        ),
+        Text(
+          title,
+          style: TextStyle(
+            color:
+                Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
           ),
-        ],
-      ),
+        ),
+        Text(
+          percentage,
+          style: TextStyle(
+            color: color,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildEnhancedTrendIndicator(dynamic sector, bool isBullish) {
-    final strength =
-        (isBullish ? sector.bullishScore : sector.bearishScore.abs()) / 100;
-    final clampedStrength = strength.clamp(0.0, 1.0);
+  Widget _buildAdvanceDeclineCompact(SectorTrend sector) {
+    double ratio = sector.negativeStocks > 0
+        ? sector.positiveStocks / sector.negativeStocks
+        : sector.positiveStocks.toDouble();
+
+    Color ratioColor;
+    if (ratio > 2) {
+      ratioColor = _getPositiveColor(context);
+    } else if (ratio > 1) {
+      ratioColor = Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFFFFAA00)
+          : const Color(0xFFFF8F00);
+    } else {
+      ratioColor = _getNegativeColor(context);
+    }
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Trend Strength',
-              style: TextStyle(
-                color: Theme.of(context)
-                    .textTheme
-                    .bodyMedium
-                    ?.color
-                    ?.withOpacity(0.8),
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            Text(
-              '${(clampedStrength * 100).toStringAsFixed(0)}%',
-              style: TextStyle(
-                color: isBullish
-                    ? _getPositiveColor(context)
-                    : _getNegativeColor(context),
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ],
+        Icon(
+          Icons.balance_rounded,
+          size: 16,
+          color: ratioColor,
         ),
-        const SizedBox(height: 8),
-        Stack(
-          children: [
-            Container(
-              height: 6,
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .textTheme
-                    .bodyLarge
-                    ?.color
-                    ?.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 800),
-              curve: Curves.easeOutCubic,
-              height: 6,
-              width: MediaQuery.of(context).size.width * 0.7 * clampedStrength,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isBullish
-                      ? [
-                          _getPositiveColor(context),
-                          _getPositiveColor(context).withOpacity(0.8),
-                        ]
-                      : [
-                          _getNegativeColor(context),
-                          _getNegativeColor(context).withOpacity(0.8),
-                        ],
-                ),
-                borderRadius: BorderRadius.circular(3),
-                boxShadow: [
-                  BoxShadow(
-                    color: (isBullish
-                            ? _getPositiveColor(context)
-                            : _getNegativeColor(context))
-                        .withOpacity(0.4),
-                    blurRadius: 4,
-                    offset: const Offset(0, 0),
-                  ),
-                ],
-              ),
-            ),
-          ],
+        const SizedBox(height: 6),
+        Text(
+          '${ratio.toStringAsFixed(1)}',
+          style: TextStyle(
+            color: Theme.of(context).textTheme.headlineSmall?.color,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.2,
+          ),
+        ),
+        Text(
+          'A/D Ratio',
+          style: TextStyle(
+            color:
+                Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.6),
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Text(
+          ratio > 2
+              ? 'Strong'
+              : ratio > 1
+                  ? 'Moderate'
+                  : 'Weak',
+          style: TextStyle(
+            color: ratioColor,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
       ],
     );

@@ -8,31 +8,26 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
 
 // --- Main Widget ---
-class ZerodhaConnectPage extends StatefulWidget {
-  const ZerodhaConnectPage({Key? key}) : super(key: key);
+class GrowwConnectPage extends StatefulWidget {
+  const GrowwConnectPage({Key? key}) : super(key: key);
 
   @override
-  State<ZerodhaConnectPage> createState() => _ZerodhaConnectPageState();
+  State<GrowwConnectPage> createState() => _GrowwConnectPageState();
 }
 
-class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
+class _GrowwConnectPageState extends State<GrowwConnectPage>
     with TickerProviderStateMixin {
   // Form and controller declarations remain the same...
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
   final _apiKeyController = TextEditingController();
   final _apiSecretController = TextEditingController();
-  final _totpKeyController = TextEditingController();
 
   // State variables remain the same...
   String _status = 'disconnected';
   String _statusMessage = 'Initializing...';
   DateTime? _lastUpdated;
   bool _isLoading = false;
-  bool _obscurePassword = true;
   bool _obscureApiSecret = true;
-  bool _obscureTotpKey = true;
   late AnimationController _animationController;
   late AnimationController _pulseController;
   late Animation<double> _fadeAnimation;
@@ -47,7 +42,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
   @override
   void initState() {
     super.initState();
-    print('🚀 [ZerodhaConnectPage] Initializing page...');
+    print('🚀 [GrowwConnectPage] Initializing page...');
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -66,19 +61,19 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
   }
 
   Future<void> _initializePage() async {
-    print('🔧 [ZerodhaConnectPage] Starting page initialization...');
+    print('🔧 [GrowwConnectPage] Starting page initialization...');
 
     User? user = FirebaseAuth.instance.currentUser;
     if (user != null) {
-      print('👤 [ZerodhaConnectPage] User authenticated: ${user.uid}');
+      print('👤 [FyeresConnectPage] User authenticated: ${user.uid}');
       _suid = user.uid;
-      _dbRef = FirebaseDatabase.instance.ref().child('brokers/zerodha/$_suid');
+      _dbRef = FirebaseDatabase.instance.ref().child('brokers/groww/$_suid');
 
       // Load initial data and setup real-time listener
       await _loadConnectionDetails();
       _setupRealtimeListener();
     } else {
-      print('❌ [ZerodhaConnectPage] No authenticated user found');
+      print('❌ [GrowwConnectPage] No authenticated user found');
       setState(() {
         _status = 'disconnected';
         _statusMessage = 'Please sign in to connect your broker account.';
@@ -90,22 +85,22 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
     if (_status == 'checking' || _status == 'pending') {
       _pulseController.repeat(reverse: true);
     }
-    print('✅ [ZerodhaConnectPage] Page initialization complete');
+    print('✅ [GrowwConnectPage] Page initialization complete');
   }
 
   // ✨ Setup real-time listener for Firebase changes
   void _setupRealtimeListener() {
     if (_suid == null) return;
 
-    print('🔄 [ZerodhaConnectPage] Setting up real-time listener...');
+    print('🔄 [GrowwConnectPage] Setting up real-time listener...');
 
     _realtimeListener = _dbRef.onValue.listen(
       (DatabaseEvent event) {
-        print('📡 [ZerodhaConnectPage] Real-time update received');
+        print('📡 [GrowwConnectPage] Real-time update received');
         _handleRealtimeUpdate(event);
       },
       onError: (error) {
-        print('❌ [ZerodhaConnectPage] Real-time listener error: $error');
+        print('❌ [GrowwConnectPage] Real-time listener error: $error');
         // Optionally show error to user
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -129,20 +124,11 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
       final data = Map<String, dynamic>.from(snapshot.value as Map);
 
       // Update form controllers if values changed
-      if (_usernameController.text != (data['user_id'] ?? '')) {
-        _usernameController.text = data['user_id'] ?? '';
-      }
-      if (_passwordController.text != (data['password'] ?? '')) {
-        _passwordController.text = data['password'] ?? '';
-      }
       if (_apiKeyController.text != (data['api_key'] ?? '')) {
         _apiKeyController.text = data['api_key'] ?? '';
       }
       if (_apiSecretController.text != (data['api_secret'] ?? '')) {
         _apiSecretController.text = data['api_secret'] ?? '';
-      }
-      if (_totpKeyController.text != (data['totp_key'] ?? '')) {
-        _totpKeyController.text = data['totp_key'] ?? '';
       }
 
       // Update last updated time
@@ -158,13 +144,13 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
       // Determine status message based on new status
       switch (newStatus) {
         case 'authenticated':
-          newStatusMessage = 'You are connected to Zerodha and ready to trade!';
+          newStatusMessage = 'You are connected to Groww and ready to trade!';
           _pulseController.stop();
           // Show success snackbar if status changed to authenticated
           if (_status != 'authenticated') {
             _showStatusNotification(
               'Connection Successful!',
-              'Your Zerodha account is now connected and ready for trading.',
+              'Your Groww account is now connected and ready for trading.',
               Colors.green,
               Icons.check_circle_rounded,
             );
@@ -214,7 +200,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
         });
 
         print(
-            '📊 [ZerodhaConnectPage] Real-time update applied - Status: $newStatus');
+            '📊 [GrowwConnectPage] Real-time update applied - Status: $newStatus');
       }
     } else {
       // No data exists, reset to disconnected state
@@ -226,7 +212,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
         });
         _pulseController.stop();
         print(
-            '📭 [ZerodhaConnectPage] Real-time update: Data removed, status reset');
+            '📭 [GrowwConnectPage] Real-time update: Data removed, status reset');
       }
     }
   }
@@ -274,7 +260,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
   Future<void> _loadConnectionDetails() async {
     if (_suid == null) {
       print(
-          '❌ [ZerodhaConnectPage] Cannot load connection details: SUID is null');
+          '❌ [GrowwConnectPage] Cannot load connection details: SUID is null');
       setState(() {
         _status = 'disconnected';
         _statusMessage = 'Please sign in to connect your broker account.';
@@ -282,8 +268,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
       return;
     }
 
-    print(
-        '📥 [ZerodhaConnectPage] Loading connection details from Firebase...');
+    print('📥 [GrowwConnectPage] Loading connection details from Firebase...');
     setState(() {
       _status = 'checking';
       _statusMessage = 'Checking for existing connection...';
@@ -293,14 +278,11 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
     try {
       final snapshot = await _dbRef.get();
       if (snapshot.exists && snapshot.value != null) {
-        print('📊 [ZerodhaConnectPage] Connection details found in Firebase');
+        print('📊 [GrowwConnectPage] Connection details found in Firebase');
         final data = Map<String, dynamic>.from(snapshot.value as Map);
 
-        _usernameController.text = data['user_id'] ?? '';
-        _passwordController.text = data['password'] ?? '';
         _apiKeyController.text = data['api_key'] ?? '';
         _apiSecretController.text = data['api_secret'] ?? '';
-        _totpKeyController.text = data['totp_key'] ?? '';
 
         final lastUpdatedMillis = data['updated_at'];
         if (lastUpdatedMillis is int) {
@@ -312,7 +294,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
         setState(() {
           _status = currentStatus;
           if (currentStatus == 'authenticated') {
-            _statusMessage = 'You are connected to Zerodha and ready to trade!';
+            _statusMessage = 'You are connected to Groww and ready to trade!';
             _pulseController.stop();
           } else if (currentStatus == 'pending') {
             _statusMessage =
@@ -331,8 +313,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
           }
         });
       } else {
-        print(
-            '📭 [ZerodhaConnectPage] No connection details found in Firebase');
+        print('📭 [GrowwConnectPage] No connection details found in Firebase');
         setState(() {
           _status = 'disconnected';
           _statusMessage = 'Enter credentials to connect.';
@@ -340,7 +321,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
         _pulseController.stop();
       }
     } catch (e) {
-      print('❌ [ZerodhaConnectPage] Error loading connection details: $e');
+      print('❌ [GrowwConnectPage] Error loading connection details: $e');
       setState(() {
         _status = 'error';
         _statusMessage = 'Failed to load details: ${e.toString()}';
@@ -351,7 +332,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
 
   @override
   void dispose() {
-    print('🧹 [ZerodhaConnectPage] Disposing resources...');
+    print('🧹 [GrowwConnectPage] Disposing resources...');
 
     // ✨ Cancel real-time listener
     _realtimeListener?.cancel();
@@ -359,22 +340,19 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
 
     _animationController.dispose();
     _pulseController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
     _apiKeyController.dispose();
     _apiSecretController.dispose();
-    _totpKeyController.dispose();
     super.dispose();
   }
 
   // Method to save credentials
   Future<void> _saveAndConnectCredentials() async {
     if (!_formKey.currentState!.validate()) {
-      print('❌ [ZerodhaConnectPage] Form validation failed');
+      print('❌ [GrowwConnectPage] Form validation failed');
       return;
     }
 
-    print('🔄 [ZerodhaConnectPage] Starting credential save process...');
+    print('🔄 [GrowwConnectPage] Starting credential save process...');
     setState(() {
       _isLoading = true;
       _status = 'pending';
@@ -383,18 +361,12 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
     _pulseController.repeat(reverse: true);
 
     try {
-      final username = _usernameController.text;
-      final password = _passwordController.text;
       final apiKey = _apiKeyController.text;
       final apiSecret = _apiSecretController.text;
-      final totpKey = _totpKeyController.text;
 
       final payload = {
-        'user_id': username,
-        'password': password,
         'api_key': apiKey,
         'api_secret': apiSecret,
-        'totp_key': totpKey,
         'updated_at': ServerValue.timestamp,
         'status': 'pending',
         'connection_complete': false,
@@ -402,13 +374,12 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
       };
 
       await _dbRef.set(payload);
-      print(
-          '✅ [ZerodhaConnectPage] Credentials saved successfully to Firebase');
+      print('✅ [GrowwConnectPage] Credentials saved successfully to Firebase');
 
       // Note: State will be updated automatically by real-time listener
-      print('🎉 [ZerodhaConnectPage] Save process completed successfully!');
+      print('🎉 [GrowwConnectPage] Save process completed successfully!');
     } catch (e) {
-      print('❌ [ZerodhaConnectPage] Save failed: $e');
+      print('❌ [GrowwConnectPage] Save failed: $e');
 
       try {
         await _dbRef.update({
@@ -417,10 +388,10 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
           'error_message': e.toString(),
           'updated_at': ServerValue.timestamp,
         });
-        print('💾 [ZerodhaConnectPage] Firebase updated with error status');
+        print('💾 [GrowwConnectPage] Firebase updated with error status');
       } catch (dbError) {
         print(
-            '❌ [ZerodhaConnectPage] Failed to update Firebase with error: $dbError');
+            '❌ [GrowwConnectPage] Failed to update Firebase with error: $dbError');
       }
 
       // Manual state update for immediate error feedback
@@ -431,35 +402,31 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
       _pulseController.stop();
     } finally {
       setState(() => _isLoading = false);
-      print('🔄 [ZerodhaConnectPage] Save process finished');
+      print('🔄 [GrowwConnectPage] Save process finished');
     }
   }
 
   Future<void> _disconnectAccount() async {
-    print('🔌 [ZerodhaConnectPage] Disconnect account requested');
+    print('🔌 [GrowwConnectPage] Disconnect account requested');
 
-    print(
-        '🗑️ [ZerodhaConnectPage] User confirmed disconnect, removing data...');
+    print('🗑️ [GrowwConnectPage] User confirmed disconnect, removing data...');
     await _dbRef.remove();
     _formKey.currentState?.reset();
-    _usernameController.clear();
-    _passwordController.clear();
     _apiKeyController.clear();
     _apiSecretController.clear();
-    _totpKeyController.clear();
 
     // Note: State will be updated automatically by real-time listener when data is removed
-    print('✅ [ZerodhaConnectPage] Account disconnected successfully');
+    print('✅ [GrowwConnectPage] Account disconnected successfully');
   }
 
   void _launchYouTube() async {
-    print('🎥 [ZerodhaConnectPage] Launching YouTube guide...');
+    print('🎥 [GrowwConnectPage] Launching YouTube guide...');
     final url = Uri.parse('https://www.youtube.com/watch?v=z7swHkB3Pa0');
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
-      print('✅ [ZerodhaConnectPage] YouTube guide launched successfully');
+      print('✅ [GrowwConnectPage] YouTube guide launched successfully');
     } else {
-      print('❌ [ZerodhaConnectPage] Failed to launch YouTube guide');
+      print('❌ [GrowwConnectPage] Failed to launch YouTube guide');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Could not launch video guide.')),
       );
@@ -476,7 +443,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
         appBar: AppBar(
           title: Row(
             children: [
-              const Text('Connect to Zerodha'),
+              const Text('Connect to Groww'),
               const SizedBox(width: 8),
               // ✨ Real-time indicator
               Container(
@@ -586,7 +553,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
       appBar: AppBar(
         title: Row(
           children: [
-            const Text('Connect to Zerodha'),
+            const Text('Connect to Groww'),
             const SizedBox(width: 8),
             // ✨ Real-time indicator
             Container(
@@ -628,25 +595,6 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
                 _buildStatusCard(theme, isDark),
                 const SizedBox(height: 24),
                 _buildTextField(
-                  controller: _usernameController,
-                  label: 'User ID',
-                  icon: Icons.person_outline_rounded,
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'User ID is required' : null,
-                  theme: theme,
-                ),
-                _buildTextField(
-                  controller: _passwordController,
-                  label: 'Password',
-                  icon: Icons.lock_outline_rounded,
-                  obscureText: _obscurePassword,
-                  onToggle: () =>
-                      setState(() => _obscurePassword = !_obscurePassword),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'Password is required' : null,
-                  theme: theme,
-                ),
-                _buildTextField(
                   controller: _apiKeyController,
                   label: 'API Key',
                   icon: Icons.vpn_key_rounded,
@@ -666,20 +614,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
                       : null,
                   theme: theme,
                 ),
-                _buildTextField(
-                  controller: _totpKeyController,
-                  label: 'TOTP Key (from Authenticator App)',
-                  icon: Icons.security_rounded,
-                  obscureText: _obscureTotpKey,
-                  onToggle: () =>
-                      setState(() => _obscureTotpKey = !_obscureTotpKey),
-                  validator: (v) =>
-                      (v == null || v.isEmpty) ? 'TOTP Key is required' : null,
-                  theme: theme,
-                ),
-                const SizedBox(height: 20),
-                _buildAuthHelper(theme),
-                const SizedBox(height: 20),
+                const SizedBox(height: 32),
                 Row(
                   children: [
                     Expanded(
@@ -734,7 +669,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
                                       const SizedBox(height: 8),
                                       Text(
                                         '• Delete all stored credentials\n'
-                                        '• Disconnect your Zerodha account\n'
+                                        '• Disconnect your Groww account\n'
                                         '• Stop all trading activities',
                                         style: theme.textTheme.bodyMedium
                                             ?.copyWith(
@@ -816,7 +751,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
                     ),
                   ],
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 32),
                 _buildSecurityNote(theme),
                 const SizedBox(height: 20),
                 _buildHelpSection(theme),
@@ -1040,90 +975,6 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
     );
   }
 
-  Widget _buildAuthHelper(ThemeData theme) {
-    return Card(
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      color: theme.colorScheme.surface,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  Icons.security,
-                  color: theme.colorScheme.onSurface,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  'Allow Access',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Kindly click this link and allow permissions for your created kite app.',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                height: 1.6,
-                color: theme.colorScheme.onSurface.withOpacity(0.8),
-              ),
-            ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () async {
-                  if (_apiKeyController.text.length >= 4) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                          content: Text(
-                              'Enther valid API key that is generated in the kite app')),
-                    );
-                  } else {
-                    print(
-                        '🎥 [ZerodhaConnectPage] Launching kite app authentication link..');
-                    final url = Uri.parse(
-                        'https://kite.trade/connect/login?v=3&api_key=' +
-                            _apiKeyController.text.toString());
-                    if (await canLaunchUrl(url)) {
-                      await launchUrl(url,
-                          mode: LaunchMode.externalApplication);
-                    } else {
-                      print(
-                          '❌ [ZerodhaConnectPage] Failed to launch app authentication link');
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                            content: Text(
-                                'Could not launch app authentication link.')),
-                      );
-                    }
-                  }
-                },
-                icon: const Icon(Icons.security),
-                label: const Text('Authenticate'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: Colors.blue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildHelpSection(ThemeData theme) {
     return Card(
       elevation: 2,
@@ -1153,7 +1004,7 @@ class _ZerodhaConnectPageState extends State<ZerodhaConnectPage>
             ),
             const SizedBox(height: 16),
             Text(
-              'Follow this video guide to get your API credentials from the Zerodha Developer portal.',
+              'Follow this video guide to get your API credentials from the Groww Developer portal.',
               style: theme.textTheme.bodyMedium?.copyWith(
                 height: 1.6,
                 color: theme.colorScheme.onSurface.withOpacity(0.8),

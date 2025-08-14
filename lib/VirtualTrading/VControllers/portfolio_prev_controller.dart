@@ -1,9 +1,16 @@
 import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/VirtualTrading/VDataModel/v_holdings.dart';
 import 'package:optionxi/VirtualTrading/VDatabaseSupabase/db_read_supabase_prev_portfolio.dart';
 
 class PortfolioController extends GetxController {
+  final String? suid;
+
+  PortfolioController({this.suid});
+
+  late final String userSuid;
+
   final PortfolioService _portfolioService = PortfolioService();
 
   // --- Observables ---
@@ -38,11 +45,14 @@ class PortfolioController extends GetxController {
   StreamSubscription? _fnoSubscription;
 
   // This should be replaced by your actual authentication logic
-  final String userSuid = FirebaseAuth.instance.currentUser!.uid.toString();
+  // final String userSuid = FirebaseAuth.instance.currentUser!.uid.toString();
+  // final String? userSuid = suid ?? FirebaseAuth.instance.currentUser?.uid;
 
   @override
   void onInit() {
     super.onInit();
+    userSuid = suid ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+
     fetchAllData();
     _setupSubscriptions();
   }
@@ -219,14 +229,14 @@ class PortfolioController extends GetxController {
   }
 
   void _handleSubscriptionError(String subscriptionName, dynamic error) {
-    Get.snackbar(
-      '$subscriptionName Error',
-      'Connection lost. Trying to reconnect...',
-      snackPosition: SnackPosition.BOTTOM,
-      backgroundColor: Get.theme.colorScheme.error.withOpacity(0.1),
-      colorText: Get.theme.colorScheme.error,
-      duration: const Duration(seconds: 2),
-    );
+    // Get.snackbar(
+    //   '$subscriptionName Error',
+    //   'Connection lost. Trying to reconnect...',
+    //   snackPosition: SnackPosition.BOTTOM,
+    //   backgroundColor: Get.theme.colorScheme.error.withOpacity(0.1),
+    //   colorText: Get.theme.colorScheme.error,
+    //   duration: const Duration(seconds: 2),
+    // );
 
     // Retry subscription after a delay
     Timer(const Duration(seconds: 3), () {

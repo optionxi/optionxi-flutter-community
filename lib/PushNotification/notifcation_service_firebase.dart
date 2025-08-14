@@ -2,17 +2,21 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:optionxi/DB_Services/database_write.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 
-final navigatorKey = GlobalKey<NavigatorState>();
+// final navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> handleMessageBackground(RemoteMessage? message) async {
   if (message == null) return;
   debugPrint("Background message received");
-  navigatorKey.currentState?.pushNamed("/messages", arguments: message);
+  // Add this line to increment badge for background messages
+  BadgeService.incrementNotificationsBadge();
+  // navigatorKey.currentState?.pushNamed("/messages", arguments: message);
+  Get.toNamed("/messages", arguments: message);
 }
 
 class NotificationServiceFirebase {
@@ -260,7 +264,7 @@ class NotificationServiceFirebase {
     FirebaseMessaging.onMessageOpenedApp.listen((msg) {
       debugPrint("Background message opened");
       handleMessage(msg);
-      _showNotification(msg);
+      // _showNotification(msg); no need to show again, user clicked
     });
 
     FirebaseMessaging.onMessage.listen((msg) {
@@ -292,7 +296,8 @@ class NotificationServiceFirebase {
     if (message == null) return;
 
     try {
-      navigatorKey.currentState?.pushNamed("/messages", arguments: message);
+      // navigatorKey.currentState?.pushNamed("/messages", arguments: message);
+      Get.toNamed("/messages", arguments: message);
     } catch (e) {
       debugPrint("Message navigation error: $e");
     }
