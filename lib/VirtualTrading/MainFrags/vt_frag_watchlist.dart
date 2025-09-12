@@ -58,15 +58,15 @@ class _FNOPageState extends State<FNOPage> with TickerProviderStateMixin {
               child: NestedScrollView(
                 headerSliverBuilder: (context, innerBoxIsScrolled) => [
                   // Collapsible header
-                  SliverPersistentHeader(
-                    floating: false,
-                    pinned: false,
-                    delegate: CollapsibleHeaderDelegate(
-                      minHeight: 0,
-                      maxHeight: 80, // Adjust based on your header height
-                      child: _buildHeader(context),
-                    ),
-                  ),
+                  // SliverPersistentHeader(
+                  //   floating: false,
+                  //   pinned: false,
+                  //   delegate: CollapsibleHeaderDelegate(
+                  //     minHeight: 0,
+                  //     maxHeight: 80, // Adjust based on your header height
+                  //     child: _buildHeader(context),
+                  //   ),
+                  // ),
                   // Collapsible search bar
                   // SliverPersistentHeader(
                   //   floating: false,
@@ -97,54 +97,54 @@ class _FNOPageState extends State<FNOPage> with TickerProviderStateMixin {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Virtual Trade',
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).textTheme.titleLarge?.color,
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color:
-                  Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'DELAYED',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildHeader(BuildContext context) {
+  //   return Padding(
+  //     padding: const EdgeInsets.all(16.0),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //       children: [
+  //         Text(
+  //           'Virtual Trade',
+  //           style: GoogleFonts.poppins(
+  //             fontSize: 28,
+  //             fontWeight: FontWeight.bold,
+  //             color: Theme.of(context).textTheme.titleLarge?.color,
+  //           ),
+  //         ),
+  //         Container(
+  //           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  //           decoration: BoxDecoration(
+  //             color:
+  //                 Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+  //             borderRadius: BorderRadius.circular(20),
+  //           ),
+  //           child: Row(
+  //             mainAxisSize: MainAxisSize.min,
+  //             children: [
+  //               Container(
+  //                 width: 8,
+  //                 height: 8,
+  //                 decoration: BoxDecoration(
+  //                   color: Colors.green,
+  //                   shape: BoxShape.circle,
+  //                 ),
+  //               ),
+  //               const SizedBox(width: 6),
+  //               Text(
+  //                 'DELAYED',
+  //                 style: GoogleFonts.poppins(
+  //                   fontSize: 12,
+  //                   fontWeight: FontWeight.w600,
+  //                   color: Theme.of(context).colorScheme.primary,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   // Widget _buildSearchBar(BuildContext context) {
   //   return Padding(

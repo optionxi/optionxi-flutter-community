@@ -54,7 +54,7 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
           SliverToBoxAdapter(
             child: Column(
               children: [
-                _buildHeader(),
+                // _buildHeader(),
                 _buildCollapsibleStats(),
               ],
             ),
@@ -108,57 +108,57 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
   //   });
   // }
 
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Portfolio',
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).textTheme.titleLarge?.color,
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'DELAYED',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildHeader() {
+  //   return Padding(
+  //     padding: const EdgeInsets.all(16.0),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //       children: [
+  //         Text(
+  //           'Portfolio',
+  //           style: GoogleFonts.poppins(
+  //             fontSize: 28,
+  //             fontWeight: FontWeight.bold,
+  //             color: Theme.of(context).textTheme.titleLarge?.color,
+  //           ),
+  //         ),
+  //         Container(
+  //           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  //           decoration: BoxDecoration(
+  //             color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+  //             borderRadius: BorderRadius.circular(20),
+  //           ),
+  //           child: Row(
+  //             mainAxisSize: MainAxisSize.min,
+  //             children: [
+  //               Container(
+  //                 width: 8,
+  //                 height: 8,
+  //                 decoration: BoxDecoration(
+  //                   color: Colors.green,
+  //                   shape: BoxShape.circle,
+  //                 ),
+  //               ),
+  //               const SizedBox(width: 6),
+  //               Text(
+  //                 'DELAYED',
+  //                 style: GoogleFonts.poppins(
+  //                   fontSize: 12,
+  //                   fontWeight: FontWeight.w600,
+  //                   color: Theme.of(context).colorScheme.primary,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildCollapsibleStats() {
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),

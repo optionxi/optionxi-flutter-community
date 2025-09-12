@@ -14,6 +14,7 @@ import 'package:optionxi/Main_Pages/act_portfolio.dart';
 import 'package:optionxi/Main_Pages/act_predictions.dart';
 import 'package:optionxi/Main_Pages/act_tradingideas.dart';
 import 'package:optionxi/MobileLink/link_phone_screen.dart';
+import 'package:optionxi/Payments/subsctiption_screen.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
 import 'package:optionxi/VirtualTrading/act_broker_connectpage.dart';
 
@@ -260,10 +261,10 @@ class _TradingProfilePageState extends State<TradingProfilePage>
                       badgeText: "Beta", onTap: goToLeaderBoardPage),
                   OptionItem("Broker Connect", FontAwesomeIcons.robot,
                       badgeText: "Beta", onTap: gotoBrokerConnect),
-                  OptionItem("Oraganisations", FontAwesomeIcons.building,
+                  OptionItem("Organisations", FontAwesomeIcons.building,
                       badgeText: "Soon", onTap: showCommingSoon),
-                  OptionItem("Live virtual trading", Icons.bolt,
-                      badgeText: "Soon", onTap: showCommingSoon),
+                  // OptionItem("Subscriptions", FontAwesomeIcons.moneyBill,
+                  //     badgeText: "New", onTap: gotoSubscriptionPage),
                   OptionItem(
                     "Privacy Mode",
                     Icons.privacy_tip,
@@ -471,6 +472,14 @@ class _TradingProfilePageState extends State<TradingProfilePage>
     Navigator.push(
       context,
       MaterialPageRoute(builder: (context) => BrokerConnectPage()),
+    );
+  }
+
+  void gotoSubscriptionPage() {
+    //Go to OTP entering Page
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => ModernSubscriptionScreen()),
     );
   }
 

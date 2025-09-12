@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
+import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/VirtualTradeJournal/add_basket_page.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_holdings_journal.dart';
 
@@ -217,15 +218,25 @@ class _EditBasketPageState extends State<EditBasketPage>
         'reason': _customReasonController
             .text, // <<<--- MODIFIED: Always take from controller
         'entry_date': _selectedEntryDate.toUtc().toIso8601String(),
+        'isshort': widget.basket.isshort
       };
 
       await journalEntryRef.set(entryData);
 
-      // final successMessage =
-      //     "${widget.basket.symbol} was successfully updated in your basket!";
+      final successMessage =
+          "${widget.basket.symbol} was successfully updated in your basket!";
 
       // GlobalSnackBarGet().showGetSuccessOnTop("Basket Updated", successMessage,
       //     backgroundColor: Colors.green.shade600);
+
+      final int uniqueId =
+          DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+      NotificationService().showNotificationBasic(
+        id: uniqueId,
+        title: "Basket Updated",
+        body: successMessage,
+      );
 
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {

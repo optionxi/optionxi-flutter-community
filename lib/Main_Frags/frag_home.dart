@@ -1,12 +1,12 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/Components/broker_list_section.dart';
 import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_notice_section.dart';
 import 'package:optionxi/Components/cust_top_tutors.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
 import 'package:optionxi/Components/home_top_leaderboard.dart';
-// import 'package:optionxi/Components/trade_community_section.dart';
 import 'package:optionxi/Components/trending_stocks_section.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Main_Pages/act_search_stocks.dart';
@@ -116,20 +116,25 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     ),
 
                     NoticesSection(),
-                    // SlideTransition(
-                    //   position: Tween<Offset>(
-                    //     begin: Offset(0, 0.2),
-                    //     end: Offset.zero,
-                    //   ).animate(
-                    //     CurvedAnimation(
-                    //       parent: _controller,
-                    //       curve: Interval(0.3, 0.5, curve: Curves.easeOut),
-                    //     ),
-                    //   ),
-                    //   child: buildTradingIdeas(context, _controller),
-                    // ),
-                    // const SizedBox(height: 24),
                     // Divider(),
+                    SizedBox(
+                      height: 8,
+                    ),
+                    SlideTransition(
+                      position: Tween<Offset>(
+                        begin: Offset(0, 0.2),
+                        end: Offset.zero,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: _controller,
+                          curve: Interval(0.3, 0.5, curve: Curves.easeOut),
+                        ),
+                      ),
+                      // child: buildTradingIdeas(context, _controller),
+                      child: buildBrokerHub(context, _controller),
+                    ),
+                    const SizedBox(height: 24),
+                    Divider(),
                     TrendingStocksSection(),
                     const SizedBox(height: 24),
                     Divider(),

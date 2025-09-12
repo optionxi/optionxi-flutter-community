@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:optionxi/Main_Frags/frag_watchlist.dart';
+import 'package:get/get.dart';
+import 'package:optionxi/Components/cust_badge_widget.dart';
+import 'package:optionxi/Helpers/badge_service_obx.dart';
+import 'package:optionxi/VirtualTradeJournal/frag_watchlist.dart';
 import 'package:optionxi/VirtualTradeJournal/vt_frag_portfolio_journal.dart';
 
 class WatchlistFragmentMain extends StatefulWidget {
@@ -36,6 +39,11 @@ class _WatchlistFragmentMainState extends State<WatchlistFragmentMain>
   }
 
   void _onBottomNavItemTapped(int index) async {
+    if (index == 1) {
+      // Clear basket badge when user taps on basket tab
+      await BasketBadgeServiceObx.clearBasketBadge();
+    }
+
     setState(() {
       _currentPageIndex = index;
     });
@@ -108,7 +116,10 @@ class _WatchlistFragmentMainState extends State<WatchlistFragmentMain>
                   label: 'Watchlist',
                 ),
                 BottomNavigationBarItem(
-                  icon: Icon(Icons.donut_small_outlined),
+                  icon: Obx(() => BadgeWidget(
+                        count: BasketBadgeServiceObx.basketBadgeCount.value,
+                        child: Icon(Icons.donut_small_outlined),
+                      )),
                   activeIcon: Container(
                     padding: EdgeInsets.all(6),
                     decoration: BoxDecoration(

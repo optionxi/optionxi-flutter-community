@@ -3,7 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:intl/intl.dart';
+import 'package:optionxi/Components/custom_slidetobuy.dart';
 import 'package:optionxi/DataModels/dm_stock_model.dart';
 import 'package:optionxi/Helpers/badge_service_obx.dart';
 import 'package:optionxi/Helpers/constants.dart';
@@ -12,19 +12,22 @@ import 'package:optionxi/Main_Pages/act_atlas_page.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/browser_lite.dart';
 
-class AddToBasketPage extends StatefulWidget {
+class AddBuySellOrderPage extends StatefulWidget {
   final DataStockModel stock;
-
-  const AddToBasketPage({
+  final String whichbroker;
+  final String buyorsell;
+  const AddBuySellOrderPage({
     Key? key,
     required this.stock,
+    required this.whichbroker,
+    required this.buyorsell,
   }) : super(key: key);
 
   @override
-  _AddToBasketPageState createState() => _AddToBasketPageState();
+  _AddBuySellOrderPageState createState() => _AddBuySellOrderPageState();
 }
 
-class _AddToBasketPageState extends State<AddToBasketPage>
+class _AddBuySellOrderPageState extends State<AddBuySellOrderPage>
     with TickerProviderStateMixin {
   late AnimationController _animationController;
   late AnimationController _submitController;
@@ -40,52 +43,14 @@ class _AddToBasketPageState extends State<AddToBasketPage>
   final TextEditingController _customReasonController = TextEditingController();
 
   String _selectedAction = 'BUY';
-  String? _selectedReason = 'Technical Breakout'; // Set default reason
-  String _selectedTimeframe = 'Short Term';
-  late DateTime _selectedEntryDate;
-  bool _isSubmitting = false;
   bool _isExpanded = false;
   // <<<--- ADDED: State for collapsible sections
   bool _isRiskManagementExpanded = false;
-  bool _isWhyThisTradeExpanded = false;
-
-  final List<Map<String, dynamic>> _positiveReasons = [
-    {
-      'title': 'Technical Breakout',
-      'icon': Icons.trending_up,
-      'color': Colors.green
-    },
-    {
-      'title': 'Strong Fundamentals',
-      'icon': Icons.analytics,
-      'color': Colors.blue
-    },
-    {'title': 'Volume Surge', 'icon': Icons.bar_chart, 'color': Colors.orange},
-    {'title': 'Support Level', 'icon': Icons.support, 'color': Colors.teal},
-  ];
-
-  final List<Map<String, dynamic>> _negativeReasons = [
-    {
-      'title': 'Social Media Hype',
-      'icon': Icons.chat_bubble,
-      'color': Colors.red
-    },
-    {
-      'title': 'News Based',
-      'icon': Icons.newspaper,
-      'color': Colors.deepOrange
-    },
-    {
-      'title': 'Guru Recommendation',
-      'icon': Icons.person,
-      'color': Colors.pink
-    },
-    {'title': 'FOMO Entry', 'icon': Icons.psychology, 'color': Colors.purple},
-  ];
 
   @override
   void initState() {
     super.initState();
+    _selectedAction = widget.buyorsell;
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
@@ -115,7 +80,6 @@ class _AddToBasketPageState extends State<AddToBasketPage>
   void _setInitialDefaults() {
     _buyPriceController.text = widget.stock.close.toStringAsFixed(2);
     _quantityController.text = '1'; // <<<--- MODIFIED: Set default quantity
-    _selectedEntryDate = DateTime.now();
     _updateTargetAndStopLoss();
   }
 
@@ -143,32 +107,6 @@ class _AddToBasketPageState extends State<AddToBasketPage>
     super.dispose();
   }
 
-  Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime? pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _selectedEntryDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-    );
-    if (pickedDate != null) {
-      final TimeOfDay? pickedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.fromDateTime(_selectedEntryDate),
-      );
-      if (pickedTime != null) {
-        setState(() {
-          _selectedEntryDate = DateTime(
-            pickedDate.year,
-            pickedDate.month,
-            pickedDate.day,
-            pickedTime.hour,
-            pickedTime.minute,
-          );
-        });
-      }
-    }
-  }
-
   void _submitToJournal() async {
     if (!_formKey.currentState!.validate()) {
       GlobalSnackBarGet().showGetSuccessOnTop(
@@ -177,9 +115,6 @@ class _AddToBasketPageState extends State<AddToBasketPage>
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
     _submitController.forward();
 
     try {
@@ -189,11 +124,14 @@ class _AddToBasketPageState extends State<AddToBasketPage>
       }
 
       final databaseRef = FirebaseDatabase.instance.ref();
-      final journalEntryRef =
-          databaseRef.child('virtualbasket_toadd').child(user.uid).push();
+      final orderRef = databaseRef
+          .child('order_to_execute')
+          .child(widget.whichbroker)
+          .child(user.uid)
+          .push();
 
       // <<<--- MODIFIED: Add 'to_update' flag if editing
-      final entryData = {
+      final orderData = {
         'symbol': widget.stock.symbol,
         'segment': "EQ",
         'transaction_type': _selectedAction,
@@ -205,25 +143,15 @@ class _AddToBasketPageState extends State<AddToBasketPage>
         'stop_loss_price': _stopLossController.text.isNotEmpty
             ? double.tryParse(_stopLossController.text)
             : null,
-        'timeframe': _selectedTimeframe,
         'reason': _customReasonController
             .text, // <<<--- MODIFIED: Always take from controller
-        'entry_date': _selectedEntryDate.toUtc().toIso8601String(),
       };
 
-      await journalEntryRef.set(entryData);
-      await BasketBadgeServiceObx.incrementBasketBadge();
+      // await journalEntryRef.set(entryData);
+      // await BasketBadgeServiceObx.incrementBasketBadge();
 
       final successMessage =
-          "${widget.stock.symbol} was successfully added to your basket!";
-
-      // GlobalSnackBarGet().showGetSuccessOnTop("Basket Updated", successMessage,
-      //     backgroundColor: Colors.green.shade600);
-
-      // Color backgroundColor;
-      // IconData icon;
-      // backgroundColor = Colors.green;
-      // icon = Icons.check_circle_rounded;
+          "Order placed for ${widget.stock.symbol} via ${widget.whichbroker} broker";
 
       if (mounted) {
         // ScaffoldMessenger.of(context).showSnackBar(
@@ -252,17 +180,17 @@ class _AddToBasketPageState extends State<AddToBasketPage>
         //     ),
         //   ),
         // );
+
         final int uniqueId =
             DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
         NotificationService().showNotificationBasic(
           id: uniqueId,
-          title: "Basket Added",
+          title: "${widget.whichbroker}: Order Placed",
           body: successMessage,
         );
       }
-
-      await Future.delayed(const Duration(seconds: 1));
+      // await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
         Navigator.pop(context);
       }
@@ -272,9 +200,6 @@ class _AddToBasketPageState extends State<AddToBasketPage>
           backgroundColor: Colors.red);
     } finally {
       if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
         _submitController.reverse();
       }
     }
@@ -349,12 +274,14 @@ class _AddToBasketPageState extends State<AddToBasketPage>
                                   _buildPriceInputs(isDark),
                                   const SizedBox(height: 24),
                                   _buildRiskManagement(isDark), // MODIFIED
-                                  const SizedBox(height: 24),
-                                  _buildReasonSelector(isDark), // MODIFIED
                                   const SizedBox(height: 32),
                                   VirtualDisclaimerNotice(),
                                   const SizedBox(height: 32),
-                                  _buildSubmitButton(isDark),
+                                  SlidetoBuyorSell(
+                                    theme: Theme.of(context),
+                                    onCompleted: _submitToJournal,
+                                    orderType: _selectedAction,
+                                  ),
                                   const SizedBox(height: 40),
                                 ],
                               ),
@@ -717,7 +644,7 @@ class _AddToBasketPageState extends State<AddToBasketPage>
   Widget _buildHeader(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width > 600;
     final fontSize = isTablet ? 32.0 : 28.0;
-    final title = "Add to Basket";
+    final title = "Place Order";
 
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
@@ -779,7 +706,7 @@ class _AddToBasketPageState extends State<AddToBasketPage>
           ),
           const SizedBox(height: 12),
           Text(
-            "Add ${widget.stock.stckname} to virtual basket to analyse. Educational purpose only ",
+            "Place Real Orders via ${widget.whichbroker} API. Read the terms and conditions properly ",
             style: TextStyle(
               color: Theme.of(context)
                   .textTheme
@@ -931,82 +858,8 @@ class _AddToBasketPageState extends State<AddToBasketPage>
             ],
           ),
           const SizedBox(height: 16),
-          _buildDateTimePicker(
-            label: 'Entry Date',
-            dateTime: _selectedEntryDate,
-            isDark: isDark,
-            onTap: () => _selectDateTime(context),
-          ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedTimeframe,
-                  decoration: InputDecoration(
-                    labelText: 'Timeframe',
-                    prefixIcon:
-                        Icon(Icons.schedule_rounded, color: Colors.orange),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.grey[50],
-                  ),
-                  items: ['Intraday', 'Short Term', 'Long Term', 'Swing']
-                      .map((timeframe) => DropdownMenuItem(
-                            value: timeframe,
-                            child: Text(timeframe),
-                          ))
-                      .toList(),
-                  onChanged: (value) =>
-                      setState(() => _selectedTimeframe = value!),
-                ),
-              ),
-            ],
-          ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDateTimePicker({
-    required String label,
-    required DateTime dateTime,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    final DateFormat displayFormat = DateFormat('dd-MM-yy hh:mm a z');
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AbsorbPointer(
-        child: TextFormField(
-          // Add a controller to properly display the selected date
-          controller:
-              TextEditingController(text: displayFormat.format(dateTime)),
-          decoration: InputDecoration(
-            labelText: label,
-            labelStyle: TextStyle(
-              color: isDark ? Colors.grey[300] : Colors.grey[600],
-            ),
-            prefixIcon: Icon(Icons.calendar_today_rounded, color: Colors.cyan),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor:
-                isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50],
-          ),
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
       ),
     );
   }
@@ -1036,255 +889,6 @@ class _AddToBasketPageState extends State<AddToBasketPage>
         fontWeight: FontWeight.w600,
       ),
       validator: validator,
-    );
-  }
-
-  // <<<--- MODIFIED: Refactored to be collapsible
-  Widget _buildReasonSelector(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1F1F1F),
-                  const Color(0xFF2A2A2A),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFFAFBFC),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isWhyThisTradeExpanded = !_isWhyThisTradeExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.psychology_rounded,
-                      color: Colors.indigo,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Why this trade?',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-                AnimatedRotation(
-                  turns: _isWhyThisTradeExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 28,
-                    color: isDark ? Colors.grey[400] : Colors.grey[500],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _isWhyThisTradeExpanded ? null : 0,
-            child: AnimatedOpacity(
-              opacity: _isWhyThisTradeExpanded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: _isWhyThisTradeExpanded
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Good Reasons',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: _positiveReasons.map((reason) {
-                              final isSelected =
-                                  _selectedReason == reason['title'];
-                              return _buildReasonChip(
-                                  reason, isSelected, isDark);
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            'Be Careful',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.red,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: _negativeReasons.map((reason) {
-                              final isSelected =
-                                  _selectedReason == reason['title'];
-                              return _buildReasonChip(
-                                  reason, isSelected, isDark);
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 20),
-                          TextField(
-                            controller: _customReasonController,
-                            decoration: InputDecoration(
-                              labelText: 'Custom Reason',
-                              prefixIcon: Icon(Icons.edit_note_rounded,
-                                  color: Colors.teal),
-                              filled: true,
-                              fillColor: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.grey[100],
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
-                                  width: 1.2,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.teal,
-                                  width: 1.5,
-                                ),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.redAccent,
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                            onChanged: (value) {
-                              // <<<--- MODIFIED: When user types, deselect any chip
-                              if (_selectedReason != null) {
-                                setState(() {
-                                  _selectedReason = null;
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReasonChip(
-      Map<String, dynamic> reason, bool isSelected, bool isDark) {
-    return GestureDetector(
-      onTap: () {
-        // <<<--- MODIFIED: Update text field when chip is tapped
-        setState(() {
-          if (isSelected) {
-            _selectedReason = null;
-            _customReasonController.clear();
-          } else {
-            _selectedReason = reason['title'];
-            _customReasonController.text = reason['title'];
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: [
-                    reason['color'].withOpacity(0.8),
-                    reason['color'].withOpacity(0.6),
-                  ],
-                )
-              : null,
-          color: !isSelected
-              ? (isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : reason['color'].withOpacity(0.1))
-              : null,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: reason['color'].withOpacity(isSelected ? 0.8 : 0.3),
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: reason['color'].withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              reason['icon'],
-              size: 18,
-              color: isSelected ? Colors.white : reason['color'],
-            ),
-            const SizedBox(width: 8),
-            Text(
-              reason['title'],
-              style: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : (isDark ? Colors.white70 : reason['color']),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -1416,82 +1020,6 @@ class _AddToBasketPageState extends State<AddToBasketPage>
       ),
     );
   }
-
-  Widget _buildSubmitButton(bool isDark) {
-    final buttonText = "Add to Basket";
-    return GestureDetector(
-      onTap: _isSubmitting ? null : _submitToJournal,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          gradient: _isSubmitting
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isDark
-                      ? [Colors.grey.shade700, Colors.grey.shade800]
-                      : [Colors.grey.shade400, Colors.grey.shade500],
-                )
-              : LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF3B82F6), // Blue
-                    const Color(0xFF6366F1), // Indigo
-                    const Color(0xFF8B5CF6), // Purple
-                  ],
-                ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: _isSubmitting
-              ? null
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.4),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-        ),
-        child: Center(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: _isSubmitting
-                ? const SizedBox(
-                    key: ValueKey('loading'),
-                    height: 26,
-                    width: 26,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3,
-                    ),
-                  )
-                : Row(
-                    key: ValueKey('content'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                      SizedBox(width: 12),
-                      Text(
-                        buttonText,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
-        ),
-      ),
-    );
-  }
 }
 
 class VirtualDisclaimerNotice extends StatelessWidget {
@@ -1554,7 +1082,7 @@ class VirtualDisclaimerNotice extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Educational use only—no real money, rewards, or trades. Practice with a virtual stock basket before investing for real.',
+                  'By placing an order through this platform, you acknowledge that trades are executed via your broker’s API. We do not provide financial advice and are not responsible for trade outcomes, execution errors, delays, or losses. Please verify all details before confirming any order.',
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.grey.shade600,

@@ -3,6 +3,7 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
+import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/VirtualTradeJournal/add_basket_page.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_tradehistory.dart';
 
@@ -267,9 +268,23 @@ class _EditJournalPageState extends State<EditJournalPage>
           .child(widget.journal.orderId.toString())
           .set({"todelete": true});
 
-      GlobalSnackBarGet().showGetSuccessOnTop("Journal Deleted",
-          "${_symbolController.text} was successfully deleted from your journal!",
-          backgroundColor: Colors.red.shade600);
+      // GlobalSnackBarGet().showGetSuccessOnTop("Journal Deleted",
+      //     "${_symbolController.text} was successfully deleted from your journal!",
+      //     backgroundColor: Colors.red.shade600);
+
+      final successMessage =
+          "${_symbolController.text} was successfully deleted from your journal!";
+
+      final int uniqueId =
+          DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+      if (mounted) {
+        NotificationService().showNotificationBasic(
+          id: uniqueId,
+          title: "Journal Deleted",
+          body: successMessage,
+        );
+      }
 
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {
@@ -346,11 +361,22 @@ class _EditJournalPageState extends State<EditJournalPage>
 
       await journalEntryRef.set(entryData);
 
-      // final successMessage =
-      //     "${_symbolController.text} was successfully updated in your journal!";
+      final successMessage =
+          "${_symbolController.text} was successfully updated in your journal!";
 
       // GlobalSnackBarGet().showGetSuccessOnTop("Journal Updated", successMessage,
       //     backgroundColor: Colors.green.shade600);
+
+      final int uniqueId =
+          DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+      if (mounted) {
+        NotificationService().showNotificationBasic(
+          id: uniqueId,
+          title: "Journal Updated",
+          body: successMessage,
+        );
+      }
 
       await Future.delayed(const Duration(seconds: 1));
       if (mounted) {

@@ -54,7 +54,7 @@ class _FragTradingHubState extends State<FragTradingHub>
             physics: BouncingScrollPhysics(),
             child: Column(
               children: [
-                _buildHeader(isDark),
+                // _buildHeader(isDark),
                 _buildQuickActionsSection(isDark, theme),
                 _buildTradingInfoSection(isDark, theme),
                 _buildPremiumInfoSection(isDark, theme),
@@ -67,48 +67,48 @@ class _FragTradingHubState extends State<FragTradingHub>
     );
   }
 
-  Widget _buildHeader(bool isDark) {
-    return SlideTransition(
-      position: Tween<Offset>(
-        begin: Offset(0, -0.3),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Interval(0.0, 0.3, curve: Curves.easeOutCubic),
-      )),
-      child: Container(
-        padding: EdgeInsets.all(24),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Trading Hub',
-                    style: GoogleFonts.poppins(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Your gateway to live trades, tools & analytics',
-                    style: GoogleFonts.inter(
-                      fontSize: 14,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  // Widget _buildHeader(bool isDark) {
+  //   return SlideTransition(
+  //     position: Tween<Offset>(
+  //       begin: Offset(0, -0.3),
+  //       end: Offset.zero,
+  //     ).animate(CurvedAnimation(
+  //       parent: _controller,
+  //       curve: Interval(0.0, 0.3, curve: Curves.easeOutCubic),
+  //     )),
+  //     child: Container(
+  //       padding: EdgeInsets.all(24),
+  //       child: Row(
+  //         children: [
+  //           Expanded(
+  //             child: Column(
+  //               crossAxisAlignment: CrossAxisAlignment.start,
+  //               children: [
+  //                 Text(
+  //                   'Trading Hub',
+  //                   style: GoogleFonts.poppins(
+  //                     fontSize: 28,
+  //                     fontWeight: FontWeight.bold,
+  //                     color: isDark ? Colors.white : Colors.black87,
+  //                   ),
+  //                 ),
+  //                 SizedBox(height: 4),
+  //                 Text(
+  //                   'Your gateway to live trades, tools & analytics',
+  //                   style: GoogleFonts.inter(
+  //                     fontSize: 14,
+  //                     color: isDark ? Colors.grey[400] : Colors.grey[600],
+  //                     fontWeight: FontWeight.w500,
+  //                   ),
+  //                 ),
+  //               ],
+  //             ),
+  //           ),
+  //         ],
+  //       ),
+  //     ),
+  //   );
+  // }
 
   Widget _buildQuickActionsSection(bool isDark, ThemeData theme) {
     return SlideTransition(
@@ -145,18 +145,6 @@ class _FragTradingHubState extends State<FragTradingHub>
                 );
               },
               isDark: isDark,
-            ),
-            SizedBox(height: 12),
-            buildActionItem(
-              title: 'Live Virtual Trading',
-              subtitle: 'Trade with live data, broker connect',
-              icon: FontAwesomeIcons.chartLine,
-              color: Color(0xFF667EEA),
-              onTap: () {
-                showCommingSoon();
-              },
-              isDark: isDark,
-              badge: 'BETA',
             ),
             SizedBox(height: 12),
             buildActionItem(

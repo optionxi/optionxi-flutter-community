@@ -7,10 +7,10 @@ import 'package:optionxi/Dialogs/custom_dialog.dart';
 import 'package:optionxi/Helpers/open_url.dart';
 import 'package:optionxi/Helpers/update_helper.dart';
 import 'package:optionxi/Main_Frags/frag_home.dart';
-import 'package:optionxi/Main_Frags/frag_virtualtrading.dart';
+import 'package:optionxi/Main_Frags/frag_prev.dart';
 import 'package:optionxi/Main_Frags/frag_tools.dart';
 import 'package:optionxi/Main_Frags/frag_profile.dart';
-import 'package:optionxi/VirtualTradeJournal/frag_watchlist_main.dart';
+import 'package:optionxi/Main_Frags/frag_live.dart';
 
 class Homepage extends StatefulWidget {
   final int initialIndex;
@@ -52,7 +52,7 @@ class _HomepageState extends State<Homepage> {
         return TradingHomeScreen();
       case 1:
         return VirtualTradingFragment(
-          initialFragIndex: widget.tradeFragIndex, // Pass the fragment index
+          initialFragIndex: widget.tradeFragIndex,
         );
       case 2:
         return WatchlistFragmentMain();

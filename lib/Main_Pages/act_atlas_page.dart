@@ -104,6 +104,7 @@ class SupabaseService {
     int pageSize = 10,
     DateTime? selectedDate,
     bool strongTrendOnly = false,
+    bool above60pcnt = false,
   }) async {
     final from = (page - 1) * pageSize;
     final to = from + pageSize - 1;
@@ -127,6 +128,11 @@ class SupabaseService {
     // Apply strong trend filter if selected
     if (strongTrendOnly) {
       query = query.gt('probability', 50.0); // Use double value
+    }
+
+    // Apply strong trend filter if selected
+    if (above60pcnt) {
+      query = query.gt('probability', 60.0); // Use double value
     }
 
     // Order and paginate results
@@ -316,6 +322,7 @@ class _AtlasOutputPageState extends State<AtlasOutputPage>
   int _totalPages = 1;
   DateTime? _selectedDate;
   bool _strongTrendOnly = true;
+  bool _above60pcnt = true;
   TabController? _tabController;
   StreamSubscription? _subscription;
 
@@ -365,6 +372,7 @@ class _AtlasOutputPageState extends State<AtlasOutputPage>
         pageSize: 10,
         selectedDate: _selectedDate,
         strongTrendOnly: _strongTrendOnly,
+        above60pcnt: _above60pcnt,
       );
       if (mounted) {
         setState(() {
@@ -394,6 +402,17 @@ class _AtlasOutputPageState extends State<AtlasOutputPage>
     _fetchOutputs();
   }
 
+  void _handleAbove60Toggle(bool value) {
+    if (mounted) {
+      setState(() {
+        _above60pcnt = value;
+        _page = 1;
+      });
+    }
+
+    _fetchOutputs();
+  }
+
   void _handlePreviousPage() {
     if (_page > 1) {
       setState(() {
@@ -416,6 +435,7 @@ class _AtlasOutputPageState extends State<AtlasOutputPage>
     setState(() {
       _selectedDate = null;
       _strongTrendOnly = false;
+      _above60pcnt = false;
       _page = 1;
       _tabController?.index = 0;
     });
@@ -1058,6 +1078,17 @@ class _AtlasOutputPageState extends State<AtlasOutputPage>
                 onPressed: _handleResetFilters,
                 child: Text('Clear Filters'),
               ),
+          ],
+        ),
+        Row(
+          children: [
+            Switch(
+              value: _above60pcnt,
+              onChanged: _handleAbove60Toggle,
+            ),
+            SizedBox(width: 8),
+            Text('Show 60% probability and Above'),
+            Spacer(),
           ],
         ),
       ],

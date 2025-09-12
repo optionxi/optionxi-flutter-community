@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:optionxi/Helpers/constants.dart';
+import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/VirtualTradeJournal/edit_basket_page.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_holdings_journal.dart';
 
@@ -169,15 +170,53 @@ class _ExitPositionDialogState extends State<ExitPositionDialog> {
       });
 
       if (mounted) {
-        Navigator.of(context).pop(true); // Return true to indicate success
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //   SnackBar(
+        //     content: Text(
+        //         '${stockName} position exited successfully (${exitQuantity} shares)'),
+        //     backgroundColor: Colors.green.shade600,
+        //     behavior: SnackBarBehavior.floating,
+        //   ),
+        // );
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content:
-                Text('Position exited successfully (${exitQuantity} shares)'),
-            backgroundColor: Colors.green.shade600,
+            content: Row(
+              children: [
+                Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${stockName} position exited successfully (${exitQuantity} shares)',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(milliseconds: 1500),
             behavior: SnackBarBehavior.floating,
+            margin: EdgeInsets.only(bottom: 70), // Add bottom margin
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
           ),
         );
+
+        final int uniqueId =
+            DateTime.now().millisecondsSinceEpoch.remainder(100000);
+
+        NotificationService().showNotificationBasic(
+          id: uniqueId,
+          title: "Position Exited",
+          body:
+              '${stockName} position exited successfully (${exitQuantity} shares)',
+        );
+
+        Navigator.of(context).pop(true); // Return true to indicate success
       }
     } catch (e) {
       if (mounted) {

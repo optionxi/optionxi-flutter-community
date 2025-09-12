@@ -614,15 +614,15 @@ class _OrdersPageState extends State<OrdersPage>
     return NestedScrollView(
       headerSliverBuilder: (context, innerBoxIsScrolled) => [
         // Collapsible header
-        SliverPersistentHeader(
-          floating: false,
-          pinned: false,
-          delegate: CollapsibleHeaderDelegate(
-            minHeight: 0,
-            maxHeight: 80, // Adjust based on your header height
-            child: _buildHeader(textColor),
-          ),
-        ),
+        // SliverPersistentHeader(
+        //   floating: false,
+        //   pinned: false,
+        //   delegate: CollapsibleHeaderDelegate(
+        //     minHeight: 0,
+        //     maxHeight: 80, // Adjust based on your header height
+        //     child: _buildHeader(textColor),
+        //   ),
+        // ),
         // Pinned tab bar
         SliverPersistentHeader(
           pinned: true,
@@ -642,53 +642,53 @@ class _OrdersPageState extends State<OrdersPage>
     );
   }
 
-  Widget _buildHeader(Color textColor) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            "Orders",
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: textColor,
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  'DELAYED',
-                  style: GoogleFonts.poppins(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // Widget _buildHeader(Color textColor) {
+  //   return Padding(
+  //     padding: const EdgeInsets.all(16.0),
+  //     child: Row(
+  //       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //       children: [
+  //         Text(
+  //           "Orders",
+  //           style: GoogleFonts.poppins(
+  //             fontSize: 28,
+  //             fontWeight: FontWeight.bold,
+  //             color: textColor,
+  //           ),
+  //         ),
+  //         Container(
+  //           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+  //           decoration: BoxDecoration(
+  //             color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+  //             borderRadius: BorderRadius.circular(20),
+  //           ),
+  //           child: Row(
+  //             mainAxisSize: MainAxisSize.min,
+  //             children: [
+  //               Container(
+  //                 width: 8,
+  //                 height: 8,
+  //                 decoration: BoxDecoration(
+  //                   color: Colors.green,
+  //                   shape: BoxShape.circle,
+  //                 ),
+  //               ),
+  //               const SizedBox(width: 6),
+  //               Text(
+  //                 'DELAYED',
+  //                 style: GoogleFonts.poppins(
+  //                   fontSize: 12,
+  //                   fontWeight: FontWeight.w600,
+  //                   color: Theme.of(context).colorScheme.primary,
+  //                 ),
+  //               ),
+  //             ],
+  //           ),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   Widget _buildTabBar() {
     return Container(
@@ -1023,12 +1023,15 @@ class _OrdersPageState extends State<OrdersPage>
                     secondaryTextColor),
                 if (order['status'] != 'rejected')
                   _buildDetailItem(
-                      'Price',
-                      // order['rupees'],
-                      order['executedPrice'].toString(),
-                      Icons.currency_rupee_rounded,
-                      textColor,
-                      secondaryTextColor),
+                    'Price',
+                    (order['executedPrice'] == null ||
+                            order['executedPrice'] == "null")
+                        ? "processing"
+                        : order['executedPrice'].toString(),
+                    Icons.currency_rupee_rounded,
+                    textColor,
+                    secondaryTextColor,
+                  ),
                 _buildDetailItem('Type', order['orderType'] ?? 'MARKET',
                     Icons.category_rounded, textColor, secondaryTextColor),
               ],

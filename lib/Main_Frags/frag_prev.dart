@@ -380,15 +380,3 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
     );
   }
 }
-
-// 4. Example of how to increment badges from anywhere in your app
-class ExampleOrderTrigger {
-  static Future<void> triggerOrder() async {
-    // When an order gets triggered, increment both badges
-    await BadgeService.incrementOrdersBadge();
-    await BadgeService.incrementPortfolioBadge();
-
-    // You can also trigger a rebuild of the VirtualTradingFragment
-    // by using a state management solution like Provider, Bloc, or Riverpod
-  }
-}

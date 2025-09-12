@@ -637,16 +637,6 @@ class _QuickSettingsPageState extends State<QuickSettingsPage>
                   setModalState: setModalState,
                 ),
                 SizedBox(height: 8),
-
-                // Live Virtual Trading Option
-                _buildModeOption(
-                  title: 'Live Virtual Trading',
-                  subtitle: 'Real-time data • Broker connection',
-                  icon: FontAwesomeIcons.chartLine,
-                  value: 'live',
-                  isDark: isDark,
-                  setModalState: setModalState,
-                ),
               ],
 
               SizedBox(height: 24),
