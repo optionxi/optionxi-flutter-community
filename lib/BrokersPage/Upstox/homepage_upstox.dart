@@ -11,15 +11,11 @@ import 'package:optionxi/Theme/theme_controller.dart';
 class HomepageUpstox extends StatefulWidget {
   final int initialIndex;
   final int? tradeFragIndex;
-  final String apikey;
-  final String accesstoken;
 
   const HomepageUpstox({
     Key? key,
     this.initialIndex = 0,
     this.tradeFragIndex,
-    required this.apikey,
-    required this.accesstoken,
   }) : super(key: key);
 
   @override

@@ -1,8 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
 import 'package:intl/intl.dart';
-import 'package:optionxi/Colors_Text_Components/colors.dart';
 import 'package:optionxi/DataModels/sample_stock_symbols.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Main_Pages/act_alert_stocks.dart';
@@ -33,43 +31,18 @@ class _AlertItemState extends State<AlertItem>
     super.dispose();
   }
 
-  // Helper widget for creating styled price info chips
-  Widget _buildPriceChip(String text, Color textColor, Color bgColor,
-      {IconData? icon}) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // if (icon != null) Icon(icon, size: 12, color: textColor),
-          if (icon != null) const SizedBox(width: 4),
-          Text(
-            text,
-            style: TextStyle(
-              color: textColor,
-              fontWeight: FontWeight.w600,
-              fontSize: 12,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAlertItem(AlertModel alert, int index) {
     // Determine styles based on sentiment
     final isBullish = alert.sentiment == 'bullish';
-    final Color borderColor =
-        isBullish ? Colors.green.shade200 : Colors.red.shade200;
-    final Color bgColor = isBullish ? Colors.green.shade50 : Colors.red.shade50;
-    final Color tagColor =
-        isBullish ? Colors.green.shade700 : Colors.red.shade700;
-    final Color tagBgColor =
-        isBullish ? Colors.green.shade100 : Colors.red.shade100;
+
+    // Core color for the sleek vertical bar
+    final Color barColor = isBullish ? Colors.green : Colors.red;
+
+    // Background color for the card: subtle tint in light mode, cardColor in dark mode
+    final Color cardBackgroundColor =
+        Theme.of(context).brightness == Brightness.dark
+            ? Theme.of(context).cardColor
+            : barColor.withOpacity(0.05);
 
     final DateTime alertDatetime = DateTime.parse(alert.createdAt).toLocal();
 
@@ -96,18 +69,17 @@ class _AlertItemState extends State<AlertItem>
         );
       },
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 12), // Compressed margin
         decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? Theme.of(context).cardColor
-              : bgColor,
-          border: Border.all(color: borderColor),
-          borderRadius: BorderRadius.circular(16),
+          // Use the new subtle background color, replacing the old bgColor/borderColor
+          color: cardBackgroundColor,
+          // Removed: border: Border.all(color: borderColor),
+          borderRadius: BorderRadius.circular(12), // Slightly smaller radius
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
             ),
           ],
         ),
@@ -116,8 +88,9 @@ class _AlertItemState extends State<AlertItem>
           child: Column(
             children: [
               // Main Alert Content
+              // Main Alert Content
               InkWell(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 onTap: () {
                   if (hasDetailedData) {
                     setState(() {
@@ -130,340 +103,183 @@ class _AlertItemState extends State<AlertItem>
                     });
                   }
                 },
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                // 1. Wrap Row in IntrinsicHeight to force children to same height
+                child: IntrinsicHeight(
+                  child: Row(
+                    // 2. Stretch children vertically to fill the IntrinsicHeight
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Top Section: Logo, Title, Description
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Stock Logo
-                          Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.1),
-                                  blurRadius: 8,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: CachedNetworkImage(
-                                height: 48,
-                                width: 48,
-                                imageUrl:
-                                    "${Constants.OptionXiS3Loc}${alert.symbol}.png",
-                                fit: BoxFit.cover,
-                                placeholder: (context, url) => Image.asset(
-                                  'assets/images/stockdefault.png',
-                                  fit: BoxFit.cover,
-                                ),
-                                errorWidget: (context, url, error) =>
-                                    Image.asset(
-                                  'assets/images/stockdefault.png',
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
+                      // 3. Sleek Color Bar on the Left
+                      Container(
+                        width: 4,
+                        // REMOVED: height: 80,  <-- Removed fixed height
+                        decoration: BoxDecoration(
+                          color: barColor,
+                          borderRadius: const BorderRadius.only(
+                            topLeft: Radius.circular(12),
+                            bottomLeft: Radius.circular(12),
                           ),
-                          const SizedBox(width: 16),
-                          // Alert Content
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                // Title and Sentiment Tag
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        displaySymbol,
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                        ),
+                      ),
+
+                      // 4. The rest of the content
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Stock Logo
+                              Container(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(10),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
                                     ),
-                                    if (alert.sentiment != null)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                            horizontal: 10, vertical: 6),
-                                        decoration: BoxDecoration(
-                                          color: tagBgColor,
-                                          borderRadius:
-                                              BorderRadius.circular(20),
-                                        ),
-                                        child: Text(
-                                          alert.sentiment!.toUpperCase(),
-                                          style: TextStyle(
-                                            color: tagColor,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 11,
-                                          ),
-                                        ),
-                                      ),
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                // Description
-                                Text(
-                                  alert.description,
-                                  style: TextStyle(
-                                    color: Theme.of(context)
-                                        .textTheme
-                                        .bodyMedium
-                                        ?.color,
-                                    fontSize: 14,
-                                    height: 1.4,
-                                  ),
-                                  maxLines:
-                                      2, // Reduced max lines for compactness
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-
-                      // **NEW**: Price Info Section (Sleek Design)
-                      Wrap(
-                        spacing: 8.0,
-                        runSpacing: 8.0,
-                        children: [
-                          // Close price
-                          if (alert.close != null)
-                            _buildPriceChip(
-                              '₹${alert.close!.toStringAsFixed(2)}',
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.white
-                                  : Colors.black87,
-                              Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.grey.shade700
-                                  : Colors.grey.shade200,
-                            ),
-
-                          // Percentage Change
-                          if (alert.pcnt != null)
-                            _buildPriceChip(
-                              '${alert.pcnt! >= 0 ? '+' : ''}${alert.pcnt!.toStringAsFixed(2)}%',
-                              alert.pcnt! >= 0
-                                  ? Colors.green.shade800
-                                  : Colors.red.shade800,
-                              alert.pcnt! >= 0
-                                  ? Colors.green.shade100
-                                  : Colors.red.shade100,
-                              icon: alert.pcnt! >= 0
-                                  ? Icons.arrow_upward_rounded
-                                  : Icons.arrow_downward_rounded,
-                            ),
-
-                          // **NEW**: Change From Previous Alert
-                          if (widget.prevAlert != null &&
-                              widget.prevAlert!.close != null &&
-                              alert.close != null)
-                            Builder(builder: (context) {
-                              final prevClose = widget.prevAlert!.close!;
-                              final change = alert.close! - prevClose;
-                              if (change == 0)
-                                return const SizedBox
-                                    .shrink(); // Hide if no change
-
-                              final bool isUp = change > 0;
-                              return _buildPriceChip(
-                                '${isUp ? '+' : ''}₹${change.toStringAsFixed(2)}',
-                                isUp
-                                    ? Colors.green.shade800
-                                    : Colors.red.shade800,
-                                isUp
-                                    ? Colors.green.shade100
-                                    : Colors.red.shade100,
-                                icon: isUp
-                                    ? Icons.change_history_rounded
-                                    : Icons.change_history_rounded,
-                              );
-                            }),
-
-                          // Yesterday Day high, Day low
-                          if (alert.pcnt != null)
-                            if (((alert.high ?? 0) >=
-                                        (alert.prevDayHigh ?? 0)) &&
-                                    (alert.pcnt ?? 0) >= 0 ||
-                                (alert.low ?? 0) <= (alert.prevDayLow ?? 0) &&
-                                    (alert.pcnt ?? 0) <= 0)
-                              _buildPriceChip(
-                                (alert.high ?? 0) >= (alert.prevDayHigh ?? 0)
-                                    ? 'High Breakout'
-                                    : "Low Breakout",
-                                alert.pcnt! >= 0
-                                    ? Colors.green.shade800
-                                    : Colors.red.shade800,
-                                alert.pcnt! >= 0
-                                    ? Colors.green.shade100
-                                    : Colors.red.shade100,
-                                icon: alert.pcnt! >= 0
-                                    ? Icons.arrow_upward_rounded
-                                    : Icons.arrow_downward_rounded,
-                              ),
-                          // Volume Breakout
-                          if (alert.pcnt != null &&
-                              alert.volume != null &&
-                              alert.sma5Volume != null)
-                            if ((alert.volume ?? 0) >=
-                                2 * (alert.sma5Volume ?? 0))
-                              _buildPriceChip(
-                                'Volume Breakout',
-                                alert.pcnt! >= 0
-                                    ? Colors.green.shade800
-                                    : Colors.red.shade800,
-                                alert.pcnt! >= 0
-                                    ? Colors.green.shade100
-                                    : Colors.red.shade100,
-                                icon: alert.pcnt! >= 0
-                                    ? Icons.arrow_upward_rounded
-                                    : Icons.arrow_downward_rounded,
-                              ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 8),
-
-                      // **NEW**: Time Info Section
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.access_time_rounded,
-                            size: 14,
-                            color: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.color
-                                ?.withOpacity(0.7),
-                          ),
-                          const SizedBox(width: 6),
-                          Text(
-                            "${DateFormat('hh:mm a').format(alertDatetime)} • ${timeago.format(alertDatetime)}",
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.color
-                                  ?.withOpacity(0.7),
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 12),
-
-                      // Action Row
-                      Padding(
-                        padding: const EdgeInsets.only(top: 12),
-                        child: Row(
-                          children: [
-                            // Expand/collapse button
-                            Expanded(
-                              child: SizedBox(
-                                height: 36,
-                                child: OutlinedButton.icon(
-                                  onPressed: hasDetailedData
-                                      ? () {
-                                          setState(() {
-                                            _isExpanded = !_isExpanded;
-                                            if (_isExpanded) {
-                                              _expandController.forward();
-                                            } else {
-                                              _expandController.reverse();
-                                            }
-                                          });
-                                        }
-                                      : null, // Disabled when no data
-                                  icon: AnimatedRotation(
-                                    turns: _isExpanded ? 0.5 : 0,
-                                    duration: const Duration(milliseconds: 300),
-                                    child: const Icon(
-                                      Icons.keyboard_arrow_down_rounded,
-                                      size: 18,
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: CachedNetworkImage(
+                                    height: 40,
+                                    width: 40,
+                                    imageUrl:
+                                        "${Constants.OptionXiS3Loc}${alert.symbol}.png",
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, url) => Image.asset(
+                                      'assets/images/stockdefault.png',
+                                      fit: BoxFit.cover,
+                                    ),
+                                    errorWidget: (context, url, error) =>
+                                        Image.asset(
+                                      'assets/images/stockdefault.png',
+                                      fit: BoxFit.cover,
                                     ),
                                   ),
-                                  label: Text(
-                                    hasDetailedData
-                                        ? (_isExpanded
-                                            ? 'Show Less'
-                                            : 'Show More')
-                                        : 'No Data',
-                                    style: const TextStyle(fontSize: 13),
-                                  ),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: hasDetailedData
-                                        ? Theme.of(context)
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Alert Content Text Column
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    // ... (Rest of your text/content code remains exact same) ...
+                                    // Header Row: Symbol (Left) vs Price (Right)
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            displaySymbol,
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        if (alert.close != null)
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                '₹${alert.close!.toStringAsFixed(2)}',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 14,
+                                                  color: Theme.of(context)
+                                                      .textTheme
+                                                      .bodyLarge
+                                                      ?.color,
+                                                ),
+                                              ),
+                                              if (alert.pcnt != null)
+                                                Text(
+                                                  '${alert.pcnt! >= 0 ? '+' : ''}${alert.pcnt!.toStringAsFixed(2)}%',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.w600,
+                                                    fontSize: 12,
+                                                    color: alert.pcnt! >= 0
+                                                        ? Colors.green.shade700
+                                                        : Colors.red.shade700,
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      alert.description,
+                                      style: TextStyle(
+                                        color: Theme.of(context)
                                             .textTheme
                                             .bodyMedium
                                             ?.color
-                                        : Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.color
-                                            ?.withOpacity(0.6),
-                                    side: BorderSide(
-                                      color: Theme.of(context)
-                                          .dividerColor
-                                          .withOpacity(
-                                              hasDetailedData ? 0.3 : 0.2),
+                                            ?.withOpacity(0.8),
+                                        fontSize: 13,
+                                        height: 1.3,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          Icons.access_time_rounded,
+                                          size: 12,
+                                          color: Theme.of(context)
+                                              .textTheme
+                                              .bodySmall
+                                              ?.color
+                                              ?.withOpacity(0.6),
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "${DateFormat('hh:mm a').format(alertDatetime)} • ${timeago.format(alertDatetime)}",
+                                          style: TextStyle(
+                                            color: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.color
+                                                ?.withOpacity(0.6),
+                                            fontSize: 11,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        if (hasDetailedData)
+                                          AnimatedRotation(
+                                            turns: _isExpanded ? 0.5 : 0,
+                                            duration: const Duration(
+                                                milliseconds: 300),
+                                            child: Icon(
+                                              Icons.keyboard_arrow_down_rounded,
+                                              size: 18,
+                                              color: Theme.of(context)
+                                                  .textTheme
+                                                  .bodySmall
+                                                  ?.color
+                                                  ?.withOpacity(0.5),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            // Navigate Button
-                            if (alert.symbol != null) ...[
-                              const SizedBox(width: 8),
-                              SizedBox(
-                                height: 36,
-                                child: ElevatedButton.icon(
-                                  onPressed: () {
-                                    String? fullKey;
-                                    totalStocks.forEach((key, value) {
-                                      if (key.contains(alert.symbol!)) {
-                                        fullKey = key;
-                                      }
-                                    });
-
-                                    if (fullKey != null) {
-                                      Get.toNamed(
-                                          '/stocks/${fullKey!.toUpperCase()}');
-                                    }
-                                  },
-                                  icon: const Icon(Icons.trending_up_rounded,
-                                      size: 16),
-                                  label: const Text(
-                                    'View Stock',
-                                    style: TextStyle(fontSize: 13),
-                                  ),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.secondaryColor,
-                                    foregroundColor: Colors.white,
-                                    elevation: 0,
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
+                                  ],
                                 ),
                               ),
                             ],
-                          ],
+                          ),
                         ),
                       ),
                     ],
@@ -481,13 +297,13 @@ class _AlertItemState extends State<AlertItem>
                           ? Theme.of(context).cardColor.withOpacity(0.5)
                           : Colors.white.withOpacity(0.8),
                       borderRadius: const BorderRadius.only(
-                        bottomLeft: Radius.circular(16),
-                        bottomRight: Radius.circular(16),
+                        bottomLeft: Radius.circular(12),
+                        bottomRight: Radius.circular(12),
                       ),
                       border: Border(
                         top: BorderSide(
                           color:
-                              Theme.of(context).dividerColor.withOpacity(0.3),
+                              Theme.of(context).dividerColor.withOpacity(0.1),
                         ),
                       ),
                     ),
@@ -763,7 +579,7 @@ class _AlertItemState extends State<AlertItem>
   Widget _buildInfoCards(AlertModel alert) {
     List<Widget> cards = [];
 
-    // **NEW**: Change from Previous Alert
+    // Change from Previous Alert
     if (widget.prevAlert != null &&
         widget.prevAlert!.close != null &&
         alert.close != null) {
@@ -906,14 +722,11 @@ class _AlertItemState extends State<AlertItem>
 
 class AlertItem extends StatefulWidget {
   final AlertModel alert;
-  final AlertModel? prevAlert; // <-- ADD THIS
+  final AlertModel? prevAlert;
   final int index;
 
   const AlertItem(
-      {Key? key,
-      required this.alert,
-      this.prevAlert, // <-- ADD THIS
-      required this.index})
+      {Key? key, required this.alert, this.prevAlert, required this.index})
       : super(key: key);
 
   @override

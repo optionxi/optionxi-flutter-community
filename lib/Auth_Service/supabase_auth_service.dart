@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
-import 'package:optionxi/Login_Signup/login.dart';
+import 'package:optionxi/Login_Signup/login2.dart';
 import 'package:optionxi/homepage.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
@@ -46,7 +46,7 @@ class AuthService {
           return const Homepage();
         } else {
           // User is not logged in.
-          return const ModernTradingLoginPage();
+          return const ModernLoginPage();
         }
       },
     );

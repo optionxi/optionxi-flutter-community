@@ -1,90 +1,85 @@
-// Modern Broker Connect Page
+import 'dart:ui'; // Required for ImageFilter
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+// --- YOUR IMPORTS ---
 import 'package:optionxi/BrokersConnect/connect_fyers_page.dart';
 import 'package:optionxi/BrokersConnect/connect_upstox_page.dart';
 import 'package:optionxi/BrokersConnect/connect_zerodha_page.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/connect_broker_dialog.dart';
 
 class BrokerConnectPage extends StatelessWidget {
-  BrokerConnectPage({
-    Key? key,
-  }) : super(key: key);
+  BrokerConnectPage({Key? key}) : super(key: key);
 
   final List<Map<String, dynamic>> brokers = [
     {
       'name': 'Fyers',
       'logo': 'assets/brokers/fyers.png',
-      'color': Color(0xFF26A69A),
-      'subtitle': 'Technology-first broker with advanced APIs',
+      'color': const Color(0xFF26A69A),
+      'subtitle': 'API First • Low Latency',
       'status': 'trending',
-      'rating': 4.5,
-      'features': ['API Trading', 'Low Brokerage', 'Charts'],
+      'isActive': true,
+      'features': ['Free API', 'TradingView', 'Option Chain'],
       'onTap': (BuildContext context) {
         Navigator.push(context,
             MaterialPageRoute(builder: (_) => const FyersConnectPage()));
       }
     },
     {
-      'name': 'Upstox',
-      'logo': 'assets/brokers/upstox.png',
-      'color': Color(0xFF5C6BC0),
-      'subtitle': 'Advanced trading platform with pro tools',
-      'status': 'new',
-      'rating': 4.2,
-      'features': ['Pro Platform', 'Options', 'Futures'],
-      'onTap': (BuildContext context) {
-        Navigator.push(context,
-            MaterialPageRoute(builder: (_) => const UpstoxConnectPage()));
-      }
-    },
-    {
       'name': 'Zerodha',
       'logo': 'assets/brokers/kite.png',
-      'color': Color(0xFF387ED1),
-      'subtitle': 'India\'s largest discount broker',
+      'color': const Color(0xFF387ED1),
+      'subtitle': 'Kite Connect • No.1 Broker',
       'status': 'popular',
-      'rating': 4.8,
-      'features': ['Kite Platform', 'Coin', 'Console'],
+      'isActive': true,
+      'features': ['Kite Web', 'Coin', 'Console'],
       'onTap': (BuildContext context) {
         Navigator.push(context,
             MaterialPageRoute(builder: (_) => const ZerodhaConnectPage()));
       }
     },
     {
+      'name': 'Upstox',
+      'logo': 'assets/brokers/upstox.png',
+      'color': const Color(0xFF5C6BC0),
+      'subtitle': 'RKSV • Pro Trading Tools',
+      'status': 'new',
+      'isActive': true,
+      'features': ['Fast Execution', 'Strategy Builder'],
+      'onTap': (BuildContext context) {
+        Navigator.push(context,
+            MaterialPageRoute(builder: (_) => const UpstoxConnectPage()));
+      }
+    },
+    {
       'name': 'Angel One',
       'logo': 'assets/brokers/angelone.png',
-      'color': Color(0xFFFF7043),
-      'subtitle': 'Smart investment & advisory solutions',
+      'color': const Color(0xFFFF7043),
+      'subtitle': 'Smart API • Full Service',
       'status': 'coming soon',
-      'rating': 4.3,
-      'features': ['SmartAPI', 'Advisory', 'Research'],
-      'onTap': (BuildContext context) {
-        // Navigator.push(context,
-        //     MaterialPageRoute(builder: (_) => const AngelOneConnectPage()));
-      }
+      'isActive': false,
+      'features': ['Advisory', 'Robo Order', 'Smart API'],
+      'onTap': (BuildContext context) {}
     },
     {
       'name': 'Groww',
       'logo': 'assets/brokers/groww.png',
-      'color': Color(0xFF43D865),
-      'subtitle': 'Simple & elegant investment platform',
-      'status': 'coming soon',
-      'rating': 4.4,
-      'features': ['Stocks', 'Mutual Funds', 'IPO'],
-      'onTap': (BuildContext context) {
-        // Navigator.push(context,
-        //     MaterialPageRoute(builder: (_) => const GrowwConnectPage()));
-      }
+      'color': const Color(0xFF43D865),
+      'subtitle': 'Simple Investing',
+      'status': 'queued',
+      'isActive': false,
+      'features': ['Direct MF', 'Stocks'],
+      'onTap': (BuildContext context) {}
     },
     {
       'name': 'ICICI Direct',
       'logo': 'assets/brokers/icicidirect.png',
-      'color': Color(0xFFFF6D00),
-      'subtitle': 'Full-service broker with banking integration',
+      'color': const Color(0xFFFF6D00),
+      'subtitle': 'Breeze API • Banking',
       'status': 'queued',
-      'rating': 4.1,
-      'features': ['Banking', 'Research', '3-in-1 Account'],
+      'isActive': false,
+      'features': ['3-in-1', 'Research', 'Margin'],
       'onTap': (BuildContext context) {
         showConnectionDialog(context, 'ICICI Direct');
       }
@@ -96,238 +91,193 @@ class BrokerConnectPage extends StatelessWidget {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
+    // Modern background color
+    final backgroundColor =
+        isDark ? const Color(0xFF0F1115) : const Color(0xFFF2F4F7);
+
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        leading: Container(
-          margin: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: isDark
-                ? Colors.white.withOpacity(0.1)
-                : Colors.black.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: IconButton(
-            icon: Icon(Icons.arrow_back_ios_new,
-                color: theme.colorScheme.onBackground, size: 20),
-            onPressed: () => Navigator.pop(context),
-          ),
-        ),
-        title: Text(
-          'Connect Broker',
-          style: GoogleFonts.inter(
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            color: theme.colorScheme.onBackground,
-          ),
-        ),
-        centerTitle: false,
-      ),
+      backgroundColor: backgroundColor,
+      extendBodyBehindAppBar: true,
       body: CustomScrollView(
-        physics: BouncingScrollPhysics(),
+        physics: const BouncingScrollPhysics(),
         slivers: [
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _buildHeaderSection(theme),
-            ),
-          ),
+          _buildModernHeader(context, theme, isDark),
           SliverPadding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
             sliver: SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildModernBrokerCard(
-                  context,
-                  brokers[index],
-                  isDark,
-                  () => brokers[index]['onTap'](context),
-                ),
+                (context, index) {
+                  return _BrokerCard(
+                    broker: brokers[index],
+                    isDark: isDark,
+                  );
+                },
                 childCount: brokers.length,
               ),
             ),
           ),
-          SliverToBoxAdapter(
-            child: SizedBox(height: 32),
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildHeaderSection(ThemeData theme) {
-    return Container(
-      padding: EdgeInsets.fromLTRB(20, 0, 20, 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            theme.primaryColor.withOpacity(0.1),
-            theme.primaryColor.withOpacity(0.05),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+  Widget _buildModernHeader(
+      BuildContext context, ThemeData theme, bool isDark) {
+    return SliverAppBar(
+      pinned: true,
+      floating: false,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      backgroundColor: theme.scaffoldBackgroundColor.withOpacity(0.8),
+      systemOverlayStyle:
+          isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      leading: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Container(
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: isDark
+                ? Colors.white.withOpacity(0.1)
+                : Colors.black.withOpacity(0.05),
+          ),
+          child: IconButton(
+            icon: Icon(Icons.arrow_back_ios_new,
+                size: 18, color: theme.colorScheme.onSurface),
+            onPressed: () => Navigator.pop(context),
+          ),
         ),
-        borderRadius: BorderRadius.circular(20),
+      ),
+      centerTitle: true,
+      title: Text(
+        'Connect Broker',
+        style: GoogleFonts.plusJakartaSans(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: theme.colorScheme.onSurface,
+        ),
+      ),
+      flexibleSpace: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(color: Colors.transparent),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrokerCard extends StatelessWidget {
+  final Map<String, dynamic> broker;
+  final bool isDark;
+
+  const _BrokerCard({
+    Key? key,
+    required this.broker,
+    required this.isDark,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isActive = broker['isActive'] as bool;
+    final primaryColor = broker['color'] as Color;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1A1D24) : Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          if (!isDark)
+            BoxShadow(
+              color: const Color(0xFF9EA3B0).withOpacity(0.2), // Soft shadow
+              blurRadius: 20,
+              offset: const Offset(0, 8),
+              spreadRadius: -4,
+            ),
+        ],
         border: Border.all(
-          color: theme.primaryColor.withOpacity(0.2),
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
           width: 1,
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Row(
-          //   children: [
-          //     Icon(
-          //       Icons.link,
-          //       color: theme.primaryColor,
-          //       size: 24,
-          //     ),
-          //     SizedBox(width: 12),
-          //     Expanded(
-          //       child: Text(
-          //         'Connect & Trade Live',
-          //         style: GoogleFonts.inter(
-          //           fontSize: 18,
-          //           fontWeight: FontWeight.w600,
-          //           color: theme.colorScheme.onSurface,
-          //         ),
-          //       ),
-          //     ),
-          //   ],
-          // ),
-          SizedBox(height: 12),
-          Text(
-            'Link your existing broker account to execute trades seamlessly. Your credentials are encrypted and secure.',
-            style: GoogleFonts.inter(
-              fontSize: 14,
-              color: theme.colorScheme.onSurface.withOpacity(0.7),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildModernBrokerCard(BuildContext context,
-      Map<String, dynamic> broker, bool isDark, VoidCallback onTapFunction) {
-    final theme = Theme.of(context);
-    final isDisabled =
-        ['coming soon', 'queued'].contains(broker['status']?.toLowerCase());
-
-    return Container(
-      margin: EdgeInsets.only(bottom: 16),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: isDisabled ? null : onTapFunction,
-          child: AnimatedContainer(
-            duration: Duration(milliseconds: 200),
-            padding: EdgeInsets.fromLTRB(20, 24, 20, 20),
-            decoration: BoxDecoration(
-              color: theme.cardColor,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: isDisabled
-                    ? (isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.black.withOpacity(0.03))
-                    : (isDark
-                        ? Colors.white.withOpacity(0.1)
-                        : Colors.black.withOpacity(0.08)),
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: (broker['color'] as Color).withOpacity(0.1),
-                  offset: Offset(0, 4),
-                  blurRadius: 20,
-                  spreadRadius: 0,
-                ),
-              ],
-            ),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Column(
-                  children: [
-                    Row(
-                      children: [
-                        _buildBrokerLogo(broker, isDisabled),
-                        SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      broker['name'] as String,
-                                      style: GoogleFonts.inter(
-                                        fontSize: 17,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDisabled
-                                            ? theme.colorScheme.onSurface
-                                                .withOpacity(0.4)
-                                            : theme.colorScheme.onSurface,
-                                      ),
-                                    ),
+          borderRadius: BorderRadius.circular(24),
+          onTap: isActive
+              ? () {
+                  HapticFeedback.lightImpact();
+                  broker['onTap'](context);
+                }
+              : null,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Opacity(
+              opacity: isActive ? 1.0 : 0.6,
+              child: Column(
+                children: [
+                  // Top Row: Logo, Info, Connect Button
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildLogo(primaryColor),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  broker['name'],
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w700,
+                                    color: theme.colorScheme.onSurface,
                                   ),
-                                  // if (broker['rating'] != null)
-                                  //   _buildRating(
-                                  //       broker['rating'], theme, isDisabled),
-                                ],
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                broker['subtitle'] as String,
-                                style: GoogleFonts.inter(
-                                  color: isDisabled
-                                      ? theme.colorScheme.onSurface
-                                          .withOpacity(0.3)
-                                      : theme.colorScheme.onSurface
-                                          .withOpacity(0.6),
-                                  fontSize: 13,
-                                  height: 1.3,
                                 ),
+                                // if (broker['status'] != null && isActive) ...[
+                                //   const SizedBox(width: 8),
+                                //   _buildStatusBadge(broker['status']),
+                                // ],
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              broker['subtitle'],
+                              style: GoogleFonts.inter(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: theme.colorScheme.onSurface
+                                    .withOpacity(0.5),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                        if (!isDisabled)
-                          Container(
-                            padding: EdgeInsets.all(8),
-                            margin: EdgeInsets.fromLTRB(0, 32, 0, 0),
-                            decoration: BoxDecoration(
-                              color:
-                                  (broker['color'] as Color).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Icon(
-                              Icons.arrow_forward_ios,
-                              color: broker['color'] as Color,
-                              size: 16,
-                            ),
-                          ),
-                      ],
-                    ),
-                    SizedBox(height: 16),
-                    _buildFeatureTags(broker['features'], theme, isDisabled),
-                  ],
-                ),
-                // Status chip
-                if (broker['status'] != null)
-                  Positioned(
-                    top: -12,
-                    right: -12,
-                    child: _buildModernStatusChip(
-                        broker['status'] as String, theme),
+                      ),
+                      const SizedBox(width: 8),
+                      _buildConnectButton(isActive, primaryColor),
+                    ],
                   ),
-              ],
+
+                  const SizedBox(height: 16),
+
+                  // Divider
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : Colors.black.withOpacity(0.04),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // Features List
+                  _buildFeaturesList(theme),
+                ],
+              ),
             ),
           ),
         ),
@@ -335,215 +285,111 @@ class BrokerConnectPage extends StatelessWidget {
     );
   }
 
-  // Widget _buildBrokerLogo(Map<String, dynamic> broker, bool isDisabled) {
-  //   return Container(
-  //     width: 56,
-  //     height: 56,
-  //     decoration: BoxDecoration(
-  //       color: (broker['color'] as Color).withOpacity(isDisabled ? 0.05 : 0.1),
-  //       borderRadius: BorderRadius.circular(16),
-  //       border: Border.all(
-  //         color: (broker['color'] as Color).withOpacity(isDisabled ? 0.1 : 0.2),
-  //         width: 1,
-  //       ),
-  //     ),
-  //     child: ClipRRect(
-  //       borderRadius: BorderRadius.circular(15),
-  //       child: CachedNetworkImage(
-  //         imageUrl: broker['logo'] as String,
-  //         width: 32,
-  //         height: 32,
-  //         fit: BoxFit.contain,
-  //         placeholder: (context, url) => Container(
-  //           padding: EdgeInsets.all(12),
-  //           child: CircularProgressIndicator(
-  //             strokeWidth: 2,
-  //             valueColor: AlwaysStoppedAnimation<Color>(
-  //               (broker['color'] as Color).withOpacity(0.5),
-  //             ),
-  //           ),
-  //         ),
-  //         errorWidget: (context, url, error) => Container(
-  //           padding: EdgeInsets.all(12),
-  //           child: Icon(
-  //             Icons.business,
-  //             color: (broker['color'] as Color)
-  //                 .withOpacity(isDisabled ? 0.3 : 0.7),
-  //             size: 24,
-  //           ),
-  //         ),
-  //         color: isDisabled ? Colors.grey.withOpacity(0.5) : null,
-  //         colorBlendMode: isDisabled ? BlendMode.saturation : null,
-  //       ),
-  //     ),
-  //   );
-  // }
-
-  Widget _buildBrokerLogo(Map<String, dynamic> broker, bool isDisabled) {
+  Widget _buildLogo(Color color) {
     return Container(
-      width: 56,
-      height: 56,
+      width: 50,
+      height: 50,
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: (broker['color'] as Color).withOpacity(isDisabled ? 0.05 : 0.1),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: (broker['color'] as Color).withOpacity(isDisabled ? 0.1 : 0.2),
-          width: 1,
-        ),
+        border: Border.all(color: color.withOpacity(0.1)),
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(15),
-        child: Image.asset(
-          broker['logo'] as String,
-          width: 32,
-          height: 32,
-          fit: BoxFit.contain,
-          color: isDisabled ? Colors.grey.withOpacity(0.5) : null,
-          colorBlendMode: isDisabled ? BlendMode.saturation : null,
+      child: Image.asset(
+        broker['logo'],
+        fit: BoxFit.contain,
+        errorBuilder: (c, o, s) => Icon(Icons.show_chart, color: color),
+      ),
+    );
+  }
+
+  Widget _buildConnectButton(bool isActive, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: isActive ? color : Colors.transparent,
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: isActive ? color : Colors.grey.withOpacity(0.3),
+        ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: color.withOpacity(0.4),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                )
+              ]
+            : [],
+      ),
+      child: Text(
+        isActive ? 'Connect' : 'Soon',
+        style: GoogleFonts.inter(
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          color: isActive ? Colors.white : Colors.grey,
         ),
       ),
     );
   }
 
-  // Widget _buildRating(double rating, ThemeData theme, bool isDisabled) {
+  // Widget _buildStatusBadge(String status) {
+  //   Color badgeColor;
+  //   switch (status) {
+  //     case 'popular':
+  //       badgeColor = Colors.orange;
+  //       break;
+  //     case 'new':
+  //       badgeColor = Colors.green;
+  //       break;
+  //     case 'trending':
+  //       badgeColor = Colors.purple;
+  //       break;
+  //     default:
+  //       badgeColor = Colors.blue;
+  //   }
+
   //   return Container(
-  //     padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+  //     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
   //     decoration: BoxDecoration(
-  //       color: isDisabled
-  //           ? Colors.grey.withOpacity(0.1)
-  //           : Colors.amber.withOpacity(0.1),
-  //       borderRadius: BorderRadius.circular(8),
+  //       color: badgeColor.withOpacity(0.1),
+  //       borderRadius: BorderRadius.circular(6),
   //     ),
-  //     child: Row(
-  //       mainAxisSize: MainAxisSize.min,
-  //       children: [
-  //         Icon(
-  //           Icons.star_rounded,
-  //           size: 14,
-  //           color: isDisabled ? Colors.grey : Colors.amber.shade600,
-  //         ),
-  //         SizedBox(width: 4),
-  //         Text(
-  //           rating.toString(),
-  //           style: GoogleFonts.inter(
-  //             fontSize: 12,
-  //             fontWeight: FontWeight.w500,
-  //             color: isDisabled
-  //                 ? Colors.grey
-  //                 : theme.colorScheme.onSurface.withOpacity(0.8),
-  //           ),
-  //         ),
-  //       ],
+  //     child: Text(
+  //       status.toUpperCase(),
+  //       style: GoogleFonts.inter(
+  //         fontSize: 9,
+  //         fontWeight: FontWeight.w700,
+  //         color: badgeColor,
+  //         letterSpacing: 0.5,
+  //       ),
   //     ),
   //   );
   // }
 
-  Widget _buildFeatureTags(
-      List<String> features, ThemeData theme, bool isDisabled) {
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
+  Widget _buildFeaturesList(ThemeData theme) {
+    final features = broker['features'] as List<String>;
+    return Row(
       children: features.take(3).map((feature) {
-        return Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: isDisabled
-                ? theme.colorScheme.onSurface.withOpacity(0.05)
-                : theme.colorScheme.onSurface.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: isDisabled
-                  ? theme.colorScheme.onSurface.withOpacity(0.05)
-                  : theme.colorScheme.onSurface.withOpacity(0.1),
-              width: 1,
-            ),
-          ),
-          child: Text(
-            feature,
-            style: GoogleFonts.inter(
-              fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: isDisabled
-                  ? theme.colorScheme.onSurface.withOpacity(0.3)
-                  : theme.colorScheme.onSurface.withOpacity(0.7),
-            ),
+        return Padding(
+          padding: const EdgeInsets.only(right: 12),
+          child: Row(
+            children: [
+              Icon(Icons.check_circle_rounded,
+                  size: 14, color: theme.colorScheme.primary.withOpacity(0.5)),
+              const SizedBox(width: 4),
+              Text(
+                feature,
+                style: GoogleFonts.inter(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6),
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
         );
       }).toList(),
-    );
-  }
-
-  Widget _buildModernStatusChip(String status, ThemeData theme) {
-    Color chipColor;
-    Color textColor;
-    IconData? icon;
-
-    switch (status.toLowerCase()) {
-      case 'new':
-        chipColor = Colors.green;
-        textColor = Colors.white;
-        icon = Icons.new_releases_rounded;
-        break;
-      case 'popular':
-        chipColor = Colors.purple;
-        textColor = Colors.white;
-        icon = Icons.trending_up_rounded;
-        break;
-      case 'trending':
-        chipColor = Colors.orange;
-        textColor = Colors.white;
-        icon = Icons.whatshot_rounded;
-        break;
-      case 'coming soon':
-        chipColor = Colors.blue;
-        textColor = Colors.white;
-        icon = Icons.schedule_rounded;
-        break;
-      case 'queued':
-        chipColor = Colors.grey;
-        textColor = Colors.white;
-        icon = Icons.queue_rounded;
-        break;
-      default:
-        chipColor = Colors.grey;
-        textColor = Colors.white;
-        icon = Icons.info_rounded;
-    }
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: chipColor,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: chipColor.withOpacity(0.4),
-            offset: Offset(0, 2),
-            blurRadius: 8,
-            spreadRadius: 0,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            size: 12,
-            color: textColor,
-          ),
-          SizedBox(width: 4),
-          Text(
-            status.toUpperCase(),
-            style: GoogleFonts.inter(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: textColor,
-              letterSpacing: 0.5,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

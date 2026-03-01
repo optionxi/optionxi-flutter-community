@@ -1,24 +1,34 @@
 # OptionXI – Open Source Virtual Trading App
 
+**OptionXI** is India’s first open-source virtual trading app for learning, strategy testing, and community collaboration.
+
+
 [![Play Store](https://upload.wikimedia.org/wikipedia/commons/7/78/Google_Play_Store_badge_EN.svg)](https://play.google.com/store/apps/details?id=com.optionxi.app)
 ![TruffleHog Scan](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/trufflehog.yml/badge.svg)
 [![Gitleaks Scan](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/gitleaks.yml)
 ![Build Scan](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/flutter-build.yml/badge.svg)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/optionxi/optionxi-flutter-community?utm_source=oss&utm_medium=github&utm_campaign=optionxi%2Foptionxi-flutter-community&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
+---
 
 
-**OptionXI** is **India's first open-source virtual trading platform** – built for education, strategy testing, and transparent community collaboration.
+<a href="https://www.producthunt.com/products/optionxi?embed=true&utm_source=badge-featured&utm_medium=badge&utm_source=badge-optionxi&#0045;open&#0045;source&#0045;trading&#0045;app" target="_blank">
+  <img src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1016349&theme=light&t=1758272315158" alt="OptionXI&#0032;&#0045;&#0032;Open&#0032;Source&#0032;Trading&#0032;App | Product Hunt" width="250" height="54" />
+</a>  
 
-The app is live on [Google Play Store →](https://play.google.com/store/apps/details?id=com.optionxi.app)  
-> ⚠️ _This repository is the **open-source Flutter front-end**. The backend (Supabase/Postgres) will also be made open-source soon._
+📱 Available now on [Google Play Store →](https://play.google.com/store/apps/details?id=com.optionxi.app)
+
+> ⚠️ This repository contains the **open-source Flutter front end**.
+> The backend (Supabase/Postgres) will be released as open-source soon.
 
 ---
 
-### 🌟 App Preview
-![Feature Image](screenshots/Featue%20Image.png)
+## 🌟 App Preview
+
+![App Feature Image](screenshots/Featue%20Image.png)
 
 ---
+
 
 ## 🚀 What is OptionXI?
 

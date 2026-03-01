@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -475,6 +476,16 @@ class _ExitPositionDialogState extends State<ExitPositionDialog> {
                             TextFormField(
                               controller: _quantityController,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                TextInputFormatter.withFunction(
+                                    (oldValue, newValue) {
+                                  if (newValue.text.isEmpty) return newValue;
+                                  final qty = int.tryParse(newValue.text) ?? 0;
+                                  if (qty > 10000) return oldValue;
+                                  return newValue;
+                                }),
+                              ],
                               decoration: InputDecoration(
                                 hintText: 'Enter quantity',
                                 filled: true,

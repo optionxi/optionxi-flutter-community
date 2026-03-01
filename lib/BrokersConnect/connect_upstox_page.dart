@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer; // Using aliased import for clarity
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
@@ -122,6 +123,16 @@ class _UpstoxConnectPageState extends State<UpstoxConnectPage>
       onError: (error) {
         developer.log('❌ [UpstoxConnectPage] Real-time listener error: $error',
             error: error, name: 'UpstoxConnect');
+
+        // ✅ Explicitly log to Crashlytics with context
+        FirebaseCrashlytics.instance.recordError(
+          error,
+          StackTrace.current,
+          reason: 'Real-time listener error in UpstoxConnectPage',
+          fatal: false,
+          information: ['User ID: $_suid', 'Database path: ${_dbRef.path}'],
+        );
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text('Connection monitoring error: ${error.toString()}'),
@@ -553,12 +564,6 @@ class _UpstoxConnectPageState extends State<UpstoxConnectPage>
     );
   }
 
-  // --- Helper & UI Widgets (Mostly unchanged) ---
-
-  // NOTE: Other UI widgets like _buildStatusCard, _buildTextField, _buildSecurityNote,
-  // _buildHelpSection, _buildLoadingScreen, _buildAuthRequiredScreen, _buildAppBar, etc.,
-  // remain largely the same as your original code, as they are well-structured.
-  // I have included them here for completeness.
   Widget _buildStartTradingButton({bool isPrimary = false}) {
     final button = FilledButton.icon(
       onPressed: () async {
@@ -566,34 +571,13 @@ class _UpstoxConnectPageState extends State<UpstoxConnectPage>
           Navigator.pop(context); // Close bottom sheet if open
         }
 
-        // Retrieve access_token and api_key from Firebase
-        try {
-          final snapshot = await _dbRef.get();
-          if (snapshot.exists && snapshot.value != null) {
-            final data = Map<String, dynamic>.from(snapshot.value as Map);
-            final accessToken = data['access_token'] ?? '';
-            final apiKey = data['api_key'] ?? '';
-
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomepageUpstox(
-                  accesstoken: accessToken,
-                  apikey: apiKey,
-                ),
-              ),
-            );
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Failed to retrieve trading credentials')),
-            );
-          }
-        } catch (e) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error: ${e.toString()}')),
-          );
-        }
+        // Open UpstoxPage
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => HomepageUpstox(),
+          ),
+        );
       },
       icon: const Icon(FontAwesomeIcons.chartArea),
       label: const Text('Start Trading'),

@@ -8,9 +8,9 @@ import 'package:optionxi/Helpers/open_url.dart';
 import 'package:optionxi/Helpers/update_helper.dart';
 import 'package:optionxi/Main_Frags/frag_home.dart';
 import 'package:optionxi/Main_Frags/frag_prev.dart';
-import 'package:optionxi/Main_Frags/frag_tools.dart';
 import 'package:optionxi/Main_Frags/frag_profile.dart';
 import 'package:optionxi/Main_Frags/frag_live.dart';
+import 'package:optionxi/Main_Frags/frag_tools_v2.dart';
 
 class Homepage extends StatefulWidget {
   final int initialIndex;
@@ -56,8 +56,9 @@ class _HomepageState extends State<Homepage> {
         );
       case 2:
         return WatchlistFragmentMain();
+
       case 3:
-        return AdvancedTradingToolsPage();
+        return AdvancedTradingToolsPageV2();
       case 4:
         return TradingProfilePage();
       default:

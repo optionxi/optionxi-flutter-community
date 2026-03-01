@@ -8,23 +8,6 @@ class PortfolioJournalService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
   // --- FETCH METHODS ---
-  Future<double> fetchBalance(String suid) async {
-    try {
-      final response = await _supabase
-          .from('journal_balance')
-          .select('balance')
-          .eq('suid', suid)
-          .maybeSingle();
-      if (response == null || response['balance'] == null) {
-        return 0.0;
-      }
-      return (response['balance'] as num).toDouble();
-    } catch (e) {
-      print('Error fetching balance: $e');
-      return 0.0;
-    }
-  }
-
   Future<List<BasketUserHolding>> fetchHoldings(String suid) async {
     try {
       final response = await _supabase
@@ -55,12 +38,21 @@ class PortfolioJournalService {
     }
   }
 
-  Future<List<JournalTradeHistory>> fetchTradeHistory(String suid) async {
+  /// Fetches trade history filtered by [days] from today server-side.
+  /// Pass [days] = null to fetch all records (no date filter).
+  Future<List<JournalTradeHistory>> fetchTradeHistory(
+    String suid, {
+    int days = 30,
+  }) async {
     try {
-      final response = await _supabase
-          .from('journal_trade_history')
-          .select()
-          .eq('suid', suid);
+      var query =
+          _supabase.from('journal_trade_history').select().eq('suid', suid);
+
+      final cutoff =
+          DateTime.now().subtract(Duration(days: days)).toIso8601String();
+      query = query.gte('exit_date', cutoff);
+
+      final response = await query;
       return (response as List)
           .map((e) => JournalTradeHistory.fromJson(e))
           .toList();
@@ -71,14 +63,11 @@ class PortfolioJournalService {
   }
 
   // --- SUBSCRIPTION (REALTIME) METHODS ---
-  // Note: These now filter on the client-side to prevent the PostgrestException.
-  // For large tables, a more optimized approach using database functions (RPC) or channels is recommended.
-
   Stream<double> subscribeToBalance(String suid) {
     return _supabase
         .from('journal_balance')
         .stream(primaryKey: ['id'])
-        .eq('suid', suid) // Server-side filtering
+        .eq('suid', suid)
         .map((payload) {
           if (payload.isEmpty || payload.first['balance'] == null) {
             return 0.0;
@@ -91,7 +80,7 @@ class PortfolioJournalService {
     return _supabase
         .from('journal_user_holdings')
         .stream(primaryKey: ['id'])
-        .eq('suid', suid) // Server-side filtering
+        .eq('suid', suid)
         .map((payload) => payload
             .map((e) => BasketUserHolding.fromJson(e).copyWith(isshort: false))
             .toList());
@@ -101,19 +90,22 @@ class PortfolioJournalService {
     return _supabase
         .from('journal_short_positions')
         .stream(primaryKey: ['id'])
-        .eq('suid', suid) // Apply server-side filter
+        .eq('suid', suid)
         .map((payload) => payload
             .map((e) => BasketUserHolding.fromJson(e).copyWith(isshort: true))
             .toList());
   }
 
-  Stream<List<JournalTradeHistory>> subscribeToTradeHistory(String suid) {
+  /// Realtime change-notification stream for trade history.
+  /// Returns a void stream that fires whenever the table changes for this user.
+  /// The controller re-fetches server-side (with date filter) on each event,
+  /// so all filtering happens on Supabase — not on the client.
+  Stream<void> subscribeToTradeHistoryChanges(String suid) {
     return _supabase
         .from('journal_trade_history')
         .stream(primaryKey: ['id'])
-        .eq('suid', suid) // Apply server-side filter
-        .map((payload) =>
-            payload.map((e) => JournalTradeHistory.fromJson(e)).toList());
+        .eq('suid', suid)
+        .map((_) => null);
   }
 
   Stream<List<Map<String, dynamic>>> subscribeToLiveNifty50() {

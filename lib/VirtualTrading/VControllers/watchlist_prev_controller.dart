@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/DataModels/dm_stock_model.dart';
 import 'package:optionxi/VirtualTrading/VDatabaseSupabase/db_read_supabase_prev_virtual.dart';
@@ -166,6 +168,7 @@ class FNOController extends GetxController {
 
   // Simplified subscription setup
   Future<void> _setupSubscriptions() async {
+    final _suid = FirebaseAuth.instance.currentUser?.uid.toString();
     try {
       _cancelSubscriptions();
 
@@ -174,7 +177,18 @@ class FNOController extends GetxController {
         (stockDataList) {
           _updateStockData(stockDataList);
         },
-        onError: (error) => print('Nifty 50 subscription error: $error'),
+        onError: (error) {
+          print('Nifty 50 subscription error: $error');
+          // ✅ Explicitly log to Crashlytics with context
+          FirebaseCrashlytics.instance.recordError(
+            error,
+            StackTrace.current,
+            reason:
+                'Real-time subscription settingup error, in previous NIFTY50',
+            fatal: false,
+            information: ['User ID: $_suid'],
+          );
+        },
       );
 
       // FNO subscription
@@ -182,10 +196,28 @@ class FNOController extends GetxController {
         (fnoDataList) {
           _updateFNOData(fnoDataList);
         },
-        onError: (error) => print('FNO subscription error: $error'),
+        onError: (error) {
+          print('FNO subscription error: $error');
+          // ✅ Explicitly log to Crashlytics with context
+          FirebaseCrashlytics.instance.recordError(
+            error,
+            StackTrace.current,
+            reason: 'Real-time subscription settingup error, in previous FNO',
+            fatal: false,
+            information: ['User ID: $_suid'],
+          );
+        },
       );
-    } catch (e) {
-      print('Error setting up subscriptions: $e');
+    } catch (error) {
+      print('Error setting up subscriptions: $error');
+      // ✅ Explicitly log to Crashlytics with context
+      FirebaseCrashlytics.instance.recordError(
+        error,
+        StackTrace.current,
+        reason: 'Real-time subscription settingup error, in previous',
+        fatal: false,
+        information: ['User ID: $_suid'],
+      );
     }
   }
 

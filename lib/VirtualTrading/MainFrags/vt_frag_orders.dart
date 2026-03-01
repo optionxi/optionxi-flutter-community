@@ -1026,7 +1026,9 @@ class _OrdersPageState extends State<OrdersPage>
                     'Price',
                     (order['executedPrice'] == null ||
                             order['executedPrice'] == "null")
-                        ? "processing"
+                        ? order['orderType'] == 'LIMIT'
+                            ? order['price'].toString()
+                            : "processing"
                         : order['executedPrice'].toString(),
                     Icons.currency_rupee_rounded,
                     textColor,

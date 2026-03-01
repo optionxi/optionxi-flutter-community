@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
-import 'package:optionxi/Login_Signup/login.dart';
+import 'package:optionxi/Login_Signup/login2.dart';
 import 'package:optionxi/Login_Signup/otp.dart';
 import 'package:optionxi/Login_Signup/signup.dart';
 import 'package:optionxi/homepage.dart';
@@ -28,7 +28,7 @@ class AuthService {
           // return ModernTradingLoginPage();
         } else {
           // User is not logged in
-          return ModernTradingLoginPage();
+          return ModernLoginPage();
           // return Homepage();
         }
       },

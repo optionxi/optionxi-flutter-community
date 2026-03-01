@@ -174,21 +174,6 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
             Expanded(
               child: Row(
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primaryContainer
-                          .withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      Icons.account_balance_wallet_rounded,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
                   const SizedBox(width: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,7 +363,7 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
                             context,
                             MaterialPageRoute(
                                 builder: (context) => BuyandSellPagePrev(
-                                    pos.symbol, pos.segment, false)));
+                                    pos.symbol, pos.segment, true)));
                       },
                       child: _buildModernPositionCard(pos)))
                   .toList(),
@@ -560,22 +545,6 @@ class _PortfolioFragmentPrevState extends State<PortfolioFragmentPrev>
   Widget _buildSectionHeader(String title, IconData icon, bool isBullish) {
     return Row(
       children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
-            ),
-          ),
-          child: Icon(
-            icon,
-            size: 18,
-            color: isBullish ? Colors.green : Colors.red,
-            // color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
         const SizedBox(width: 12),
         Text(
           title,

@@ -2,14 +2,22 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Components/broker_list_section.dart';
+import 'package:optionxi/Components/cust_ai_chooser_component.dart';
 import 'package:optionxi/Components/cust_contact_us.dart';
-import 'package:optionxi/Components/cust_notice_section.dart';
+import 'package:optionxi/Components/cust_market_glance.dart';
+import 'package:optionxi/Components/cust_market_trend_section.dart';
+import 'package:optionxi/Components/cust_tools_chips.dart';
 import 'package:optionxi/Components/cust_top_tutors.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
+import 'package:optionxi/Components/floating_ai.dart';
 import 'package:optionxi/Components/home_top_leaderboard.dart';
 import 'package:optionxi/Components/trending_stocks_section.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
-import 'package:optionxi/Main_Pages/act_search_stocks.dart';
+import 'package:optionxi/Main_Pages/AlgoPage/algo_deployment_page.dart';
+import 'package:optionxi/Main_Pages/act_ai_optionxi.dart';
+import 'package:optionxi/Main_Pages/act_search_stocks_meili.dart';
+import 'package:optionxi/Main_Pages/act_sectorwise_page.dart';
+import 'package:optionxi/Main_Pages/act_stock_ai_summary.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
 
 class TradingHomeScreen extends StatefulWidget {
@@ -43,6 +51,30 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      floatingActionButton: MagicalAIButton(
+        isDark: themeController.isDarkMode,
+        onPressed: () {
+          // Navigator.push(
+          //   context,
+          //   MaterialPageRoute(
+          //     builder: (context) => ChatScreen(),
+          //   ),
+          // );
+          showAIActionSheet(
+            context,
+            onChat: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(),
+                )),
+            onAnalyse: (symbol) => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => StockAiAnalysisPage(symbol: symbol),
+                )),
+          );
+        },
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           physics: BouncingScrollPhysics(),
@@ -63,27 +95,29 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                       ),
                       child: _buildHeader(),
                     ),
-                    const SizedBox(height: 24),
-                    SlideTransition(
-                      position: Tween<Offset>(
-                        begin: Offset(0, 0.2),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: _controller,
-                          curve: Interval(0.1, 0.3, curve: Curves.easeOut),
-                        ),
-                      ),
-                      child: FadeTransition(
-                        opacity: Tween<double>(begin: 0, end: 1).animate(
-                          CurvedAnimation(
-                            parent: _controller,
-                            curve: Interval(0.1, 0.3, curve: Curves.easeOut),
-                          ),
-                        ),
-                        child: _buildTitle(),
-                      ),
-                    ),
+                    const SizedBox(height: 8),
+                    IndicesGlance(),
+                    // const SizedBox(height: 24),
+                    // SlideTransition(
+                    //   position: Tween<Offset>(
+                    //     begin: Offset(0, 0.2),
+                    //     end: Offset.zero,
+                    //   ).animate(
+                    //     CurvedAnimation(
+                    //       parent: _controller,
+                    //       curve: Interval(0.1, 0.3, curve: Curves.easeOut),
+                    //     ),
+                    //   ),
+                    //   child: FadeTransition(
+                    //     opacity: Tween<double>(begin: 0, end: 1).animate(
+                    //       CurvedAnimation(
+                    //         parent: _controller,
+                    //         curve: Interval(0.1, 0.3, curve: Curves.easeOut),
+                    //       ),
+                    //     ),
+                    //     child: _buildTitle(),
+                    //   ),
+                    // ),
                     const SizedBox(height: 24),
                     SlideTransition(
                       position: Tween<Offset>(
@@ -103,8 +137,7 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                               await Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                    builder: (context) =>
-                                        StockSearchPage(false)),
+                                    builder: (context) => AllSearchPageMeili()),
                               );
                             },
                             child: AbsorbPointer(
@@ -114,11 +147,17 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                         ],
                       ),
                     ),
-
-                    NoticesSection(),
-                    // Divider(),
+                    SizedBox(
+                      height: 16,
+                    ),
+                    StockChipsSection(),
                     SizedBox(
                       height: 8,
+                    ),
+
+                    // NoticesSection(),
+                    SizedBox(
+                      height: 24,
                     ),
                     SlideTransition(
                       position: Tween<Offset>(
@@ -133,17 +172,26 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                       // child: buildTradingIdeas(context, _controller),
                       child: buildBrokerHub(context, _controller),
                     ),
-                    const SizedBox(height: 24),
-                    Divider(),
+                    SizedBox(
+                      height: 24,
+                    ),
                     TrendingStocksSection(),
-                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 8,
+                    ),
+                    // const SizedBox(height: 8),
+                    MarketTrendsSection(
+                      onViewAll: gotoSectorWise,
+                    ),
+                    const SizedBox(height: 8),
                     Divider(),
                     TopTradingTutorsScreen(),
                     // const SizedBox(height: 24),
-                    Divider(),
+                    // Divider(),
                     LeaderboardWidgetMain(),
                     const SizedBox(height: 24),
                     _buildCtaSection(),
+                    const SizedBox(height: 12),
                   ],
                 );
               },
@@ -207,33 +255,28 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     onPressed: () => themeController.toggleTheme(),
                   )),
               const SizedBox(width: 8),
-              InkWell(
-                onTap: () async {
-                  // await BadgeService.incrementNotificationsBadge();
-                },
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Theme.of(context).colorScheme.primary,
-                        Theme.of(context).colorScheme.secondary
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(40),
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Theme.of(context).colorScheme.primary,
+                      Theme.of(context).colorScheme.secondary
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  padding: EdgeInsets.all(2),
-                  child: CircleAvatar(
-                    radius: 20,
-                    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-                    backgroundImage:
-                        FirebaseAuth.instance.currentUser?.photoURL != null
-                            ? NetworkImage(
-                                FirebaseAuth.instance.currentUser!.photoURL!)
-                            : const AssetImage('assets/images/option_xi_w.png')
-                                as ImageProvider,
-                  ),
+                  borderRadius: BorderRadius.circular(40),
+                ),
+                padding: EdgeInsets.all(2),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+                  backgroundImage:
+                      FirebaseAuth.instance.currentUser?.photoURL != null
+                          ? NetworkImage(
+                              FirebaseAuth.instance.currentUser!.photoURL!)
+                          : const AssetImage('assets/images/option_xi_w.png')
+                              as ImageProvider,
                 ),
               ),
             ],
@@ -334,26 +377,6 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
     );
   }
 
-  Widget _buildTitle() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "Hey, $username 👋",
-          style: Theme.of(context).textTheme.titleSmall,
-        ),
-        const SizedBox(height: 8),
-        Text(
-          "Simple, Fast Trading\nOpen Source",
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontSize: 28,
-                height: 1.2,
-              ),
-        ),
-      ],
-    );
-  }
-
   void gotoNofitication() async {
     await BadgeService.clearNotificationsBadge();
     await Navigator.pushNamed(
@@ -361,94 +384,311 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
       '/messages',
       arguments: {},
     );
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Widget _buildCtaSection() {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Theme.of(context).colorScheme.primary,
-            Theme.of(context).colorScheme.secondary
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : Colors.black.withValues(alpha: 0.07),
+          width: 1,
         ),
-        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withValues(alpha: 0.35)
+                : colorScheme.primary.withValues(alpha: 0.08),
+            blurRadius: 32,
+            spreadRadius: 0,
+            offset: const Offset(0, 8),
+          ),
+        ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            "Ready to Deploy Your Algorithm?",
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Stack(
+          children: [
+            // Background
+            Positioned.fill(
+              child: Container(
+                color:
+                    isDark ? const Color(0xFF141418) : const Color(0xFFFAFAFC),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Get started with our professional trading infrastructure and deploy your strategies at scale.",
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              // Main CTA Button
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => showContactOptions(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.white,
-                    foregroundColor: Theme.of(context).colorScheme.primary,
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.rocket_launch, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        "Get Started Now",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
+
+            // Subtle top-right glow accent
+            Positioned(
+              top: -30,
+              right: -30,
+              child: Container(
+                width: 140,
+                height: 140,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      colorScheme.primary
+                          .withValues(alpha: isDark ? 0.18 : 0.10),
+                      Colors.transparent,
                     ],
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+            ),
 
-              // Contact Options Button
-              ElevatedButton(
-                onPressed: () => showContactOptions(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.white.withValues(alpha: 0.15),
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.all(16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            // Content
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Top row: status chip + icon
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: colorScheme.primary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              "Infrastructure Ready",
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.primary,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [
+                              colorScheme.primary,
+                              colorScheme.secondary,
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(10),
+                          boxShadow: [
+                            BoxShadow(
+                              color:
+                                  colorScheme.primary.withValues(alpha: 0.35),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.rocket_launch_rounded,
+                          color: Colors.white,
+                          size: 17,
+                        ),
+                      ),
+                    ],
                   ),
-                  elevation: 0,
-                ),
-                child: Icon(Icons.chat_bubble_outline, size: 20),
+
+                  const SizedBox(height: 14),
+
+                  // Title
+                  Text(
+                    "Deploy Your Algorithm",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: isDark ? Colors.white : const Color(0xFF0D0D12),
+                      letterSpacing: -0.4,
+                      height: 1.2,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  // Subtitle
+                  Text(
+                    "Professional trading infrastructure built for scale. Connect, configure, and go live in minutes.",
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.45)
+                          : const Color(0xFF6B6B7B),
+                      height: 1.5,
+                      letterSpacing: 0.1,
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  // Divider
+                  Container(
+                    height: 1,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.06)
+                        : Colors.black.withValues(alpha: 0.06),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Bottom row: CTA on LEFT, stats after it, right side free for FAB
+                  Row(
+                    children: [
+                      // CTA button — leftmost
+                      GestureDetector(
+                        onTap: () => showContactOptions(context),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                colorScheme.primary,
+                                colorScheme.secondary,
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    colorScheme.primary.withValues(alpha: 0.30),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Text(
+                                "Get Started",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.1,
+                                ),
+                              ),
+                              SizedBox(width: 6),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: Colors.white,
+                                size: 14,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Divider between button and stats
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.08),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      // Stats — to the right of button
+                      _buildStat(context, "99.9%", "Uptime"),
+                      const SizedBox(width: 12),
+                      Container(
+                        width: 1,
+                        height: 28,
+                        color: isDark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : Colors.black.withValues(alpha: 0.08),
+                      ),
+                      const SizedBox(width: 12),
+                      _buildStat(context, "<10ms", "Latency"),
+                      // Right side intentionally empty — space for floating button
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildStat(BuildContext context, String value, String label) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: isDark ? Colors.white : const Color(0xFF0D0D12),
+            letterSpacing: -0.2,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: isDark
+                ? Colors.white.withValues(alpha: 0.35)
+                : const Color(0xFF9B9BAA),
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  void gotoSectorWise() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => SectorAnalysisPage()),
+    );
+  }
+
+  void openAlgoDeploy() {
+    // Navigator.push(
+    //   context,
+    //   MaterialPageRoute(builder: (context) => AlgoDesignerPage()),
+    // );
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => AlgoDeploymentPage()),
     );
   }
 }

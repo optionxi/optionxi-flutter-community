@@ -1,141 +1,128 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:get/get.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 import 'package:optionxi/DataModels/dm_stock_model.dart';
 import 'package:optionxi/Helpers/badge_service_obx.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
-import 'package:optionxi/Main_Pages/act_atlas_page.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
-import 'package:optionxi/browser_lite.dart';
+import 'package:optionxi/VirtualTradeJournal/dialog_order_sucess.dart';
 
 class AddToBasketPage extends StatefulWidget {
   final DataStockModel stock;
 
-  const AddToBasketPage({
-    Key? key,
-    required this.stock,
-  }) : super(key: key);
+  const AddToBasketPage({Key? key, required this.stock}) : super(key: key);
 
   @override
-  _AddToBasketPageState createState() => _AddToBasketPageState();
+  State<AddToBasketPage> createState() => _AddToBasketPageState();
 }
 
 class _AddToBasketPageState extends State<AddToBasketPage>
     with TickerProviderStateMixin {
-  late AnimationController _animationController;
-  late AnimationController _submitController;
-  late Animation<double> _slideAnimation;
-  late Animation<double> _fadeAnimation;
-
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _buyPriceController = TextEditingController();
   final TextEditingController _targetController = TextEditingController();
   final TextEditingController _stopLossController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _customReasonController = TextEditingController();
 
+  late AnimationController _pageAnimController;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
   String _selectedAction = 'BUY';
-  String? _selectedReason = 'Technical Breakout'; // Set default reason
   String _selectedTimeframe = 'Short Term';
   late DateTime _selectedEntryDate;
   bool _isSubmitting = false;
-  bool _isExpanded = false;
-  // <<<--- ADDED: State for collapsible sections
-  bool _isRiskManagementExpanded = false;
-  bool _isWhyThisTradeExpanded = false;
 
-  final List<Map<String, dynamic>> _positiveReasons = [
-    {
-      'title': 'Technical Breakout',
-      'icon': Icons.trending_up,
-      'color': Colors.green
-    },
-    {
-      'title': 'Strong Fundamentals',
-      'icon': Icons.analytics,
-      'color': Colors.blue
-    },
-    {'title': 'Volume Surge', 'icon': Icons.bar_chart, 'color': Colors.orange},
-    {'title': 'Support Level', 'icon': Icons.support, 'color': Colors.teal},
+  double? _targetPercent;
+  double? _stopLossPercent;
+
+  final List<String> _reasons = [
+    'Technical Breakout',
+    'Strong Fundamentals',
+    'Volume Surge',
+    'Support Level',
+    'News Based',
+    'FOMO Entry',
+    'Social Media Hype',
   ];
 
-  final List<Map<String, dynamic>> _negativeReasons = [
-    {
-      'title': 'Social Media Hype',
-      'icon': Icons.chat_bubble,
-      'color': Colors.red
-    },
-    {
-      'title': 'News Based',
-      'icon': Icons.newspaper,
-      'color': Colors.deepOrange
-    },
-    {
-      'title': 'Guru Recommendation',
-      'icon': Icons.person,
-      'color': Colors.pink
-    },
-    {'title': 'FOMO Entry', 'icon': Icons.psychology, 'color': Colors.purple},
+  final List<String> _timeframes = [
+    'Intraday',
+    'Swing',
+    'Short Term',
+    'Long Term',
   ];
+
+  Color get _buyColor => const Color(0xFF00C896);
+  Color get _sellColor => const Color(0xFFFF4D6A);
+  Color get _activeColor => _selectedAction == 'BUY' ? _buyColor : _sellColor;
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: const Duration(milliseconds: 800),
+    _pageAnimController = AnimationController(
       vsync: this,
+      duration: const Duration(milliseconds: 480),
     );
-    _submitController = AnimationController(
-      duration: const Duration(milliseconds: 1200),
-      vsync: this,
+    _fadeAnim =
+        CurvedAnimation(parent: _pageAnimController, curve: Curves.easeOut);
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+      CurvedAnimation(parent: _pageAnimController, curve: Curves.easeOutCubic),
     );
+    _pageAnimController.forward();
 
-    _slideAnimation = Tween<double>(begin: 1.0, end: 0.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeOutCubic),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
-    );
-
-    _animationController.forward();
-
-    // Initialize the reason text field with the default value
-    _customReasonController.text = 'Technical Breakout';
-
-    _setInitialDefaults();
-
-    _buyPriceController.addListener(_updateTargetAndStopLoss);
+    _setDefaults();
+    _targetController.addListener(_recalc);
+    _stopLossController.addListener(_recalc);
   }
 
-  void _setInitialDefaults() {
-    _buyPriceController.text = widget.stock.close.toStringAsFixed(2);
-    _quantityController.text = '1'; // <<<--- MODIFIED: Set default quantity
+  void _setDefaults() {
+    _quantityController.text = '1';
     _selectedEntryDate = DateTime.now();
-    _updateTargetAndStopLoss();
+    _customReasonController.text = 'Technical Breakout';
+    _updateRiskLevels();
   }
 
-  void _updateTargetAndStopLoss() {
-    final double? entryPrice = double.tryParse(_buyPriceController.text);
-    if (entryPrice != null && entryPrice > 0) {
-      final double targetPrice = entryPrice * 1.08;
-      final double stopLossPrice = entryPrice * 0.90;
-
-      _targetController.text = targetPrice.toStringAsFixed(2);
-      _stopLossController.text = stopLossPrice.toStringAsFixed(2);
+  void _updateRiskLevels() {
+    final ltp = widget.stock.close;
+    if (ltp > 0) {
+      final isBuy = _selectedAction == 'BUY';
+      final target = (isBuy ? ltp * 1.05 : ltp * 0.95).clamp(0.0, 999999.0);
+      final sl = (isBuy ? ltp * 0.98 : ltp * 1.02).clamp(0.0, 999999.0);
+      _targetController.text = target.toStringAsFixed(2);
+      _stopLossController.text = sl.toStringAsFixed(2);
+      _recalc();
     }
+  }
+
+  void _recalc() {
+    final entry = widget.stock.close;
+    final target = double.tryParse(_targetController.text);
+    final sl = double.tryParse(_stopLossController.text);
+    setState(() {
+      _targetPercent = (target != null && entry > 0)
+          ? ((target - entry) / entry) * 100
+          : null;
+      _stopLossPercent =
+          (sl != null && entry > 0) ? ((sl - entry) / entry) * 100 : null;
+    });
+  }
+
+  void _toggleAction(String action) {
+    if (_selectedAction == action) return;
+    setState(() => _selectedAction = action);
+    _updateRiskLevels();
+    HapticFeedback.lightImpact();
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    _submitController.dispose();
-    _buyPriceController.removeListener(_updateTargetAndStopLoss);
-    _buyPriceController.dispose();
+    _pageAnimController.dispose();
     _targetController.dispose();
     _stopLossController.dispose();
     _quantityController.dispose();
@@ -143,179 +130,68 @@ class _AddToBasketPageState extends State<AddToBasketPage>
     super.dispose();
   }
 
-  Future<void> _selectDateTime(BuildContext context) async {
-    final DateTime? pickedDate = await showDatePicker(
-      context: context,
-      initialDate: _selectedEntryDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2101),
-    );
-    if (pickedDate != null) {
-      final TimeOfDay? pickedTime = await showTimePicker(
-        context: context,
-        initialTime: TimeOfDay.fromDateTime(_selectedEntryDate),
-      );
-      if (pickedTime != null) {
-        setState(() {
-          _selectedEntryDate = DateTime(
-            pickedDate.year,
-            pickedDate.month,
-            pickedDate.day,
-            pickedTime.hour,
-            pickedTime.minute,
-          );
-        });
-      }
-    }
-  }
-
-  void _submitToJournal() async {
-    if (!_formKey.currentState!.validate()) {
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    final qty = int.tryParse(_quantityController.text) ?? 0;
+    if (qty <= 0) {
       GlobalSnackBarGet().showGetSuccessOnTop(
-          "Missing Values", "Please fill all the required fields.",
-          backgroundColor: Colors.orangeAccent);
+        "Invalid Quantity",
+        "Please enter at least 1.",
+        backgroundColor: Colors.orange,
+      );
       return;
     }
 
-    setState(() {
-      _isSubmitting = true;
-    });
-    _submitController.forward();
-
+    setState(() => _isSubmitting = true);
     try {
       final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        throw Exception('You must be logged in to create a journal entry.');
-      }
+      if (user == null) throw Exception('Not logged in');
 
-      final databaseRef = FirebaseDatabase.instance.ref();
-      final journalEntryRef =
-          databaseRef.child('virtualbasket_toadd').child(user.uid).push();
+      final ref = FirebaseDatabase.instance
+          .ref()
+          .child('virtualbasket_toadd')
+          .child(user.uid)
+          .push();
 
-      // <<<--- MODIFIED: Add 'to_update' flag if editing
-      final entryData = {
+      await ref.set({
         'symbol': widget.stock.symbol,
-        'segment': "EQ",
+        'segment': 'EQ',
         'transaction_type': _selectedAction,
-        'entry_price': double.tryParse(_buyPriceController.text) ?? 0.0,
-        'quantity': int.tryParse(_quantityController.text) ?? 0,
-        'target_price': _targetController.text.isNotEmpty
-            ? double.tryParse(_targetController.text)
-            : null,
-        'stop_loss_price': _stopLossController.text.isNotEmpty
-            ? double.tryParse(_stopLossController.text)
-            : null,
+        'entry_price': widget.stock.close,
+        'quantity': qty,
+        'target_price': double.tryParse(_targetController.text),
+        'stop_loss_price': double.tryParse(_stopLossController.text),
         'timeframe': _selectedTimeframe,
-        'reason': _customReasonController
-            .text, // <<<--- MODIFIED: Always take from controller
+        'reason': _customReasonController.text,
         'entry_date': _selectedEntryDate.toUtc().toIso8601String(),
-      };
+        'created_at': ServerValue.timestamp,
+      });
 
-      await journalEntryRef.set(entryData);
       await BasketBadgeServiceObx.incrementBasketBadge();
 
-      final successMessage =
-          "${widget.stock.symbol} was successfully added to your basket!";
-
-      // GlobalSnackBarGet().showGetSuccessOnTop("Basket Updated", successMessage,
-      //     backgroundColor: Colors.green.shade600);
-
-      // Color backgroundColor;
-      // IconData icon;
-      // backgroundColor = Colors.green;
-      // icon = Icons.check_circle_rounded;
-
       if (mounted) {
-        // ScaffoldMessenger.of(context).showSnackBar(
-        //   SnackBar(
-        //     content: Row(
-        //       children: [
-        //         Icon(icon, color: Colors.white, size: 20),
-        //         const SizedBox(width: 8),
-        //         Expanded(
-        //           child: Text(
-        //             successMessage,
-        //             style: const TextStyle(
-        //               color: Colors.white,
-        //               fontWeight: FontWeight.w500,
-        //             ),
-        //           ),
-        //         ),
-        //       ],
-        //     ),
-        //     backgroundColor: backgroundColor,
-        //     duration: Duration(milliseconds: 1500),
-        //     behavior: SnackBarBehavior.floating,
-        //     margin: EdgeInsets.only(bottom: 70), // Add bottom margin
-        //     shape: RoundedRectangleBorder(
-        //       borderRadius: BorderRadius.circular(12),
-        //     ),
-        //   ),
-        // );
-        final int uniqueId =
-            DateTime.now().millisecondsSinceEpoch.remainder(100000);
-
         NotificationService().showNotificationBasic(
-          id: uniqueId,
-          title: "Basket Added",
-          body: successMessage,
+          id: DateTime.now().millisecondsSinceEpoch.remainder(100000),
+          title: "Added to Basket",
+          body: "${widget.stock.symbol} added as $_selectedAction position.",
         );
+        showOrderPlacedDialog(context, false);
       }
-
-      await Future.delayed(const Duration(seconds: 1));
-      if (mounted) {
-        Navigator.pop(context);
-      }
-    } catch (e) {
+    } catch (_) {
       GlobalSnackBarGet().showGetSuccessOnTop(
-          "Failed", "Trade basket operation failed.",
-          backgroundColor: Colors.red);
+        "Error",
+        "Could not save. Try again.",
+        backgroundColor: Colors.red,
+      );
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSubmitting = false;
-        });
-        _submitController.reverse();
-      }
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  void _navigateToChart(BuildContext context) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-          builder: (context) => BrowserLite_V(
-              "https://in.tradingview.com/chart/?symbol=NSE%3A" +
-                  widget.stock.symbol.toString().split("-")[0].split(":")[1])),
-    );
-  }
-
-  Widget buildColorfulActionButton(
-    BuildContext context,
-    bool isDark,
-    String label,
-    IconData icon,
-    VoidCallback onPressed,
-    bool isChartButton,
-  ) {
-    final primaryColor = isChartButton ? Colors.blue : Colors.deepPurple;
-
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, size: 18),
-      label: Text(label),
-      style: ElevatedButton.styleFrom(
-        foregroundColor: Colors.white,
-        backgroundColor: primaryColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        elevation: 4,
-        shadowColor: primaryColor.withOpacity(0.4),
-      ),
-    );
-  }
+  String get _displaySymbol => widget.stock.symbol
+      .replaceAll('NSE:', '')
+      .replaceAll('BSE:', '')
+      .split('-')[0];
 
   @override
   Widget build(BuildContext context) {
@@ -323,1170 +199,124 @@ class _AddToBasketPageState extends State<AddToBasketPage>
 
     return Scaffold(
       backgroundColor:
-          isDark ? const Color(0xFF0A0A0A) : const Color(0xFFF8FAFC),
-      body: Column(
-        children: [
-          _buildHeader(context),
-          Expanded(
-            child: AnimatedBuilder(
-              animation: _animationController,
-              builder: (context, child) {
-                return Transform.translate(
-                  offset: Offset(0, 50 * _slideAnimation.value),
-                  child: Opacity(
-                    opacity: _fadeAnimation.value,
-                    child: Form(
-                      key: _formKey,
-                      child: CustomScrollView(
-                        slivers: [
-                          SliverToBoxAdapter(
-                            child: Padding(
-                              padding: const EdgeInsets.all(20),
-                              child: Column(
-                                children: [
-                                  _buildStockInfoCardWithActions(isDark),
-                                  const SizedBox(height: 24),
-                                  _buildPriceInputs(isDark),
-                                  const SizedBox(height: 24),
-                                  _buildRiskManagement(isDark), // MODIFIED
-                                  const SizedBox(height: 24),
-                                  _buildReasonSelector(isDark), // MODIFIED
-                                  const SizedBox(height: 32),
-                                  VirtualDisclaimerNotice(),
-                                  const SizedBox(height: 32),
-                                  _buildSubmitButton(isDark),
-                                  const SizedBox(height: 40),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+          isDark ? const Color(0xFF0C0E14) : const Color(0xFFF0F2F8),
+      // Bottom bar is part of the Column, NOT a floatingActionButton,
+      // so it never overlaps scrollable content and is always fully opaque.
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        bottom: false, // _BottomBar handles its own SafeArea
+        child: FadeTransition(
+          opacity: _fadeAnim,
+          child: SlideTransition(
+            position: _slideAnim,
+            child: Column(
+              children: [
+                // ── Sticky header ──────────────────────────────────────────
+                _StockHeader(
+                  displaySymbol: _displaySymbol,
+                  stock: widget.stock,
+                  isDark: isDark,
+                  activeColor: _activeColor,
+                  logoUrl: '${Constants.OptionXiS3Loc}$_displaySymbol.png',
+                  onBack: () => Navigator.pop(context),
+                ),
 
-  Widget _buildStockInfoCardWithActions(bool isDark) {
-    final double _percentChange = widget.stock.pcnt;
-    final double _currentPrice = widget.stock.close;
-    final double _open = widget.stock.open;
-    final double _high = widget.stock.high;
-    final double _low = widget.stock.low;
-    final double _prevClose = widget.stock.pclose;
-
-    final Color gainColor =
-        isDark ? Colors.green.shade400 : Colors.green.shade700;
-    final Color lossColor = isDark ? Colors.red.shade400 : Colors.red.shade700;
-    final Color changeColor = _percentChange >= 0 ? gainColor : lossColor;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1A1A1A) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5E5),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.4)
-                : Colors.grey.withOpacity(0.15),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isExpanded = !_isExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(20),
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.1),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: CachedNetworkImage(
-                            height: 52,
-                            width: 52,
-                            imageUrl: Constants.OptionXiS3Loc +
-                                widget.stock.symbol
-                                    .split(":")[1]
-                                    .split("-")[0]
-                                    .toString() +
-                                ".png",
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) => Image.asset(
-                              'assets/images/stockdefault.png',
-                              fit: BoxFit.cover,
-                            ),
-                            errorWidget: (context, url, error) => Image.asset(
-                              'assets/images/stockdefault.png',
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              // widget.stock.stckname,
-                              widget.stock.symbol.split(":")[1].split("-")[0],
-
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF1A1A1A),
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: isDark
-                                    ? const Color(0xFF2A2A2A)
-                                    : const Color(0xFFF5F5F5),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                // widget.stock.symbol.split(":")[1].split("-")[0],
-                                widget.stock.stckname,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: isDark
-                                      ? Colors.grey[300]
-                                      : Colors.grey[600],
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      SizedBox(
-                        width: 16,
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: changeColor.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: changeColor.withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              _percentChange >= 0
-                                  ? Icons.arrow_upward_rounded
-                                  : Icons.arrow_downward_rounded,
-                              size: 14,
-                              color: changeColor,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              '${_percentChange.abs().toStringAsFixed(2)}%',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: changeColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  Column(
-                    // crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        height: 8,
-                      ),
-                      Text(
-                        '₹${_currentPrice.toStringAsFixed(2)}',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color:
-                              isDark ? Colors.white : const Color(0xFF1A1A1A),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        _isExpanded
-                            ? 'Tap to hide details'
-                            : 'Tap to view details',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark ? Colors.grey[400] : Colors.grey[500],
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      AnimatedRotation(
-                        turns: _isExpanded ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 20,
-                          color: isDark ? Colors.grey[400] : Colors.grey[500],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _isExpanded ? null : 0,
-            child: AnimatedOpacity(
-              opacity: _isExpanded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: _isExpanded
-                  ? Column(
+                // ── Scrollable body ────────────────────────────────────────
+                Expanded(
+                  child: Form(
+                    key: _formKey,
+                    child: ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
                       children: [
-                        Container(
-                          margin: const EdgeInsets.symmetric(horizontal: 20),
-                          height: 1,
-                          color: isDark
-                              ? const Color(0xFF2A2A2A)
-                              : const Color(0xFFE5E5E5),
+                        _ActionToggle(
+                          selected: _selectedAction,
+                          isDark: isDark,
+                          buyColor: _buyColor,
+                          sellColor: _sellColor,
+                          onToggle: _toggleAction,
                         ),
-                        Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            children: [
-                              Row(
-                                children: [
-                                  Expanded(
-                                      child: _buildOhlcItem('Open',
-                                          _open.toStringAsFixed(2), isDark)),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                      child: _buildOhlcItem('High',
-                                          _high.toStringAsFixed(2), isDark)),
-                                ],
-                              ),
-                              const SizedBox(height: 16),
-                              Row(
-                                children: [
-                                  Expanded(
-                                      child: _buildOhlcItem('Low',
-                                          _low.toStringAsFixed(2), isDark)),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                      child: _buildOhlcItem(
-                                          'Prev. Close',
-                                          _prevClose.toStringAsFixed(2),
-                                          isDark)),
-                                ],
-                              ),
-                            ],
-                          ),
+                        const SizedBox(height: 26),
+                        _SectionLabel(label: 'Quantity', isDark: isDark),
+                        const SizedBox(height: 10),
+                        _QuantityRow(
+                          controller: _quantityController,
+                          isDark: isDark,
+                          activeColor: _activeColor,
                         ),
-                        Container(
-                          padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: buildColorfulActionButton(
-                                  context,
-                                  isDark,
-                                  'Chart',
-                                  Icons.trending_up_rounded,
-                                  () => _navigateToChart(context),
-                                  true,
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: buildColorfulActionButton(
-                                  context,
-                                  isDark,
-                                  'Alerts',
-                                  Icons.analytics_outlined,
-                                  () {
-                                    if (widget.stock.sec == "FNO") {
-                                      Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) =>
-                                                  AtlasOutputPage()));
-                                    } else {
-                                      Get.toNamed(
-                                          '/alerts/${widget.stock.symbol.split(":")[1].split("-")[0]}');
-                                    }
-                                  },
-                                  false,
-                                ),
-                              ),
-                            ],
-                          ),
+                        const SizedBox(height: 26),
+                        _SectionLabel(
+                          label: 'Risk Management',
+                          isDark: isDark,
+                          icon: Icons.security_rounded,
                         ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _RiskField(
+                                label: 'Stop Loss',
+                                controller: _stopLossController,
+                                isDark: isDark,
+                                percent: _stopLossPercent,
+                                accentColor: const Color(0xFFFF4D6A),
+                              ),
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: _RiskField(
+                                label: 'Target',
+                                controller: _targetController,
+                                isDark: isDark,
+                                percent: _targetPercent,
+                                accentColor: const Color(0xFF00C896),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 26),
+                        _SectionLabel(
+                          label: 'Timeframe',
+                          isDark: isDark,
+                          icon: Icons.schedule_rounded,
+                        ),
+                        const SizedBox(height: 10),
+                        _TimeframeSelector(
+                          selected: _selectedTimeframe,
+                          options: _timeframes,
+                          isDark: isDark,
+                          activeColor: _activeColor,
+                          onSelect: (v) =>
+                              setState(() => _selectedTimeframe = v),
+                        ),
+                        const SizedBox(height: 26),
+                        _SectionLabel(
+                          label: 'Trade Reason',
+                          isDark: isDark,
+                          icon: Icons.psychology_rounded,
+                        ),
+                        const SizedBox(height: 10),
+                        _ReasonSection(
+                          controller: _customReasonController,
+                          reasons: _reasons,
+                          isDark: isDark,
+                          activeColor: _activeColor,
+                        ),
+                        const SizedBox(height: 16),
                       ],
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOhlcItem(String label, String value, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF8F8F8),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark ? const Color(0xFF3A3A3A) : const Color(0xFFEEEEEE),
-          width: 1,
-        ),
-      ),
-      child: Column(
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: isDark ? Colors.grey[400] : Colors.grey[600],
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            '₹$value',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: isDark ? Colors.white : const Color(0xFF1A1A1A),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeader(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width > 600;
-    final fontSize = isTablet ? 32.0 : 28.0;
-    final title = "Add to Basket";
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(
-          bottom: BorderSide(
-            color: Theme.of(context).dividerColor.withOpacity(0.1),
-            width: 0.5,
-          ),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () => Navigator.pop(context),
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Theme.of(context).dividerColor.withOpacity(0.5),
-                      width: 1,
                     ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Theme.of(context).shadowColor.withOpacity(0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Icon(
-                    Icons.arrow_back_ios_rounded,
-                    size: 20,
-                    color: Theme.of(context).textTheme.titleMedium?.color,
                   ),
                 ),
-              ),
-              const SizedBox(width: 20),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: fontSize,
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(context).textTheme.titleLarge?.color,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            "Add ${widget.stock.stckname} to virtual basket to analyse. Educational purpose only ",
-            style: TextStyle(
-              color: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.color
-                  ?.withOpacity(0.7),
-              fontSize: isTablet ? 16.0 : 14.0,
-              fontWeight: FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
 
-  Widget _buildActionToggle(bool isDark) {
-    return LayoutBuilder(builder: (context, constraints) {
-      return ToggleButtons(
-        isSelected: [_selectedAction == 'BUY', _selectedAction == 'SELL'],
-        onPressed: (int index) {
-          setState(() {
-            _selectedAction = index == 0 ? 'BUY' : 'SELL';
-          });
-        },
-        constraints: BoxConstraints.expand(
-            width: (constraints.maxWidth / 2) - 4, height: 50),
-        borderRadius: BorderRadius.circular(16),
-        selectedBorderColor:
-            _selectedAction == 'BUY' ? Colors.green : Colors.red,
-        selectedColor: Colors.white,
-        fillColor: _selectedAction == 'BUY'
-            ? Colors.green.shade600
-            : Colors.red.shade600,
-        color: isDark ? Colors.white70 : Colors.black87,
-        children: const [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.trending_up_rounded),
-              SizedBox(width: 8),
-              Text('BUY', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.trending_down_rounded),
-              SizedBox(width: 8),
-              Text('SELL', style: TextStyle(fontWeight: FontWeight.bold)),
-            ],
-          ),
-        ],
-      );
-    });
-  }
-
-  Widget _buildPriceInputs(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1F1F1F),
-                  const Color(0xFF2A2A2A),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFFAFBFC),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.monetization_on_rounded,
-                color: Colors.amber,
-                size: 24,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'Trade Details',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : Colors.black87,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildInputFormField(
-                  'Quantity',
-                  _quantityController,
-                  Icons.numbers_rounded,
-                  Colors.purple,
-                  isDark,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Quantity is required.';
-                    }
-                    if (int.tryParse(value) == null) {
-                      return 'Invalid number.';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildActionToggle(isDark),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _buildInputFormField(
-                  'Entry Price',
-                  _buyPriceController,
-                  Icons.input_rounded,
-                  Colors.blue,
-                  isDark,
-                  prefix: '₹',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Entry price is required.';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Invalid number.';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          _buildDateTimePicker(
-            label: 'Entry Date',
-            dateTime: _selectedEntryDate,
-            isDark: isDark,
-            onTap: () => _selectDateTime(context),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<String>(
-                  value: _selectedTimeframe,
-                  decoration: InputDecoration(
-                    labelText: 'Timeframe',
-                    prefixIcon:
-                        Icon(Icons.schedule_rounded, color: Colors.orange),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(16),
-                      borderSide: BorderSide.none,
-                    ),
-                    filled: true,
-                    fillColor: isDark
-                        ? Colors.white.withOpacity(0.05)
-                        : Colors.grey[50],
-                  ),
-                  items: ['Intraday', 'Short Term', 'Long Term', 'Swing']
-                      .map((timeframe) => DropdownMenuItem(
-                            value: timeframe,
-                            child: Text(timeframe),
-                          ))
-                      .toList(),
-                  onChanged: (value) =>
-                      setState(() => _selectedTimeframe = value!),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDateTimePicker({
-    required String label,
-    required DateTime dateTime,
-    required bool isDark,
-    required VoidCallback onTap,
-  }) {
-    final DateFormat displayFormat = DateFormat('dd-MM-yy hh:mm a z');
-
-    return GestureDetector(
-      onTap: onTap,
-      child: AbsorbPointer(
-        child: TextFormField(
-          // Add a controller to properly display the selected date
-          controller:
-              TextEditingController(text: displayFormat.format(dateTime)),
-          decoration: InputDecoration(
-            labelText: label,
-            labelStyle: TextStyle(
-              color: isDark ? Colors.grey[300] : Colors.grey[600],
-            ),
-            prefixIcon: Icon(Icons.calendar_today_rounded, color: Colors.cyan),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor:
-                isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50],
-          ),
-          style: TextStyle(
-            color: isDark ? Colors.white : Colors.black87,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInputFormField(String label, TextEditingController controller,
-      IconData icon, Color color, bool isDark,
-      {String prefix = '', String? Function(String?)? validator}) {
-    return TextFormField(
-      controller: controller,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-      decoration: InputDecoration(
-        labelText: label,
-        prefixIcon: Icon(icon, color: color),
-        prefixText: prefix.isEmpty ? null : prefix,
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide.none,
-        ),
-        filled: true,
-        fillColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50],
-        labelStyle: TextStyle(
-          color: isDark ? Colors.grey[300] : Colors.grey[600],
-        ),
-      ),
-      style: TextStyle(
-        color: isDark ? Colors.white : Colors.black87,
-        fontWeight: FontWeight.w600,
-      ),
-      validator: validator,
-    );
-  }
-
-  // <<<--- MODIFIED: Refactored to be collapsible
-  Widget _buildReasonSelector(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1F1F1F),
-                  const Color(0xFF2A2A2A),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFFAFBFC),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isWhyThisTradeExpanded = !_isWhyThisTradeExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.psychology_rounded,
-                      color: Colors.indigo,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Why this trade?',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-                AnimatedRotation(
-                  turns: _isWhyThisTradeExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 28,
-                    color: isDark ? Colors.grey[400] : Colors.grey[500],
-                  ),
+                // ── Fully opaque bottom bar ────────────────────────────────
+                _BottomBar(
+                  isDark: isDark,
+                  activeColor: _activeColor,
+                  action: _selectedAction,
+                  isSubmitting: _isSubmitting,
+                  onSubmit: _submit,
                 ),
               ],
             ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _isWhyThisTradeExpanded ? null : 0,
-            child: AnimatedOpacity(
-              opacity: _isWhyThisTradeExpanded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: _isWhyThisTradeExpanded
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Good Reasons',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: _positiveReasons.map((reason) {
-                              final isSelected =
-                                  _selectedReason == reason['title'];
-                              return _buildReasonChip(
-                                  reason, isSelected, isDark);
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 20),
-                          Text(
-                            'Be Careful',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.red,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: _negativeReasons.map((reason) {
-                              final isSelected =
-                                  _selectedReason == reason['title'];
-                              return _buildReasonChip(
-                                  reason, isSelected, isDark);
-                            }).toList(),
-                          ),
-                          const SizedBox(height: 20),
-                          TextField(
-                            controller: _customReasonController,
-                            decoration: InputDecoration(
-                              labelText: 'Custom Reason',
-                              prefixIcon: Icon(Icons.edit_note_rounded,
-                                  color: Colors.teal),
-                              filled: true,
-                              fillColor: isDark
-                                  ? Colors.white.withOpacity(0.05)
-                                  : Colors.grey[100],
-                              contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16, vertical: 12),
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: BorderSide(
-                                  color: isDark
-                                      ? Colors.grey.shade700
-                                      : Colors.grey.shade300,
-                                  width: 1.2,
-                                ),
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.teal,
-                                  width: 1.5,
-                                ),
-                              ),
-                              errorBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(16),
-                                borderSide: const BorderSide(
-                                  color: Colors.redAccent,
-                                  width: 1.5,
-                                ),
-                              ),
-                            ),
-                            onChanged: (value) {
-                              // <<<--- MODIFIED: When user types, deselect any chip
-                              if (_selectedReason != null) {
-                                setState(() {
-                                  _selectedReason = null;
-                                });
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReasonChip(
-      Map<String, dynamic> reason, bool isSelected, bool isDark) {
-    return GestureDetector(
-      onTap: () {
-        // <<<--- MODIFIED: Update text field when chip is tapped
-        setState(() {
-          if (isSelected) {
-            _selectedReason = null;
-            _customReasonController.clear();
-          } else {
-            _selectedReason = reason['title'];
-            _customReasonController.text = reason['title'];
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          gradient: isSelected
-              ? LinearGradient(
-                  colors: [
-                    reason['color'].withOpacity(0.8),
-                    reason['color'].withOpacity(0.6),
-                  ],
-                )
-              : null,
-          color: !isSelected
-              ? (isDark
-                  ? Colors.white.withOpacity(0.05)
-                  : reason['color'].withOpacity(0.1))
-              : null,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: reason['color'].withOpacity(isSelected ? 0.8 : 0.3),
-            width: isSelected ? 2 : 1,
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: reason['color'].withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              reason['icon'],
-              size: 18,
-              color: isSelected ? Colors.white : reason['color'],
-            ),
-            const SizedBox(width: 8),
-            Text(
-              reason['title'],
-              style: TextStyle(
-                color: isSelected
-                    ? Colors.white
-                    : (isDark ? Colors.white70 : reason['color']),
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // <<<--- MODIFIED: Refactored to be collapsible
-  Widget _buildRiskManagement(bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1F1F1F),
-                  const Color(0xFF2A2A2A),
-                ]
-              : [
-                  Colors.white,
-                  const Color(0xFFFAFBFC),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark
-              ? Colors.white.withOpacity(0.1)
-              : Colors.black.withOpacity(0.05),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isRiskManagementExpanded = !_isRiskManagementExpanded;
-              });
-            },
-            borderRadius: BorderRadius.circular(12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      Icons.shield_rounded,
-                      color: Colors.red,
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Risk Management',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black87,
-                      ),
-                    ),
-                  ],
-                ),
-                AnimatedRotation(
-                  turns: _isRiskManagementExpanded ? 0.5 : 0,
-                  duration: const Duration(milliseconds: 200),
-                  child: Icon(
-                    Icons.keyboard_arrow_down_rounded,
-                    size: 28,
-                    color: isDark ? Colors.grey[400] : Colors.grey[500],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
-            curve: Curves.easeInOut,
-            height: _isRiskManagementExpanded ? null : 0,
-            child: AnimatedOpacity(
-              opacity: _isRiskManagementExpanded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: _isRiskManagementExpanded
-                  ? Padding(
-                      padding: const EdgeInsets.only(top: 20.0),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildInputFormField(
-                              'Stop Loss',
-                              _stopLossController,
-                              Icons.trending_down_rounded,
-                              Colors.red,
-                              isDark,
-                              prefix: '₹',
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Stop loss is required.';
-                                }
-                                if (double.tryParse(value) == null) {
-                                  return 'Invalid number.';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: _buildInputFormField(
-                              'Target',
-                              _targetController,
-                              Icons.flag_rounded,
-                              Colors.green,
-                              isDark,
-                              prefix: '₹',
-                              validator: (value) {
-                                if (value != null &&
-                                    value.isNotEmpty &&
-                                    double.tryParse(value) == null) {
-                                  return 'Invalid number.';
-                                }
-                                return null;
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  : const SizedBox.shrink(),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSubmitButton(bool isDark) {
-    final buttonText = "Add to Basket";
-    return GestureDetector(
-      onTap: _isSubmitting ? null : _submitToJournal,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          gradient: _isSubmitting
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: isDark
-                      ? [Colors.grey.shade700, Colors.grey.shade800]
-                      : [Colors.grey.shade400, Colors.grey.shade500],
-                )
-              : LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF3B82F6), // Blue
-                    const Color(0xFF6366F1), // Indigo
-                    const Color(0xFF8B5CF6), // Purple
-                  ],
-                ),
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: _isSubmitting
-              ? null
-              : [
-                  BoxShadow(
-                    color: const Color(0xFF6366F1).withOpacity(0.4),
-                    blurRadius: 20,
-                    offset: const Offset(0, 8),
-                  ),
-                ],
-        ),
-        child: Center(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 300),
-            child: _isSubmitting
-                ? const SizedBox(
-                    key: ValueKey('loading'),
-                    height: 26,
-                    width: 26,
-                    child: CircularProgressIndicator(
-                      color: Colors.white,
-                      strokeWidth: 3,
-                    ),
-                  )
-                : Row(
-                    key: ValueKey('content'),
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_circle_outline_rounded,
-                        color: Colors.white,
-                        size: 22,
-                      ),
-                      SizedBox(width: 12),
-                      Text(
-                        buttonText,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                        ),
-                      ),
-                    ],
-                  ),
           ),
         ),
       ),
@@ -1494,78 +324,828 @@ class _AddToBasketPageState extends State<AddToBasketPage>
   }
 }
 
-class VirtualDisclaimerNotice extends StatelessWidget {
-  const VirtualDisclaimerNotice({Key? key}) : super(key: key);
+// ═════════════════════════════════════════════════════════════════════════════
+// SUB-WIDGETS
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _StockHeader extends StatelessWidget {
+  final String displaySymbol;
+  final DataStockModel stock;
+  final bool isDark;
+  final Color activeColor;
+  final String logoUrl;
+  final VoidCallback onBack;
+
+  const _StockHeader({
+    required this.displaySymbol,
+    required this.stock,
+    required this.isDark,
+    required this.activeColor,
+    required this.logoUrl,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = isDark ? const Color(0xFF12151C) : Colors.white;
+    final divider = isDark
+        ? Colors.white.withOpacity(0.07)
+        : Colors.black.withOpacity(0.07);
+    final textPrimary = isDark ? Colors.white : const Color(0xFF0D1117);
+    final textSub = isDark ? const Color(0xFF6B7280) : const Color(0xFF9CA3AF);
+
+    return Container(
+      color: bg,
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              // Back button
+              GestureDetector(
+                onTap: onBack,
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.06)
+                        : const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    size: 15,
+                    color: textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+
+              // Logo
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? Colors.white.withOpacity(0.05)
+                      : const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: CachedNetworkImage(
+                    imageUrl: logoUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (_, __) => Image.asset(
+                        'assets/images/stockdefault.png',
+                        fit: BoxFit.cover),
+                    errorWidget: (_, __, ___) => Image.asset(
+                        'assets/images/stockdefault.png',
+                        fit: BoxFit.cover),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Name + sub
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      displaySymbol,
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
+                        color: textPrimary,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      stock.stckname,
+                      style: TextStyle(fontSize: 11.5, color: textSub),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+
+              // LTP
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'LTP',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w600,
+                      color: textSub,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    '₹${stock.close.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: activeColor,
+                      letterSpacing: -0.5,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Divider(height: 1, thickness: 1, color: divider),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionLabel extends StatelessWidget {
+  final String label;
+  final bool isDark;
+  final IconData? icon;
+
+  const _SectionLabel({required this.label, required this.isDark, this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isDark ? const Color(0xFF6B7280) : const Color(0xFF9CA3AF);
+    return Row(
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 5),
+        ],
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: color,
+            letterSpacing: 0.8,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ActionToggle extends StatelessWidget {
+  final String selected;
+  final bool isDark;
+  final Color buyColor, sellColor;
+  final void Function(String) onToggle;
+
+  const _ActionToggle({
+    required this.selected,
+    required this.isDark,
+    required this.buyColor,
+    required this.sellColor,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      height: 54,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.blue.shade50,
-            Colors.indigo.shade50,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        color: isDark ? const Color(0xFF1A1D26) : const Color(0xFFECEEF3),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      padding: const EdgeInsets.all(4),
+      child: Row(
+        children: [
+          _tab('BUY', buyColor),
+          const SizedBox(width: 4),
+          _tab('SELL', sellColor),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab(String label, Color color) {
+    final isActive = selected == label;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => onToggle(label),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 230),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: isActive ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: isActive
+                ? [
+                    BoxShadow(
+                      color: color.withOpacity(0.28),
+                      blurRadius: 14,
+                      offset: const Offset(0, 4),
+                    )
+                  ]
+                : [],
+          ),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                label == 'BUY'
+                    ? Icons.trending_up_rounded
+                    : Icons.trending_down_rounded,
+                size: 17,
+                color: isActive
+                    ? Colors.white
+                    : (isDark ? Colors.white30 : Colors.black26),
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14.5,
+                  letterSpacing: 0.6,
+                  color: isActive
+                      ? Colors.white
+                      : (isDark ? Colors.white30 : Colors.black26),
+                ),
+              ),
+            ],
+          ),
         ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.blue.shade100,
-          width: 1,
-        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QuantityRow extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isDark;
+  final Color activeColor;
+
+  const _QuantityRow({
+    required this.controller,
+    required this.isDark,
+    required this.activeColor,
+  });
+
+  void _change(int delta) {
+    final current = int.tryParse(controller.text) ?? 0;
+    final next = (current + delta).clamp(1, 10000);
+    controller.text = next.toString();
+    HapticFeedback.selectionClick();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = isDark ? const Color(0xFF1A1D26) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withOpacity(0.07)
+        : Colors.black.withOpacity(0.06);
+    final textColor = isDark ? Colors.white : const Color(0xFF0D1117);
+
+    return Container(
+      height: 68,
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: Colors.black.withOpacity(isDark ? 0.20 : 0.04),
+            blurRadius: 14,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: Colors.blue.shade100,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              Icons.privacy_tip_outlined,
-              color: Colors.blue.shade700,
-              size: 20,
+          _QtyBtn(
+            icon: Icons.remove_rounded,
+            isDark: isDark,
+            isLeft: true,
+            bgColor: isDark
+                ? Colors.white.withOpacity(0.06)
+                : Colors.black.withOpacity(0.05),
+            iconColor: isDark ? Colors.white54 : Colors.black45,
+            onTap: () => _change(-1),
+          ),
+          Expanded(
+            child: TextFormField(
+              controller: controller,
+              textAlign: TextAlign.center,
+              keyboardType: TextInputType.number,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: textColor,
+                letterSpacing: -0.5,
+              ),
+              decoration: InputDecoration(
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
+                hintText: '1',
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.white24 : Colors.black26,
+                ),
+              ),
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                TextInputFormatter.withFunction((old, newVal) {
+                  if (newVal.text.isEmpty) return newVal;
+                  final v = int.tryParse(newVal.text) ?? 0;
+                  return v > 10000 ? old : newVal;
+                }),
+              ],
             ),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Disclaimer',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue.shade800,
-                    letterSpacing: 0.1,
+          _QtyBtn(
+            icon: Icons.add_rounded,
+            isDark: isDark,
+            isLeft: false,
+            bgColor: activeColor.withOpacity(0.12),
+            iconColor: activeColor,
+            onTap: () => _change(1),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QtyBtn extends StatelessWidget {
+  final IconData icon;
+  final bool isDark;
+  final bool isLeft;
+  final Color bgColor;
+  final Color iconColor;
+  final VoidCallback onTap;
+
+  const _QtyBtn({
+    required this.icon,
+    required this.isDark,
+    required this.isLeft,
+    required this.bgColor,
+    required this.iconColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 64,
+        height: double.infinity,
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.horizontal(
+            left: isLeft ? const Radius.circular(17) : Radius.zero,
+            right: !isLeft ? const Radius.circular(17) : Radius.zero,
+          ),
+        ),
+        child: Icon(icon, size: 22, color: iconColor),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Formatter: caps decimal input at maxValue (999999) and blocks non-numeric
+class _DecimalCapFormatter extends TextInputFormatter {
+  final double maxValue;
+  const _DecimalCapFormatter(this.maxValue);
+
+  @override
+  TextEditingValue formatEditUpdate(
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    if (newValue.text.isEmpty) return newValue;
+    // Allow incomplete decimals like "123." while typing
+    if (newValue.text.endsWith('.')) return newValue;
+    final v = double.tryParse(newValue.text);
+    if (v == null) return oldValue;
+    if (v > maxValue) return oldValue;
+    return newValue;
+  }
+}
+
+class _RiskField extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final bool isDark;
+  final double? percent;
+  final Color accentColor;
+
+  const _RiskField({
+    required this.label,
+    required this.controller,
+    required this.isDark,
+    required this.percent,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = isDark ? const Color(0xFF1A1D26) : Colors.white;
+    final textPrimary = isDark ? Colors.white : const Color(0xFF0D1117);
+    final textMuted =
+        isDark ? const Color(0xFF6B7280) : const Color(0xFF9CA3AF);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withOpacity(0.20)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.18 : 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  color: textMuted,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              if (percent != null)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: accentColor.withOpacity(0.13),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${percent! > 0 ? '+' : ''}${percent!.toStringAsFixed(1)}%',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: accentColor,
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Educational use only—no real money, rewards, or trades. Practice with a virtual stock basket before investing for real.',
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '₹',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: textMuted,
+                ),
+              ),
+              const SizedBox(width: 3),
+              Expanded(
+                child: TextFormField(
+                  controller: controller,
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
+                  style: TextStyle(
+                    fontSize: 19,
+                    fontWeight: FontWeight.w800,
+                    color: textPrimary,
+                    letterSpacing: -0.3,
+                  ),
+                  decoration: const InputDecoration(
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  inputFormatters: [
+                    // Allow digits and a single decimal point
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
+                    _DecimalCapFormatter(999999),
+                  ],
+                  validator: (v) {
+                    final val = double.tryParse(v ?? '');
+                    if (val == null || val <= 0) return 'Invalid';
+                    return null;
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _TimeframeSelector extends StatelessWidget {
+  final String selected;
+  final List<String> options;
+  final bool isDark;
+  final Color activeColor;
+  final void Function(String) onSelect;
+
+  const _TimeframeSelector({
+    required this.selected,
+    required this.options,
+    required this.isDark,
+    required this.activeColor,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: List.generate(options.length, (i) {
+        final opt = options[i];
+        final isActive = opt == selected;
+        final isLast = i == options.length - 1;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () {
+              onSelect(opt);
+              HapticFeedback.selectionClick();
+            },
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              margin: EdgeInsets.only(right: isLast ? 0 : 8),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: isActive
+                    ? activeColor.withOpacity(0.13)
+                    : (isDark ? const Color(0xFF1A1D26) : Colors.white),
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: isActive
+                      ? activeColor.withOpacity(0.45)
+                      : Colors.transparent,
+                  width: 1.5,
+                ),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                opt,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: isActive ? FontWeight.w800 : FontWeight.w500,
+                  color: isActive
+                      ? activeColor
+                      : (isDark ? Colors.white38 : Colors.black38),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _ReasonSection extends StatefulWidget {
+  final TextEditingController controller;
+  final List<String> reasons;
+  final bool isDark;
+  final Color activeColor;
+
+  const _ReasonSection({
+    required this.controller,
+    required this.reasons,
+    required this.isDark,
+    required this.activeColor,
+  });
+
+  @override
+  State<_ReasonSection> createState() => _ReasonSectionState();
+}
+
+class _ReasonSectionState extends State<_ReasonSection> {
+  @override
+  void initState() {
+    super.initState();
+    widget.controller.addListener(() => setState(() {}));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cardBg = widget.isDark ? const Color(0xFF1A1D26) : Colors.white;
+    final textPrimary = widget.isDark ? Colors.white : const Color(0xFF0D1117);
+    final textMuted =
+        widget.isDark ? const Color(0xFF6B7280) : const Color(0xFF9CA3AF);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: widget.isDark
+                  ? Colors.white.withOpacity(0.07)
+                  : Colors.black.withOpacity(0.07),
+            ),
+          ),
+          child: TextFormField(
+            controller: widget.controller,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: textPrimary,
+            ),
+            maxLines: 2,
+            minLines: 1,
+            decoration: InputDecoration(
+              hintText: 'Describe your trade thesis...',
+              hintStyle: TextStyle(color: textMuted, fontSize: 13),
+              border: InputBorder.none,
+              isDense: true,
+              contentPadding: EdgeInsets.zero,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: widget.reasons.map((r) {
+            final isActive = widget.controller.text.trim() == r;
+            return GestureDetector(
+              onTap: () {
+                widget.controller.text = r;
+                HapticFeedback.selectionClick();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 180),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? widget.activeColor.withOpacity(0.13)
+                      : (widget.isDark
+                          ? Colors.white.withOpacity(0.05)
+                          : Colors.black.withOpacity(0.05)),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(
+                    color: isActive
+                        ? widget.activeColor.withOpacity(0.45)
+                        : Colors.transparent,
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  r,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
-                    height: 1.4,
-                    letterSpacing: 0.2,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                    color: isActive ? widget.activeColor : textMuted,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom bar — placed inside Column so it NEVER overlaps scroll content
+// and is always 100% opaque (no floating, no transparency issues)
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _BottomBar extends StatelessWidget {
+  final bool isDark;
+  final Color activeColor;
+  final String action;
+  final bool isSubmitting;
+  final VoidCallback onSubmit;
+
+  const _BottomBar({
+    required this.isDark,
+    required this.activeColor,
+    required this.action,
+    required this.isSubmitting,
+    required this.onSubmit,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Match the header background so it feels like a bottom sheet
+    final barBg = isDark ? const Color(0xFF12151C) : Colors.white;
+    final divider = isDark
+        ? Colors.white.withOpacity(0.07)
+        : Colors.black.withOpacity(0.07);
+
+    return SafeArea(
+      top: false,
+      child: Container(
+        decoration: BoxDecoration(
+          color: barBg,
+          border: Border(top: BorderSide(color: divider, width: 1)),
+        ),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Disclaimer
+            Row(
+              children: [
+                Icon(Icons.school_outlined,
+                    size: 13, color: Colors.blue.shade400),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: Text(
+                    'Educational use only — no real money involved.',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.blue.shade400,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+
+            // CTA button
+            SizedBox(
+              width: double.infinity,
+              height: 56,
+              child: ElevatedButton(
+                onPressed: isSubmitting ? null : onSubmit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: activeColor,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: activeColor.withOpacity(0.45),
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: isSubmitting
+                    ? const SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2.5,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            action == 'BUY'
+                                ? Icons.add_shopping_cart_rounded
+                                : Icons.sell_rounded,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            'Add $action to Basket',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

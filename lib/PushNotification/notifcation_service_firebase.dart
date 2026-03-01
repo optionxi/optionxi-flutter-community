@@ -13,10 +13,38 @@ import 'package:optionxi/PushNotification/notifcation_service.dart';
 Future<void> handleMessageBackground(RemoteMessage? message) async {
   if (message == null) return;
   debugPrint("Background message received");
-  // Add this line to increment badge for background messages
-  BadgeService.incrementNotificationsBadge();
-  // navigatorKey.currentState?.pushNamed("/messages", arguments: message);
-  Get.toNamed("/messages", arguments: message);
+
+  // Check if message contains "alert"
+  bool containsTriggered = false;
+
+  // Check in notification title
+  if (message.notification?.title?.toLowerCase().contains('alert') ?? false) {
+    containsTriggered = true;
+  }
+
+  // // Check in notification body
+  // if (message.notification?.body?.toLowerCase().contains('triggered') ??
+  //     false) {
+  //   containsTriggered = true;
+  // }
+
+  // // Check in data payload
+  // if (message.data.toString().toLowerCase().contains('triggered')) {
+  //   containsTriggered = true;
+  // }
+
+  if (containsTriggered) {
+    // Do something else when "alert" is found
+    debugPrint("Alert message detected");
+    BadgeService.incrementAlertBadge();
+
+    // Handle triggered message differently
+    // Get.toNamed("/triggered-alerts", arguments: message);
+  } else {
+    // Original behavior
+    BadgeService.incrementNotificationsBadge();
+    Get.toNamed("/messages", arguments: message);
+  }
 }
 
 class NotificationServiceFirebase {
@@ -134,6 +162,31 @@ class NotificationServiceFirebase {
   //     return null;
   //   }
   // }
+
+  Future<void> forceRefreshAndSyncToken() async {
+    try {
+      final messaging = FirebaseMessaging.instance;
+      final freshToken = await messaging.getToken();
+
+      if (freshToken != null && freshToken.isNotEmpty) {
+        _currentToken = freshToken;
+        await _storeTokenLocally(freshToken);
+
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          await DatabaseWriteService().updateUserFCM(user.uid, freshToken);
+          debugPrint("Force-refreshed FCM token synced for user: ${user.uid}");
+        } else {
+          await _storePendingToken(freshToken);
+          debugPrint("Force-refreshed FCM token stored as pending (no user)");
+        }
+      } else {
+        debugPrint("Force-refresh failed: no token obtained");
+      }
+    } catch (e) {
+      debugPrint("Force-refresh token error: $e");
+    }
+  }
 
   Future<void> _updateUserFCMToken(String token) async {
     try {
@@ -277,8 +330,23 @@ class NotificationServiceFirebase {
 
   void _showNotification(RemoteMessage message) {
     try {
+      // Check if message contains "alert"
+      bool containsTriggered = false;
+
+      // Check in notification title
+      if (message.notification?.title?.toLowerCase().contains('alert') ??
+          false) {
+        containsTriggered = true;
+      }
+
+      if (containsTriggered) {
+        BadgeService.incrementAlertBadge();
+      } else {
+        BadgeService.incrementNotificationsBadge();
+      }
+
       // Increment the notifications badge count
-      BadgeService.incrementNotificationsBadge();
+      // BadgeService.incrementNotificationsBadge();
 
       NotificationService().showNotificationBasic(
         id: 0,

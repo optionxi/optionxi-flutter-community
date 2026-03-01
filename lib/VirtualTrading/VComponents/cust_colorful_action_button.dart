@@ -79,17 +79,10 @@ Widget buildModernActionButton(
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Container(
-                padding: const EdgeInsets.all(6),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(
-                  icon,
-                  size: 18,
-                  color: iconColor,
-                ),
+              Icon(
+                icon,
+                size: 18,
+                color: iconColor,
               ),
               const SizedBox(width: 12),
               Flexible(

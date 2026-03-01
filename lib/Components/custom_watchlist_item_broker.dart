@@ -8,10 +8,9 @@ import 'package:optionxi/Controllers/watchlist_controller.dart';
 import 'package:optionxi/DataModels/dm_stock_model.dart';
 import 'package:optionxi/DataModels/sample_stock_symbols.dart';
 import 'package:optionxi/Helpers/constants.dart';
-import 'package:optionxi/Helpers/global_snackbar_get.dart';
 import 'package:optionxi/Helpers/volume_formater.dart';
 import 'package:optionxi/Main_Pages/act_stock_detail.dart';
-import 'package:optionxi/VirtualTradeJournal/add_buy_sell_orderpage.dart';
+// import 'package:optionxi/VirtualTradeJournal/add_buy_sell_orderpage.dart';
 import 'package:optionxi/browser_lite.dart';
 
 class WatchlistItemBroker extends StatefulWidget {
@@ -480,8 +479,8 @@ class _WatchlistItemBrokerState extends State<WatchlistItemBroker> {
                 //   ),
                 // );
 
-                GlobalSnackBarGet().showGetSuccessOnTop("Coming soon",
-                    "We are currently working on this feature..stay tuned for the update!!");
+                // GlobalSnackBarGet().showGetSuccessOnTop("Coming soon",
+                //     "We are currently working on this feature..stay tuned for the update!!");
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.green,
@@ -519,8 +518,8 @@ class _WatchlistItemBrokerState extends State<WatchlistItemBroker> {
                 //   ),
                 // );
 
-                GlobalSnackBarGet().showGetSuccessOnTop("Coming soon",
-                    "We are currently working on this feature..stay tuned for the update!!");
+                // GlobalSnackBarGet().showGetSuccessOnTop("Coming soon",
+                //     "We are currently working on this feature..stay tuned for the update!!");
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

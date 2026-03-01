@@ -1,26 +1,112 @@
-// Modified _buildContent method in your LeaderboardPage
-
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:get/get.dart';
-import 'package:optionxi/Components/custom_leaderboard_loading.dart';
-import 'package:optionxi/Helpers/conversions.dart';
+import 'package:optionxi/Main_Pages/act_breakout_page.dart';
 import 'package:optionxi/Main_Pages/act_traderprofile.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:optionxi/Theme/theme_controller.dart';
 
+// ─────────────────────────────────────────────────────────────
+//  DESIGN SYSTEM
+// ─────────────────────────────────────────────────────────────
+class _DS {
+  // Gold / Silver / Bronze accent stops
+  static const gold = Color(0xFFFFBF00);
+  static const silver = Color(0xFFC0C8D8);
+  static const bronze = Color(0xFFCD7F32);
+
+  static Color rankAccent(int rank) {
+    switch (rank) {
+      case 1:
+        return gold;
+      case 2:
+        return silver;
+      case 3:
+        return bronze;
+      default:
+        return const Color(0xFF6C8EF5);
+    }
+  }
+
+  // Adaptive colours
+  static Color surface(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFF131620)
+          : const Color(0xFFF4F6FC);
+
+  static Color card(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFF1C2030)
+          : Colors.white;
+
+  static Color cardBorder(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFF2A3050)
+          : const Color(0xFFE8ECF6);
+
+  static Color textPrimary(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFFECEFF9)
+          : const Color(0xFF131620);
+
+  static Color textSecondary(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFF7A85A8)
+          : const Color(0xFF8891B4);
+
+  static Color shimmerBase(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFF1C2030)
+          : const Color(0xFFE8ECF6);
+
+  static Color shimmerHighlight(BuildContext ctx) =>
+      Theme.of(ctx).brightness == Brightness.dark
+          ? const Color(0xFF252A40)
+          : const Color(0xFFF4F6FC);
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DATA MODEL
+// ─────────────────────────────────────────────────────────────
+class LeaderboardEntry {
+  final int rank;
+  final String username;
+  final double points;
+  final String level;
+  final String imageUrl;
+  final String suid;
+
+  const LeaderboardEntry({
+    required this.rank,
+    required this.username,
+    required this.points,
+    required this.level,
+    required this.imageUrl,
+    required this.suid,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  HELPERS
+// ─────────────────────────────────────────────────────────────
+String _formatBalance(double v) {
+  if (v >= 1e7) return '₹${(v / 1e7).toStringAsFixed(1)}Cr';
+  if (v >= 1e5) return '₹${(v / 1e5).toStringAsFixed(1)}L';
+  if (v >= 1e3) return '₹${(v / 1e3).toStringAsFixed(1)}K';
+  return '₹${v.toStringAsFixed(0)}';
+}
+
+// ─────────────────────────────────────────────────────────────
+//  LEADERBOARD PAGE
+// ─────────────────────────────────────────────────────────────
 class LeaderboardPage extends StatefulWidget {
+  const LeaderboardPage({Key? key}) : super(key: key);
+
   @override
-  _LeaderboardPageState createState() => _LeaderboardPageState();
+  State<LeaderboardPage> createState() => _LeaderboardPageState();
 }
 
 class _LeaderboardPageState extends State<LeaderboardPage>
     with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  final ThemeController themeController = Get.find<ThemeController>();
-  final SupabaseClient supabase = Supabase.instance.client;
-
+  late AnimationController _listAnim;
   List<LeaderboardEntry> leaderboardEntries = [];
   bool isLoading = true;
   String? error;
@@ -28,8 +114,8 @@ class _LeaderboardPageState extends State<LeaderboardPage>
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      duration: const Duration(milliseconds: 800),
+    _listAnim = AnimationController(
+      duration: const Duration(milliseconds: 900),
       vsync: this,
     );
     _loadLeaderboardData();
@@ -66,41 +152,293 @@ class _LeaderboardPageState extends State<LeaderboardPage>
         isLoading = false;
       });
 
-      // Start animation after data is loaded
-      _controller.forward();
+      _listAnim.forward(from: 0);
     } catch (e) {
       setState(() {
-        error = 'Failed to load leaderboard: ${e.toString()}';
+        error = 'Failed to load leaderboard. Pull to refresh.';
         isLoading = false;
       });
     }
   }
 
-  Future<void> _refreshData() async {
-    await _loadLeaderboardData();
-  }
-
   @override
   void dispose() {
-    _controller.dispose();
+    _listAnim.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshData,
-          child: SingleChildScrollView(
-            physics: AlwaysScrollableScrollPhysics(),
-            child: Column(
+      backgroundColor: _DS.surface(context),
+      body: RefreshIndicator(
+        color: const Color(0xFF6C8EF5),
+        onRefresh: _loadLeaderboardData,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            // Handles status bar height at the very top
+            SliverToBoxAdapter(
+              child: SizedBox(height: MediaQuery.of(context).padding.top),
+            ),
+            _SliverHeader(),
+            if (isLoading)
+              SliverToBoxAdapter(child: _SkeletonList())
+            else if (error != null)
+              SliverFillRemaining(
+                  child: _ErrorState(error!, _loadLeaderboardData))
+            else if (leaderboardEntries.isEmpty)
+              SliverFillRemaining(child: _EmptyState())
+            else
+              _LeaderboardSliver(
+                entries: leaderboardEntries,
+                controller: _listAnim,
+              ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                child: _PrivacyNotice(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  SLIVER HEADER
+// ─────────────────────────────────────────────────────────────
+class _SliverHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SliverToBoxAdapter(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Nav row: back + title inline ──────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 16, 0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // Header is always shown - no loading state here
-                _buildHeader(context),
-                // Only the content area shows loading
-                _buildContent(context),
-                PrivacyModeNotice()
+                // Back button — minimal, tap-friendly
+                Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: () => Navigator.pop(context),
+                    borderRadius: BorderRadius.circular(50),
+                    child: Padding(
+                      padding: const EdgeInsets.all(10),
+                      child: Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        size: 20,
+                        color: _DS.textPrimary(context),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                // Trophy icon
+                ShaderMask(
+                  shaderCallback: (r) => const LinearGradient(
+                    colors: [Color(0xFF6C8EF5), Color(0xFFA78BFA)],
+                  ).createShader(r),
+                  child: const Icon(Icons.emoji_events_rounded,
+                      color: Colors.white, size: 26),
+                ),
+                const SizedBox(width: 8),
+                // Title
+                Text(
+                  'Leaderboard',
+                  style: TextStyle(
+                    fontFamily: 'Georgia',
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: -0.4,
+                    color: _DS.textPrimary(context),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // ── Subtitle ──────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.fromLTRB(52, 2, 16, 14),
+            child: Text(
+              'Virtual trading rankings — not real trades.',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: _DS.textSecondary(context),
+                letterSpacing: 0.1,
+              ),
+            ),
+          ),
+          // ── Divider ───────────────────────────────────────
+          Container(
+            height: 1,
+            margin: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF6C8EF5).withOpacity(0.4),
+                  Colors.transparent,
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  LEADERBOARD SLIVER
+// ─────────────────────────────────────────────────────────────
+class _LeaderboardSliver extends StatelessWidget {
+  final List<LeaderboardEntry> entries;
+  final AnimationController controller;
+
+  const _LeaderboardSliver({required this.entries, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return SliverPadding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      sliver: SliverList(
+        delegate: SliverChildBuilderDelegate(
+          (ctx, i) {
+            final e = entries[i];
+            final startT = math.min(i * 0.05, 0.75);
+            final endT = math.min(startT + 0.25, 1.0);
+            final anim = CurvedAnimation(
+              parent: controller,
+              curve: Interval(startT, endT, curve: Curves.easeOutCubic),
+            );
+            return AnimatedBuilder(
+              animation: anim,
+              builder: (_, child) => FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.3),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+              ),
+              child: _LeaderboardCard(entry: e),
+            );
+          },
+          childCount: entries.length,
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  LEADERBOARD CARD
+// ─────────────────────────────────────────────────────────────
+class _LeaderboardCard extends StatelessWidget {
+  final LeaderboardEntry entry;
+
+  const _LeaderboardCard({required this.entry});
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = _DS.rankAccent(entry.rank);
+    final isTop3 = entry.rank <= 3;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: _DS.card(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isTop3
+              ? accent.withOpacity(dark ? 0.35 : 0.25)
+              : _DS.cardBorder(context),
+          width: isTop3 ? 1.5 : 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: isTop3
+                ? accent.withOpacity(dark ? 0.08 : 0.06)
+                : Colors.black.withOpacity(dark ? 0.2 : 0.04),
+            blurRadius: isTop3 ? 16 : 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            Navigator.push(context,
+                MaterialPageRoute(builder: (_) => TraderProfilePage(entry)));
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: Row(
+              children: [
+                // ── Rank badge ──────────────────────────────
+                _RankBadge(rank: entry.rank, accent: accent),
+                const SizedBox(width: 14),
+                // ── Name + balance ──────────────────────────
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.username,
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight:
+                              isTop3 ? FontWeight.w700 : FontWeight.w600,
+                          color: _DS.textPrimary(context),
+                          letterSpacing: -0.2,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: accent.withOpacity(dark ? 0.15 : 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              _formatBalance(entry.points),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: accent,
+                                letterSpacing: 0.1,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                // ── Avatar ──────────────────────────────────
+                _Avatar(
+                  imageUrl: entry.imageUrl,
+                  accent: accent,
+                  isTop3: isTop3,
+                ),
               ],
             ),
           ),
@@ -108,416 +446,215 @@ class _LeaderboardPageState extends State<LeaderboardPage>
       ),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width > 600;
-    final fontSize = isTablet ? 32.0 : 28.0;
-    final descriptionSize = isTablet ? 18.0 : 16.0;
-    final padding = isTablet ? 24.0 : 20.0;
+// ─────────────────────────────────────────────────────────────
+//  RANK BADGE
+// ─────────────────────────────────────────────────────────────
+class _RankBadge extends StatelessWidget {
+  final int rank;
+  final Color accent;
 
+  const _RankBadge({required this.rank, required this.accent});
+
+  IconData? _icon() {
+    switch (rank) {
+      case 1:
+        return Icons.emoji_events_rounded;
+      case 2:
+        return Icons.military_tech_rounded;
+      case 3:
+        return Icons.workspace_premium_rounded;
+      default:
+        return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _icon();
+    if (icon != null) {
+      return Container(
+        width: 44,
+        height: 44,
+        decoration: BoxDecoration(
+          color: accent.withOpacity(0.12),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: accent, size: 26),
+      );
+    }
     return Container(
-      padding: EdgeInsets.all(padding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: [
-              InkWell(
-                onTap: () {
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: Theme.of(context).dividerColor, width: 1),
-                  ),
-                  child: Icon(Icons.navigate_before,
-                      color: Theme.of(context).textTheme.titleSmall?.color),
-                ),
-              ),
-              SizedBox(width: 20),
-              Text(
-                "Leaderboard",
-                style: TextStyle(
-                  fontSize: fontSize,
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).textTheme.titleLarge?.color,
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 8),
-          Text(
-            "Where each traders are ranked according to their performance in virtual trading, this does not represent real trades.",
-            style: TextStyle(
-              color: Theme.of(context).textTheme.titleSmall?.color,
-              fontSize: descriptionSize,
-            ),
-          ),
-        ],
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: _DS.cardBorder(context),
+        shape: BoxShape.circle,
       ),
-    );
-  }
-
-  // MODIFIED: This is where the loading component is used
-  Widget _buildContent(BuildContext context) {
-    if (isLoading) {
-      // REPLACE THIS SECTION: Instead of the old loading UI, use the new custom loading
-      return LeaderboardLoadingList(
-        itemCount: 10, // Show 10 skeleton items
-      );
-
-      // ALTERNATIVE: For a more minimal approach, use:
-      // return MinimalCenterLoader();
-    }
-
-    if (error != null) {
-      return Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                size: 64,
-                color: Theme.of(context).colorScheme.error,
-              ),
-              SizedBox(height: 16),
-              Text(
-                error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-              ),
-              SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _refreshData,
-                child: Text('Retry'),
-              ),
-            ],
+      child: Center(
+        child: Text(
+          '$rank',
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.w700,
+            color: _DS.textSecondary(context),
           ),
         ),
-      );
-    }
-
-    if (leaderboardEntries.isEmpty) {
-      return Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceContainerHighest
-                      .withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: Icon(
-                  Icons.emoji_events_outlined,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'No rankings yet',
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).colorScheme.onSurface,
-                    ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Be the first to make it to the leaderboard!',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .onSurface
-                          .withOpacity(0.7),
-                    ),
-                textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return _buildLeaderboardList(context);
-  }
-
-  Widget _buildLeaderboardList(BuildContext context) {
-    final isTablet = MediaQuery.of(context).size.width > 600;
-    final padding = isTablet ? 16.0 : 8.0;
-
-    return Padding(
-      padding: EdgeInsets.symmetric(horizontal: padding),
-      child: Column(
-        children: [
-          ...leaderboardEntries.asMap().entries.map((entry) {
-            final index = entry.key;
-            final leaderboardEntry = entry.value;
-            return InkWell(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) =>
-                          TraderProfilePage(leaderboardEntry)),
-                );
-              },
-              child: ModernLeaderboardCard(
-                entry: leaderboardEntry,
-                index: index,
-                controller: _controller,
-              ),
-            );
-          }).toList(),
-          SizedBox(height: 20), // Bottom padding
-        ],
       ),
     );
   }
 }
 
-// Rest of your code remains the same...
-class ModernLeaderboardCard extends StatelessWidget {
-  final LeaderboardEntry entry;
-  final int index;
-  final AnimationController controller;
+// ─────────────────────────────────────────────────────────────
+//  AVATAR
+// ─────────────────────────────────────────────────────────────
+class _Avatar extends StatelessWidget {
+  final String imageUrl;
+  final Color accent;
+  final bool isTop3;
 
-  const ModernLeaderboardCard({
-    Key? key,
-    required this.entry,
-    required this.index,
-    required this.controller,
-  }) : super(key: key);
+  const _Avatar(
+      {required this.imageUrl, required this.accent, required this.isTop3});
 
   @override
   Widget build(BuildContext context) {
-    // Fix the animation interval calculation to prevent values > 1.0
-    // final maxItems = 30; // Maximum expected items
-    final delayIncrement = 0.05; // Smaller increment to fit more items
-    final maxDelay = 0.8; // Maximum delay to ensure we don't exceed 1.0
-    final animationDuration = 0.2; // Duration for each item's animation
-
-    final startTime = math.min(index * delayIncrement, maxDelay);
-    final endTime = math.min(startTime + animationDuration, 1.0);
-
-    final animation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: controller,
-        curve: Interval(
-          startTime,
-          endTime,
-          curve: Curves.easeOut,
+    final size = isTop3 ? 48.0 : 42.0;
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        border: isTop3
+            ? Border.all(color: accent, width: 2)
+            : Border.all(color: _DS.cardBorder(context), width: 1),
+      ),
+      child: ClipOval(
+        child: Image.network(
+          imageUrl,
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => Container(
+            color: accent.withOpacity(0.15),
+            child: Icon(Icons.person_rounded, color: accent, size: size * 0.55),
+          ),
         ),
       ),
     );
+  }
+}
 
-    final isTablet = MediaQuery.of(context).size.width > 600;
-    final cardPadding = isTablet ? 16.0 : 12.0;
-    final fontSize = isTablet ? 18.0 : 16.0;
-    final rankSize = isTablet ? 32.0 : 28.0;
-    final avatarSize = isTablet ? 60.0 : 50.0;
-    final iconSize = isTablet ? 36.0 : 32.0;
+// ─────────────────────────────────────────────────────────────
+//  SKELETON LOADER
+// ─────────────────────────────────────────────────────────────
+class _SkeletonList extends StatefulWidget {
+  @override
+  State<_SkeletonList> createState() => _SkeletonListState();
+}
 
-    Color getRankColor() {
-      switch (entry.rank) {
-        case 1:
-          return Colors.amber;
-        case 2:
-          return Colors.grey.shade400;
-        case 3:
-          return Colors.brown.shade300;
-        default:
-          return Theme.of(context)
-              .colorScheme
-              .primary
-              .withAlpha(179); // 0.7 alpha
-      }
-    }
+class _SkeletonListState extends State<_SkeletonList>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _shimmer;
 
-    Widget getRankIcon() {
-      switch (entry.rank) {
-        case 1:
-          return Icon(
-            Icons.emoji_events, // Crown/Trophy icon
-            size: iconSize,
-            color: Colors.amber,
-          );
-        case 2:
-          return Icon(
-            Icons.military_tech, // Medal icon
-            size: iconSize,
-            color: Colors.grey.shade400,
-          );
-        case 3:
-          return Icon(
-            Icons.workspace_premium, // Premium badge icon
-            size: iconSize,
-            color: Colors.brown.shade300,
-          );
-        default:
-          return Container(
-            width: iconSize,
-            height: iconSize,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: getRankColor().withAlpha(51), // 0.2 alpha
-            ),
-            child: Center(
-              child: Text(
-                "${entry.rank}",
-                style: TextStyle(
-                  fontSize: rankSize,
-                  fontWeight: FontWeight.bold,
-                  color: getRankColor(),
+  @override
+  void initState() {
+    super.initState();
+    _shimmer = AnimationController(
+      duration: const Duration(milliseconds: 1400),
+      vsync: this,
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _shimmer.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        children: List.generate(
+          8,
+          (i) => AnimatedBuilder(
+            animation: _shimmer,
+            builder: (_, __) {
+              final gradient = LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  _DS.shimmerBase(context),
+                  _DS.shimmerHighlight(context),
+                  _DS.shimmerBase(context),
+                ],
+                stops: [
+                  (_shimmer.value - 0.3).clamp(0.0, 1.0),
+                  _shimmer.value.clamp(0.0, 1.0),
+                  (_shimmer.value + 0.3).clamp(0.0, 1.0),
+                ],
+              );
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  color: _DS.card(context),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: _DS.cardBorder(context)),
                 ),
-              ),
-            ),
-          );
-      }
-    }
-
-    return FadeTransition(
-      opacity: animation,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: const Offset(0, 0.5),
-          end: Offset.zero,
-        ).animate(animation),
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-          child: Card(
-            elevation: entry.rank <= 3 ? 8 : 4, // Higher elevation for top 3
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: entry.rank <= 3
-                  ? BorderSide(
-                      color: getRankColor().withAlpha(77), // 0.3 alpha
-                      width: 2,
-                    )
-                  : BorderSide.none,
-            ),
-            child: Container(
-              decoration: entry.rank <= 3
-                  ? BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
-                      gradient: LinearGradient(
-                        colors: [
-                          getRankColor().withAlpha(13), // 0.05 alpha
-                          Colors.transparent,
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    )
-                  : null,
-              child: Padding(
-                padding: EdgeInsets.all(cardPadding),
                 child: Row(
                   children: [
-                    // Rank Number
-                    SizedBox(width: 4),
-                    Text(
-                      "${entry.rank}",
-                      style: TextStyle(
-                        fontSize: rankSize,
-                        fontWeight: FontWeight.bold,
-                        color: getRankColor(),
+                    // Badge circle
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: gradient,
                       ),
                     ),
-                    SizedBox(width: 12),
-                    // Crown Icon (only for top 3)
-                    if (entry.rank <= 3) ...[
-                      getRankIcon(),
-                      SizedBox(width: 12),
-                    ],
+                    const SizedBox(width: 14),
+                    // Name + balance
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            entry.username,
-                            style: TextStyle(
-                              fontSize: fontSize,
-                              fontWeight: entry.rank <= 3
-                                  ? FontWeight.w800
-                                  : FontWeight.bold,
-                              color:
-                                  Theme.of(context).textTheme.titleLarge?.color,
+                          Container(
+                            height: 14,
+                            width: 120 + i * 4.0,
+                            decoration: BoxDecoration(
+                              gradient: gradient,
+                              borderRadius: BorderRadius.circular(7),
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            "₹${convertToKMB(entry.points.toStringAsFixed(0))}",
-                            style: TextStyle(
-                              fontSize: fontSize,
-                              fontWeight: FontWeight.bold,
-                              color: entry.rank <= 3
-                                  ? getRankColor()
-                                  : Theme.of(context).colorScheme.primary,
+                          const SizedBox(height: 8),
+                          Container(
+                            height: 12,
+                            width: 70,
+                            decoration: BoxDecoration(
+                              gradient: gradient,
+                              borderRadius: BorderRadius.circular(6),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    // Avatar Image on the right
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          width: avatarSize,
-                          height: avatarSize,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: getRankColor().withAlpha(51), // 0.2 alpha
-                            border: entry.rank <= 3
-                                ? Border.all(
-                                    color: getRankColor(),
-                                    width: 2,
-                                  )
-                                : null,
-                          ),
-                          child: ClipOval(
-                            child: Image.network(
-                              entry.imageUrl,
-                              width: avatarSize,
-                              height: avatarSize,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Center(
-                                  child: Text(
-                                    "${entry.rank}",
-                                    style: TextStyle(
-                                      fontSize: rankSize,
-                                      fontWeight: FontWeight.bold,
-                                      color: getRankColor(),
-                                    ),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ],
+                    // Avatar circle
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: gradient,
+                      ),
                     ),
                   ],
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -525,68 +662,130 @@ class ModernLeaderboardCard extends StatelessWidget {
   }
 }
 
-class LeaderboardEntry {
-  final int rank;
-  final String username;
-  final double points;
-  final String level;
-  final String imageUrl;
-  final String suid;
+// ─────────────────────────────────────────────────────────────
+//  ERROR STATE
+// ─────────────────────────────────────────────────────────────
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
 
-  LeaderboardEntry({
-    required this.rank,
-    required this.username,
-    required this.points,
-    required this.level,
-    required this.imageUrl,
-    required this.suid,
-  });
-}
-
-class PrivacyModeNotice extends StatelessWidget {
-  const PrivacyModeNotice({Key? key}) : super(key: key);
+  const _ErrorState(this.message, this.onRetry);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            Colors.blue.shade50,
-            Colors.indigo.shade50,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.wifi_off_rounded,
+                  size: 40, color: Colors.redAccent),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: _DS.textSecondary(context),
+              ),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Try again'),
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF6C8EF5),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
           ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Colors.blue.shade100,
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  EMPTY STATE
+// ─────────────────────────────────────────────────────────────
+class _EmptyState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6C8EF5).withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.emoji_events_outlined,
+                size: 48, color: Color(0xFF6C8EF5)),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            'No rankings yet',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: _DS.textPrimary(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Be the first to make it to the leaderboard!',
+            style: TextStyle(
+              fontSize: 14,
+              color: _DS.textSecondary(context),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PRIVACY NOTICE
+// ─────────────────────────────────────────────────────────────
+class _PrivacyNotice extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1A2040) : const Color(0xFFEEF2FF),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: dark ? const Color(0xFF2A3A70) : const Color(0xFFD0D9FF),
+        ),
+      ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.blue.shade100,
-              borderRadius: BorderRadius.circular(8),
+              color: const Color(0xFF6C8EF5).withOpacity(0.15),
+              borderRadius: BorderRadius.circular(10),
             ),
-            child: Icon(
-              Icons.privacy_tip_outlined,
-              color: Colors.blue.shade700,
-              size: 20,
-            ),
+            child: const Icon(Icons.shield_outlined,
+                color: Color(0xFF6C8EF5), size: 18),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -596,20 +795,20 @@ class PrivacyModeNotice extends StatelessWidget {
                 Text(
                   'Privacy Mode',
                   style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue.shade800,
-                    letterSpacing: 0.1,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: dark
+                        ? const Color(0xFF9EB4FF)
+                        : const Color(0xFF3A5AF5),
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  'Turn on privacy mode in your profle, and your name and image will not be shown in leaderboard',
+                  'Enable privacy mode in your profile to hide your name and photo from this leaderboard.',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade600,
-                    height: 1.4,
-                    letterSpacing: 0.2,
+                    color: _DS.textSecondary(context),
+                    height: 1.45,
                   ),
                 ),
               ],

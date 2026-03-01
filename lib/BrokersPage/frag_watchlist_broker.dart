@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
 import 'package:optionxi/Components/custom_watchlist_item_broker.dart';
 import 'package:optionxi/Controllers/watchlist_controller.dart';
-import 'package:optionxi/Main_Pages/act_search_stocks.dart';
+import 'package:optionxi/Main_Pages/act_search_stocks_meili.dart';
 
 class WatchlistFragmentBroker extends StatefulWidget {
   final String whichbroker;
@@ -102,7 +102,7 @@ class _WatchlistFragmentBrokerState extends State<WatchlistFragmentBroker> {
       onTap: () async {
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => StockSearchPage(true)),
+          MaterialPageRoute(builder: (context) => AllSearchPageMeili()),
         );
         // Optionally refresh watchlist after returning
         await watchlistController.loadWatchlist();
@@ -178,7 +178,7 @@ class _WatchlistFragmentBrokerState extends State<WatchlistFragmentBroker> {
             onPressed: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => StockSearchPage(true)),
+                MaterialPageRoute(builder: (context) => AllSearchPageMeili()),
               );
               setState(() {
                 watchlistController.loadWatchlist();
@@ -260,7 +260,7 @@ class _WatchlistShimmerLoaderState extends State<WatchlistShimmerLoader>
   Widget build(BuildContext context) {
     return ListView.builder(
       itemCount: 10,
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      // padding: const EdgeInsets.symmetric(vertical: 8),
       itemBuilder: (context, index) {
         return AnimatedBuilder(
           animation: _animation,

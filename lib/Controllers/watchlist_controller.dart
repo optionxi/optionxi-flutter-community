@@ -177,12 +177,8 @@ class WatchlistController extends GetxController {
       await DatabaseWriteService().removeFromFavorites(userId, stock.symbol);
 
       // Update local state
-      watchlistStocks.removeWhere((s) =>
-          s.symbol.split("-")[0].split(":")[1] ==
-          stock.symbol.split("-")[0].split(":")[1]);
-      _watchlistSymbols.removeWhere((symbol) =>
-          symbol.split("-")[0].split(":")[1] ==
-          stock.symbol.split("-")[0].split(":")[1]);
+      watchlistStocks.removeWhere((s) => s.symbol == stock.symbol);
+      _watchlistSymbols.removeWhere((symbol) => symbol == stock.symbol);
       _stockFullNames.remove(stock.symbol);
 
       // Force a refresh of the subscription

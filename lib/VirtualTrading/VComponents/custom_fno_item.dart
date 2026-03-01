@@ -7,7 +7,7 @@ import 'package:optionxi/VirtualTrading/VDataModel/v_prev_fnoitem.dart';
 import 'package:optionxi/VirtualTrading/act_buyandsell_prev.dart';
 
 class FNOItem extends StatefulWidget {
-  final dynamic stock; // Can be DataStockModel or DataFNOModel
+  final dynamic stock;
   final FNOItemType type;
 
   const FNOItem({
@@ -21,9 +21,11 @@ class FNOItem extends StatefulWidget {
 }
 
 class _FNOItemState extends State<FNOItem> with TickerProviderStateMixin {
-  late AnimationController _containerPulseController;
-  late Animation<double> _containerScaleAnimation;
-  Animation<Color?>? _containerColorAnimation;
+  late AnimationController _flashController;
+  late Animation<double> _flashOpacity;
+
+  late AnimationController _scaleController;
+  late Animation<double> _scaleAnimation;
 
   double? previousPrice;
   bool? wasUp;
@@ -32,27 +34,40 @@ class _FNOItemState extends State<FNOItem> with TickerProviderStateMixin {
   void initState() {
     super.initState();
 
-    // Initialize container pulse animation
-    _containerPulseController = AnimationController(
-      duration: const Duration(milliseconds: 600),
+    _flashController = AnimationController(
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
 
-    _containerScaleAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.02,
-    ).animate(CurvedAnimation(
-      parent: _containerPulseController,
+    _flashOpacity = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0.0, end: 0.18), weight: 20),
+      TweenSequenceItem(tween: Tween(begin: 0.18, end: 0.0), weight: 80),
+    ]).animate(CurvedAnimation(
+      parent: _flashController,
+      curve: Curves.easeOut,
+    ));
+
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _scaleAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 1.0, end: 1.012), weight: 35),
+      TweenSequenceItem(tween: Tween(begin: 1.012, end: 1.0), weight: 65),
+    ]).animate(CurvedAnimation(
+      parent: _scaleController,
       curve: Curves.easeInOut,
     ));
 
-    // Set initial price
+    _initPrice();
+  }
+
+  void _initPrice() {
     if (widget.type.isStock) {
-      final stockData = widget.stock as DataStockModel;
-      previousPrice = stockData.close;
+      previousPrice = (widget.stock as DataStockModel).close;
     } else {
-      final optionData = widget.stock as DataFNOModel;
-      previousPrice = optionData.ltp;
+      previousPrice = (widget.stock as DataFNOModel).ltp;
     }
   }
 
@@ -64,15 +79,11 @@ class _FNOItemState extends State<FNOItem> with TickerProviderStateMixin {
     double oldPrice;
 
     if (widget.type.isStock) {
-      final stockData = widget.stock as DataStockModel;
-      final oldStockData = oldWidget.stock as DataStockModel;
-      currentPrice = stockData.close;
-      oldPrice = oldStockData.close;
+      currentPrice = (widget.stock as DataStockModel).close;
+      oldPrice = (oldWidget.stock as DataStockModel).close;
     } else {
-      final optionData = widget.stock as DataFNOModel;
-      final oldOptionData = oldWidget.stock as DataFNOModel;
-      currentPrice = optionData.ltp;
-      oldPrice = oldOptionData.ltp;
+      currentPrice = (widget.stock as DataFNOModel).ltp;
+      oldPrice = (oldWidget.stock as DataFNOModel).ltp;
     }
 
     if (currentPrice != oldPrice) {
@@ -80,217 +91,167 @@ class _FNOItemState extends State<FNOItem> with TickerProviderStateMixin {
         wasUp = currentPrice > oldPrice;
         previousPrice = oldPrice;
       });
-      _triggerContainerPulse();
+      _flashController.forward(from: 0);
+      _scaleController.forward(from: 0);
     }
-  }
-
-  void _triggerContainerPulse() {
-    final theme = Theme.of(context);
-    final bool isPriceUp = wasUp ?? false;
-
-    // Setup container color animation
-    _containerColorAnimation = ColorTween(
-      begin: theme.cardColor,
-      end: isPriceUp
-          ? Colors.green.withOpacity(0.1)
-          : Colors.red.withOpacity(0.1),
-    ).animate(CurvedAnimation(
-      parent: _containerPulseController,
-      curve: Curves.easeInOut,
-    ));
-
-    _containerPulseController.forward().then((_) {
-      _containerPulseController.reverse();
-    });
   }
 
   @override
   void dispose() {
-    _containerPulseController.dispose();
+    _flashController.dispose();
+    _scaleController.dispose();
     super.dispose();
   }
+
+  Color get _flashColor =>
+      wasUp == true ? const Color(0xFF00C853) : const Color(0xFFFF3D57);
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _containerPulseController,
-      builder: (context, child) {
+      animation: Listenable.merge([_flashController, _scaleController]),
+      builder: (context, _) {
         return Transform.scale(
-          scale: _containerScaleAnimation.value,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: _containerColorAnimation?.value ??
-                  Theme.of(context).cardColor,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: Theme.of(context).dividerColor,
-                width: 1,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 8,
-                  offset: const Offset(0, 2),
-                ),
-                // Add extra glow during animation
-                if (_containerPulseController.isAnimating)
-                  BoxShadow(
-                    color: (wasUp ?? false ? Colors.green : Colors.red)
-                        .withOpacity(0.2),
-                    blurRadius: 15,
-                    offset: const Offset(0, 0),
+          scale: _scaleAnimation.value,
+          child: Stack(
+            children: [
+              _buildCard(context),
+              if (_flashController.isAnimating)
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
+                        color: _flashColor.withOpacity(_flashOpacity.value),
+                      ),
+                    ),
                   ),
-              ],
-            ),
-            child: InkWell(
-              onTap: () => _onTap(context),
-              borderRadius: BorderRadius.circular(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: widget.type.isStock
-                    ? _buildStockItem(context)
-                    : _buildOptionItem(context),
-              ),
-            ),
+                ),
+            ],
           ),
         );
       },
     );
   }
 
+  Widget _buildCard(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).dividerColor.withOpacity(0.5),
+          width: 1,
+        ),
+        color: isDark ? const Color(0xFF0F1117) : Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.25 : 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: () => _onTap(context),
+          borderRadius: BorderRadius.circular(12),
+          splashColor: Colors.white.withOpacity(0.04),
+          highlightColor: Colors.white.withOpacity(0.02),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            child: widget.type.isStock
+                ? _buildStockItem(context)
+                : _buildOptionItem(context),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAccentBar(bool isPositive) {
+    return Container(
+      width: 3,
+      height: 38,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(2),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: isPositive
+              ? [const Color(0xFF00E676), const Color(0xFF00C853)]
+              : [const Color(0xFFFF6B6B), const Color(0xFFFF3D57)],
+        ),
+      ),
+    );
+  }
+
   Widget _buildStockItem(BuildContext context) {
     final stockData = widget.stock as DataStockModel;
     final isPositive = stockData.pcnt >= 0;
+    final pctColor =
+        isPositive ? const Color(0xFF00C853) : const Color(0xFFFF3D57);
 
     return Row(
       children: [
-        // Stock Icon with pulsating effect
-        // AnimatedBuilder(
-        //   animation: _containerPulseController,
-        //   builder: (context, child) {
-        //     return Container(
-        //       width: 48,
-        //       height: 48,
-        //       decoration: BoxDecoration(
-        //         color: isPositive
-        //             ? Colors.green.withOpacity(
-        //                 _containerPulseController.isAnimating ? 0.2 : 0.1)
-        //             : Colors.red.withOpacity(
-        //                 _containerPulseController.isAnimating ? 0.2 : 0.1),
-        //         borderRadius: BorderRadius.circular(12),
-        //         border: Border.all(
-        //           color: isPositive
-        //               ? Colors.green.withOpacity(
-        //                   _containerPulseController.isAnimating ? 0.4 : 0.2)
-        //               : Colors.red.withOpacity(
-        //                   _containerPulseController.isAnimating ? 0.4 : 0.2),
-        //           width: 1,
-        //         ),
-        //       ),
-        //       child: Icon(
-        //         Icons.trending_up,
-        //         color: isPositive ? Colors.green : Colors.red,
-        //         size: 24,
-        //       ),
-        //     );
-        //   },
-        // ),
-
-        Container(
-          height: 48,
-          width: 48,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(25),
-            child: Image.asset(
-              'assets/images/stockdefault.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-
-        // Stock Details
+        _buildAccentBar(isPositive),
+        const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      stockData.symbol,
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Theme.of(context).textTheme.titleLarge?.color,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  // Use AnimatedPriceWidget for pulsating price
-                  AnimatedPriceWidget(
-                    price: stockData.close,
-                    previousPrice: previousPrice,
-                    wasUp: wasUp,
-                    style: GoogleFonts.poppins(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Theme.of(context).textTheme.titleLarge?.color,
-                    ),
-                  ),
-                ],
+              Text(
+                stockData.symbol,
+                style: GoogleFonts.dmMono(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                  color: Theme.of(context).textTheme.titleLarge?.color,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      stockData.stckname.isNotEmpty
-                          ? stockData.stckname
-                          : stockData.symbol,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Theme.of(context).textTheme.titleSmall?.color,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  AnimatedBuilder(
-                    animation: _containerPulseController,
-                    builder: (context, child) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isPositive
-                              ? Colors.green.withOpacity(
-                                  _containerPulseController.isAnimating
-                                      ? 0.2
-                                      : 0.1)
-                              : Colors.red.withOpacity(
-                                  _containerPulseController.isAnimating
-                                      ? 0.2
-                                      : 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${isPositive ? '+' : ''}${stockData.pcnt.toStringAsFixed(2)}%',
-                          style: GoogleFonts.poppins(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: isPositive ? Colors.green : Colors.red,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
+              const SizedBox(height: 3),
+              Text(
+                stockData.stckname.isNotEmpty
+                    ? stockData.stckname
+                    : stockData.symbol,
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.color
+                      ?.withOpacity(0.55),
+                  fontWeight: FontWeight.w400,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
             ],
           ),
+        ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AnimatedPriceWidget(
+              price: stockData.close,
+              previousPrice: previousPrice,
+              wasUp: wasUp,
+              style: GoogleFonts.dmMono(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).textTheme.titleLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 5),
+            _buildPctBadge(
+              '${isPositive ? '+' : ''}${stockData.pcnt.toStringAsFixed(2)}%',
+              pctColor,
+            ),
+          ],
         ),
       ],
     );
@@ -299,223 +260,101 @@ class _FNOItemState extends State<FNOItem> with TickerProviderStateMixin {
   Widget _buildOptionItem(BuildContext context) {
     final optionData = widget.stock as DataFNOModel;
     final isPositive = optionData.pcnt >= 0;
+    final pctColor =
+        isPositive ? const Color(0xFF00C853) : const Color(0xFFFF3D57);
 
-    return Column(
+    return Row(
       children: [
-        Row(
-          children: [
-            // Option Type Badge with pulsating effect
-            AnimatedBuilder(
-              animation: _containerPulseController,
-              builder: (context, child) {
-                return Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: widget.type.isCall
-                        ? Colors.blue.withOpacity(
-                            _containerPulseController.isAnimating ? 0.2 : 0.1)
-                        : Colors.orange.withOpacity(
-                            _containerPulseController.isAnimating ? 0.2 : 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: widget.type.isCall
-                          ? Colors.blue.withOpacity(
-                              _containerPulseController.isAnimating ? 0.4 : 0.2)
-                          : Colors.orange.withOpacity(
-                              _containerPulseController.isAnimating
-                                  ? 0.4
-                                  : 0.2),
-                      width: 1,
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      widget.type.shortName,
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                        color: widget.type.isCall ? Colors.blue : Colors.orange,
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 16),
-
-            // Option Details
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          optionData.displayName,
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color:
-                                Theme.of(context).textTheme.titleLarge?.color,
-                          ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      // Use AnimatedPriceWidget for pulsating price
-                      AnimatedPriceWidget(
-                        price: optionData.ltp,
-                        previousPrice: previousPrice,
-                        wasUp: wasUp,
-                        style: GoogleFonts.poppins(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          color: Theme.of(context).textTheme.titleLarge?.color,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Strike: ${optionData.strikePrice.toInt()}',
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Theme.of(context).textTheme.titleSmall?.color,
-                        ),
-                      ),
-                      AnimatedBuilder(
-                        animation: _containerPulseController,
-                        builder: (context, child) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: isPositive
-                                  ? Colors.green.withOpacity(
-                                      _containerPulseController.isAnimating
-                                          ? 0.2
-                                          : 0.1)
-                                  : Colors.red.withOpacity(
-                                      _containerPulseController.isAnimating
-                                          ? 0.2
-                                          : 0.1),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              optionData.formattedPercentage,
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isPositive ? Colors.green : Colors.red,
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // Option Stats Row
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
+        _buildAccentBar(isPositive),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildStatItem(
-                context,
-                'Open',
-                '₹${optionData.o.toStringAsFixed(2)}',
+              Text(
+                optionData.displayName,
+                style: GoogleFonts.dmMono(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.2,
+                  color: Theme.of(context).textTheme.titleLarge?.color,
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-              _buildStatItem(
-                context,
-                'High',
-                '₹${optionData.h.toStringAsFixed(2)}',
-              ),
-              _buildStatItem(
-                context,
-                'Low',
-                '₹${optionData.l.toStringAsFixed(2)}',
-              ),
-              _buildStatItem(
-                context,
-                'Volume',
-                _formatVolume(optionData.v),
+              const SizedBox(height: 3),
+              Text(
+                'Strike  ${optionData.strikePrice.toInt()}',
+                style: GoogleFonts.inter(
+                  fontSize: 11.5,
+                  color: Theme.of(context)
+                      .textTheme
+                      .titleSmall
+                      ?.color
+                      ?.withOpacity(0.55),
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ],
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildStatItem(BuildContext context, String label, String value) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.poppins(
-            fontSize: 10,
-            color: Theme.of(context).textTheme.titleSmall?.color,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: Theme.of(context).textTheme.titleMedium?.color,
-          ),
+        const SizedBox(width: 16),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            AnimatedPriceWidget(
+              price: optionData.ltp,
+              previousPrice: previousPrice,
+              wasUp: wasUp,
+              style: GoogleFonts.dmMono(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: Theme.of(context).textTheme.titleLarge?.color,
+              ),
+            ),
+            const SizedBox(height: 5),
+            _buildPctBadge(optionData.formattedPercentage, pctColor),
+          ],
         ),
       ],
     );
   }
 
-  String _formatVolume(int volume) {
-    if (volume >= 10000000) {
-      return '${(volume / 10000000).toStringAsFixed(1)}Cr';
-    } else if (volume >= 100000) {
-      return '${(volume / 100000).toStringAsFixed(1)}L';
-    } else if (volume >= 1000) {
-      return '${(volume / 1000).toStringAsFixed(1)}K';
-    }
-    return volume.toString();
+  Widget _buildPctBadge(String text, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.dmMono(
+          fontSize: 11.5,
+          fontWeight: FontWeight.w600,
+          color: color,
+        ),
+      ),
+    );
   }
 
   void _onTap(BuildContext context) {
-    // Handle tap - navigate to details or add to watchlist
     if (widget.type.isStock) {
       final stockData = widget.stock as DataStockModel;
-      print('Tapped on stock: ${stockData.symbol}');
       Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (context) =>
-                BuyandSellPagePrev(stockData.symbol, "EQ", false)),
+          builder: (context) =>
+              BuyandSellPagePrev(stockData.symbol, "EQ", false),
+        ),
       );
     } else {
       final optionData = widget.stock as DataFNOModel;
-      print('Tapped on option: ${optionData.symbol}');
       Navigator.push(
         context,
         MaterialPageRoute(
-            builder: (context) =>
-                BuyandSellPagePrev(optionData.symbol, "FNO", false)),
+          builder: (context) =>
+              BuyandSellPagePrev(optionData.symbol, "FNO", false),
+        ),
       );
     }
   }

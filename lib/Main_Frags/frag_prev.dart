@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:optionxi/Components/cust_badge_widget.dart';
 import 'package:optionxi/Components/cust_notice_section.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_portfolio.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_watchlist.dart';
-import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_tradinghub.dart';
+// import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_tradinghub.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:optionxi/VirtualTrading/MainFrags/vt_frag_orders.dart';
 
@@ -227,13 +226,12 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
 
     final List<Widget> pages = [
       FNOPage(),
       OrdersPage(null),
       PortfolioFragmentPrev(null),
-      FragTradingHub(),
+      // FragTradingHub(),
     ];
 
     return Scaffold(
@@ -259,124 +257,186 @@ class _VirtualTradingFragmentState extends State<VirtualTradingFragment>
           ),
         ],
       ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(
-              color: isDark
-                  ? Colors.white.withOpacity(0.1)
-                  : Colors.black.withOpacity(0.08),
-              width: 1,
-            ),
+      bottomNavigationBar: _buildBottomNav(context),
+    );
+  }
+
+  Widget _buildBottomNav(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final tabs = [
+      _NavTab(
+          icon: Icons.visibility_outlined,
+          activeIcon: Icons.visibility_rounded,
+          label: 'Watchlist'),
+      _NavTab(
+          icon: Icons.list_alt_outlined,
+          activeIcon: Icons.list_alt_rounded,
+          label: 'Orders',
+          badge: _ordersBadgeCount),
+      _NavTab(
+          icon: Icons.donut_small_outlined,
+          activeIcon: Icons.donut_small_rounded,
+          label: 'Portfolio',
+          badge: _portfolioBadgeCount),
+    ];
+
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color.fromARGB(255, 16, 16, 22) : Colors.white,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? Colors.white.withOpacity(0.07)
+                : Colors.black.withOpacity(0.06),
+            width: 1,
           ),
         ),
-        child: Stack(
-          children: [
-            BottomNavigationBar(
-              currentIndex: _currentPageIndex,
-              onTap: _onBottomNavItemTapped,
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: theme.colorScheme.primary,
-              unselectedItemColor: theme.colorScheme.onSurface.withOpacity(0.6),
-              backgroundColor: theme.scaffoldBackgroundColor,
-              selectedLabelStyle:
-                  GoogleFonts.inter(fontWeight: FontWeight.w600, fontSize: 12),
-              unselectedLabelStyle:
-                  GoogleFonts.inter(fontWeight: FontWeight.w500, fontSize: 12),
-              elevation: 0,
-              items: [
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.visibility_outlined),
-                  activeIcon: Container(
-                    padding: EdgeInsets.all(6),
+        boxShadow: [
+          BoxShadow(
+            color: isDark
+                ? Colors.black.withOpacity(0.4)
+                : Colors.black.withOpacity(0.06),
+            blurRadius: 20,
+            offset: const Offset(0, -4),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: List.generate(tabs.length, (index) {
+              final tab = tabs[index];
+              final isSelected = _currentPageIndex == index;
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => _onBottomNavItemTapped(index),
+                  behavior: HitTestBehavior.opaque,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 10),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
+                      color: isSelected
+                          ? theme.colorScheme.primary
+                              .withOpacity(isDark ? 0.18 : 0.10)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: Icon(
-                      Icons.visibility,
-                      color: theme.colorScheme.primary,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Icon with badge
+                        Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 200),
+                              child: Icon(
+                                isSelected ? tab.activeIcon : tab.icon,
+                                key: ValueKey(isSelected),
+                                size: 22,
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                    : (isDark
+                                        ? Colors.white.withOpacity(0.45)
+                                        : Colors.black.withOpacity(0.40)),
+                              ),
+                            ),
+                            if (tab.badge > 0)
+                              Positioned(
+                                right: -8,
+                                top: -6,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.redAccent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isDark
+                                          ? const Color(0xFF1A1A2E)
+                                          : Colors.white,
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  constraints: const BoxConstraints(
+                                      minWidth: 16, minHeight: 16),
+                                  child: Text(
+                                    tab.badge > 99 ? '99+' : '${tab.badge}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 5),
+                        // Label
+                        AnimatedDefaultTextStyle(
+                          duration: const Duration(milliseconds: 200),
+                          style: GoogleFonts.inter(
+                            fontSize: 11,
+                            fontWeight:
+                                isSelected ? FontWeight.w700 : FontWeight.w500,
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : (isDark
+                                    ? Colors.white.withOpacity(0.45)
+                                    : Colors.black.withOpacity(0.40)),
+                            letterSpacing: isSelected ? 0.2 : 0,
+                          ),
+                          child: Text(tab.label),
+                        ),
+                        // Active indicator dot
+                        const SizedBox(height: 4),
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
+                          width: isSelected ? 18 : 0,
+                          height: 3,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary,
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  label: 'Watchlist',
                 ),
-                BottomNavigationBarItem(
-                  icon: BadgeWidget(
-                    count: _ordersBadgeCount,
-                    child: Icon(Icons.list_alt_outlined),
-                  ),
-                  activeIcon: BadgeWidget(
-                    count: _ordersBadgeCount,
-                    child: Container(
-                      padding: EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.list_alt,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  label: 'Orders',
-                ),
-                BottomNavigationBarItem(
-                  icon: BadgeWidget(
-                    count: _portfolioBadgeCount,
-                    child: Icon(Icons.donut_small_outlined),
-                  ),
-                  activeIcon: BadgeWidget(
-                    count: _portfolioBadgeCount,
-                    child: Container(
-                      padding: EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        Icons.donut_small,
-                        color: theme.colorScheme.primary,
-                      ),
-                    ),
-                  ),
-                  label: 'Portfolio',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.wallet),
-                  activeIcon: Container(
-                    padding: EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      Icons.wallet,
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  label: 'Trade Hub',
-                ),
-              ],
-            ),
-            // Selection border indicator
-            Positioned(
-              top: 0,
-              left:
-                  (_currentPageIndex * MediaQuery.of(context).size.width / 4) +
-                      (MediaQuery.of(context).size.width / 4 - 40) / 2,
-              child: Container(
-                width: 40,
-                height: 3,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-            ),
-          ],
+              );
+            }),
+          ),
         ),
       ),
     );
   }
+}
+
+// ─────────────────────────────────────────────
+// Helper model class — add outside the State class (at file bottom)
+// ─────────────────────────────────────────────
+
+class _NavTab {
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final int badge;
+
+  const _NavTab({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    this.badge = 0,
+  });
 }

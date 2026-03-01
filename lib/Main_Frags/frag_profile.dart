@@ -5,17 +5,18 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Auth_Service/auth_service.dart';
+import 'package:optionxi/Components/cust_alert_section_new.dart';
 import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_virtual_balance_section.dart';
+import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Helpers/open_url.dart';
+import 'package:optionxi/Main_Pages/act_health_monitors.dart';
 import 'package:optionxi/Main_Pages/act_leaderboard.dart';
-import 'package:optionxi/Main_Pages/act_news.dart';
-import 'package:optionxi/Main_Pages/act_portfolio.dart';
-import 'package:optionxi/Main_Pages/act_predictions.dart';
-import 'package:optionxi/Main_Pages/act_tradingideas.dart';
-import 'package:optionxi/MobileLink/link_phone_screen.dart';
-import 'package:optionxi/Payments/subsctiption_screen.dart';
+import 'package:optionxi/Main_Pages/act_org_onboarding.dart';
+import 'package:optionxi/Main_Pages/act_setalert_page_all.dart';
+// import 'package:optionxi/MobileLink/link_phone_screen.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
+import 'package:optionxi/VirtualTradeJournal/act_basket_fullpage.dart';
 import 'package:optionxi/VirtualTrading/act_broker_connectpage.dart';
 
 class TradingProfilePage extends StatefulWidget {
@@ -26,10 +27,10 @@ class TradingProfilePage extends StatefulWidget {
 class _TradingProfilePageState extends State<TradingProfilePage>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  // Add these variables
   bool _privacyMode = false;
-  bool _isLoading = true;
+  // bool _isLoading = true;
   final DatabaseReference _database = FirebaseDatabase.instance.ref();
+  final User? currentUser = FirebaseAuth.instance.currentUser;
 
   @override
   void initState() {
@@ -38,8 +39,6 @@ class _TradingProfilePageState extends State<TradingProfilePage>
       duration: const Duration(milliseconds: 800),
       vsync: this,
     )..forward();
-
-    // Fetch user data on init
     _fetchUserData();
   }
 
@@ -49,66 +48,49 @@ class _TradingProfilePageState extends State<TradingProfilePage>
     super.dispose();
   }
 
-  // Add this method to fetch user data
   Future<void> _fetchUserData() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final snapshot = await _database.child('regusers/${user.uid}').get();
-
+      if (currentUser != null) {
+        final snapshot =
+            await _database.child('regusers/${currentUser!.uid}').get();
         if (snapshot.exists) {
           final data = snapshot.value as Map<dynamic, dynamic>;
-          setState(() {
-            _privacyMode = data['rg_privacy'] ?? false;
-            _isLoading = false;
-          });
+          if (mounted) {
+            setState(() {
+              _privacyMode = data['rg_privacy'] ?? false;
+              // _isLoading = false;
+            });
+          }
         } else {
-          setState(() {
-            _isLoading = false;
-          });
+          // if (mounted) setState(() => _isLoading = false);
         }
       }
     } catch (e) {
-      print('Error fetching user data: $e');
-      setState(() {
-        _isLoading = false;
-      });
+      // if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  // Add this method to update privacy setting
   Future<void> _updatePrivacySetting(bool value) async {
-    final theme = Theme.of(context);
-    // String up_message = value ? "Privacy turned on" : "Privacy turn off";
-    String up_message = "Will be updated after market hours..";
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        await _database.child('regusers/${user.uid}/rg_privacy').set(value);
-        setState(() {
-          _privacyMode = value;
-        });
+      if (currentUser != null) {
+        await _database
+            .child('regusers/${currentUser!.uid}/rg_privacy')
+            .set(value);
+        setState(() => _privacyMode = value);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(up_message,
-                style: GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
-            backgroundColor: theme
-                .colorScheme.primary, // SnackBar consistent with primary color
+            content: Text("Privacy mode updated (takes effect next session)",
+                style: GoogleFonts.inter(color: Colors.white)),
+            backgroundColor: Colors.black87,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            duration: Duration(milliseconds: 1500),
-            // margin: EdgeInsets.only(bottom: 70), // Add bottom margin
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         );
       }
     } catch (e) {
-      print('Error updating privacy setting: $e');
-      // Revert the UI change if update fails
-      setState(() {
-        _privacyMode = !value;
-      });
+      setState(() => _privacyMode = !value);
     }
   }
 
@@ -121,25 +103,59 @@ class _TradingProfilePageState extends State<TradingProfilePage>
       backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
-          physics: BouncingScrollPhysics(),
+          physics: const BouncingScrollPhysics(),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildHeader(theme),
-              BalanceCard(),
-              // Padding(
-              //   padding: const EdgeInsets.all(16.0),
-              //   child: LeaderboardWidgetMain(),
-              // ),
-              // TopTradingTutorsScreen(),
-              // const SizedBox(height: 24),
-              // ProfileStatsWidget(),
-              _buildOptionsLists(theme),
+              _buildModernHeader(theme),
+
+              const SizedBox(height: 10),
+
+              // Balance Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: BalanceCard(),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Alerts Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _buildAlertsWrapper(context, isDark),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Trading Hub Grid
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(
+                  "Trading Hub",
+                  style: GoogleFonts.inter(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.onBackground,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildTradingGrid(theme),
+
+              const SizedBox(height: 24),
+
+              // Settings Lists
+              _buildSettingsSection(theme, isDark),
+
+              const SizedBox(height: 24),
+
+              // Footer
               InkWell(
-                  onTap: () {
-                    OpenHelper.open_url(
-                        "https://github.com/optionxi/optionxi-flutter-community");
-                  },
-                  child: _buildFooter(isDark)),
+                onTap: () => OpenHelper.open_url(
+                    "https://github.com/optionxi/optionxi-flutter-community"),
+                child: _buildCleanFooter(isDark),
+              ),
+              const SizedBox(height: 40),
             ],
           ),
         ),
@@ -147,557 +163,489 @@ class _TradingProfilePageState extends State<TradingProfilePage>
     );
   }
 
-  Widget _buildHeader(ThemeData theme) {
-    final primaryColor = theme.colorScheme.primary;
-    final secondaryColor = theme.colorScheme.secondary;
-    final backgroundColor = theme.scaffoldBackgroundColor;
-    final cardColor = theme.cardColor;
+  // ---------------------------------------------------------------------------
+  // 1. MODERN HEADER
+  // ---------------------------------------------------------------------------
+  Widget _buildModernHeader(ThemeData theme) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+      child: Row(
+        children: [
+          // Avatar
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                  color: theme.colorScheme.primary.withOpacity(0.2), width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  blurRadius: 10,
+                  spreadRadius: 2,
+                )
+              ],
+            ),
+            child: CircleAvatar(
+              radius: 28,
+              backgroundColor: theme.cardColor,
+              backgroundImage: currentUser?.photoURL != null
+                  ? NetworkImage(currentUser!.photoURL!)
+                  : null,
+              child: currentUser?.photoURL == null
+                  ? Icon(Icons.person, color: theme.colorScheme.primary)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 16),
 
-    return FadeTransition(
-      opacity: _controller,
-      child: Container(
-        padding: EdgeInsets.all(20),
-        child: Column(
-          children: [
-            InkWell(
-              onTap: () {
-                // Navigator.push(
-                //   context,
-                //   MaterialPageRoute(builder: (context) => ContributorsPage()),
-                // );
+          // Name & Status
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  currentUser?.displayName ?? "Trader",
+                  style: GoogleFonts.inter(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onBackground,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    Text(
+                      currentUser?.email ?? "",
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: theme.colorScheme.onBackground.withOpacity(0.5),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Logout Icon Button
+          IconButton(
+            onPressed: () => AuthService().logOut(),
+            icon: Icon(Icons.logout_rounded, color: theme.colorScheme.error),
+            style: IconButton.styleFrom(
+              backgroundColor: theme.colorScheme.error.withOpacity(0.1),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 2. ALERT WRAPPER
+  // ---------------------------------------------------------------------------
+  Widget _buildAlertsWrapper(BuildContext context, bool isDark) {
+    return InkWell(
+      onTap: () async {
+        await BadgeService.clearAlertsBadge();
+        Navigator.push(
+            context, MaterialPageRoute(builder: (context) => AlertsPage()));
+      },
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: isDark ? Colors.white10 : Colors.grey.shade200),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.03),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: AlertsSection(), // Your existing widget
+          ),
+          Positioned(
+            right: -2,
+            top: -2,
+            child: StreamBuilder<int>(
+              stream: BadgeService.alertsStreamWithInitial,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData || snapshot.data == 0)
+                  return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: const BoxDecoration(
+                    color: Colors.redAccent,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Text(
+                    snapshot.data!.toString(),
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold),
+                  ),
+                );
               },
-              child: Stack(
-                alignment: Alignment.bottomRight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 3. TRADING GRID (Replaces simple list)
+  // ---------------------------------------------------------------------------
+  Widget _buildTradingGrid(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.count(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisCount: 2,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 1.5,
+        children: [
+          _buildGridCard(
+            title: "Leaderboard",
+            subtitle: "Global Rank",
+            icon: FontAwesomeIcons.trophy,
+            color: Colors.amber,
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (c) => LeaderboardPage())),
+            theme: theme,
+          ),
+          _buildGridCard(
+            title: "Broker Connect",
+            subtitle: "Manage API",
+            icon: FontAwesomeIcons.link,
+            color: Colors.blueAccent,
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (c) => BrokerConnectPage())),
+            theme: theme,
+          ),
+          _buildGridCard(
+            title: "My Basket",
+            subtitle: "Saved Strategies",
+            icon: FontAwesomeIcons.basketShopping,
+            color: Colors.purpleAccent,
+            onTap: () => Navigator.push(
+                context, MaterialPageRoute(builder: (c) => BasketFullPage())),
+            theme: theme,
+            isNew: true,
+          ),
+          _buildGridCard(
+            title: "Organizations",
+            subtitle: "Manage Teams",
+            icon: FontAwesomeIcons.building,
+            color: Colors.teal,
+            onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                    builder: (c) => OrganizationOnboardingPage())),
+            theme: theme,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGridCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+    required ThemeData theme,
+    bool isNew = false,
+  }) {
+    final isDark = theme.brightness == Brightness.dark;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : Colors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+                color: isDark ? Colors.white10 : Colors.grey.shade200),
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    width: 120,
-                    height: 120,
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [primaryColor, secondaryColor],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+                      color: color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: FaIcon(icon, size: 16, color: color),
+                  ),
+                  if (isNew)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.red.shade100,
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                      border: Border.all(color: cardColor, width: 4),
-                    ),
-                    child: FirebaseAuth.instance.currentUser != null &&
-                            FirebaseAuth.instance.currentUser!.photoURL != null
-                        ? Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [primaryColor, secondaryColor],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                              borderRadius: BorderRadius.circular(60),
-                            ),
-                            padding: EdgeInsets.all(2),
-                            child: CircleAvatar(
-                              radius: 16,
-                              backgroundColor: backgroundColor,
-                              backgroundImage: NetworkImage(
-                                  FirebaseAuth.instance.currentUser!.photoURL!),
-                            ),
-                          )
-                        : Icon(Icons.person,
-                            size: 60, color: theme.colorScheme.onPrimary),
-                  ),
-                  Container(
-                    padding: EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: primaryColor,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.edit,
-                        size: 20, color: theme.colorScheme.onPrimary),
-                  ),
+                      child: Text("NEW",
+                          style: GoogleFonts.inter(
+                              fontSize: 8,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red)),
+                    )
                 ],
               ),
-            ),
-            SizedBox(height: 16),
-            Text(
-              FirebaseAuth.instance.currentUser?.displayName ?? "OptionXi",
-              style: TextStyle(
-                fontSize: 24,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: theme.colorScheme.onBackground,
+                    ),
+                  ),
+                  Text(
+                    subtitle,
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      color: theme.colorScheme.onBackground.withOpacity(0.6),
+                    ),
+                  ),
+                ],
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 4. PREFERENCES LIST (Grouped)
+  // ---------------------------------------------------------------------------
+  Widget _buildSettingsSection(ThemeData theme, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(left: 4, bottom: 8),
+            child: Text(
+              "Preferences",
+              style: GoogleFonts.inter(
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.onBackground,
               ),
             ),
-            // SizedBox(height: 8),
-            // Text(
-            //   "Professional Trader",
-            //   style: TextStyle(
-            //     color: theme.colorScheme.onBackground.withValues(alpha: 0.6),
-            //     fontSize: 16,
-            //   ),
-            // ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOptionsLists(ThemeData theme) {
-    final theme = Theme.of(context);
-    return SlideTransition(
-      position: Tween<Offset>(
-        begin: Offset(0, 0.2),
-        end: Offset.zero,
-      ).animate(CurvedAnimation(
-        parent: _controller,
-        curve: Interval(0.4, 0.6, curve: Curves.easeOut),
-      )),
-      child: Container(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // AdSectionProfilePrev(),
-            _buildSection(
-                "Trading",
-                [
-                  OptionItem("Leaderboard", FontAwesomeIcons.trophy,
-                      badgeText: "Beta", onTap: goToLeaderBoardPage),
-                  OptionItem("Broker Connect", FontAwesomeIcons.robot,
-                      badgeText: "Beta", onTap: gotoBrokerConnect),
-                  OptionItem("Organisations", FontAwesomeIcons.building,
-                      badgeText: "Soon", onTap: showCommingSoon),
-                  // OptionItem("Subscriptions", FontAwesomeIcons.moneyBill,
-                  //     badgeText: "New", onTap: gotoSubscriptionPage),
-                  OptionItem(
-                    "Privacy Mode",
-                    Icons.privacy_tip,
-                    trailing: _isLoading
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : Switch(
-                            value: _privacyMode,
-                            onChanged: (value) => _updatePrivacySetting(value),
-                            activeColor: theme.colorScheme.primary,
-                          ),
-                  ),
-                ],
-                theme),
-            _buildSection(
-                "Account",
-                [
-                  OptionItem(
-                    "Verification Status",
-                    Icons.verified,
-                    trailing: Container(
-                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.green.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        "Verified",
-                        style: TextStyle(color: Colors.green),
-                      ),
-                    ),
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                            builder: (context) => LinkPhoneScreen()),
-                      );
-                    },
-                  ),
-                  // OptionItem("Payment Methods", Icons.payment),
-                  OptionItem(
-                    "Logout",
-                    Icons.exit_to_app,
-                    onTap: () {
-                      AuthService().logOut();
-                    },
-                  ),
-                  // OptionItem("Security Settings", Icons.security),
-                ],
-                theme),
-            _buildSection(
-                "Preferences",
-                [
-                  OptionItem("Feature Request", Icons.settings, onTap: () {
-                    OpenHelper.open_url(
-                        "https://app.optionxi.com/feature-request");
-                  }),
-                  OptionItem("Webview", Icons.language, onTap: () {
-                    OpenHelper.open_url("https://app.optionxi.com");
-                  }),
-                  OptionItem(
-                    "Dark Mode",
-                    ThemeController.instance.isDarkMode
-                        ? Icons.light_mode
-                        : Icons.dark_mode,
-                    trailing: GetBuilder<ThemeController>(
-                      builder: (controller) {
-                        return Switch(
-                          value: controller.isDarkMode,
-                          onChanged: (value) => controller.toggleTheme(),
-                          activeColor: theme.colorScheme.primary,
-                        );
-                      },
-                    ),
-                  ),
-                  OptionItem("Customer Support", Icons.help_outline,
-                      onTap: () async {
-                    showContactOptions(context);
-                  }),
-                ],
-                theme),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSection(String title, List<OptionItem> items, ThemeData theme) {
-    final borderColor = theme.brightness == Brightness.dark
-        ? Colors.grey[850]
-        : Colors.grey[300];
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Text(
-            title,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onBackground,
+          ),
+          Container(
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                  color: isDark ? Colors.white10 : Colors.grey.shade200),
             ),
-          ),
-        ),
-        Container(
-          decoration: BoxDecoration(
-            color: theme.cardColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: borderColor!, width: 1),
-          ),
-          child: Column(
-            children:
-                items.map((item) => _buildOptionItem(item, theme)).toList(),
-          ),
-        ),
-      ],
-    );
-  }
-
-  void changetoLightandDarkMode() {
-    final themeController = Get.find<ThemeController>();
-    themeController.toggleTheme();
-  }
-
-  Widget _buildOptionItem(OptionItem item, ThemeData theme) {
-    final borderColor = theme.brightness == Brightness.dark
-        ? Colors.grey[850]
-        : Colors.grey[300];
-
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(
-            color: borderColor!,
-            width: 1,
-          ),
-        ),
-      ),
-      child: ListTile(
-        leading: Container(
-          padding: EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            item.icon,
-            color: theme.colorScheme.primary,
-          ),
-        ),
-        title: Text(
-          item.title,
-          style: TextStyle(
-            color: theme.colorScheme.onBackground,
-            fontSize: 16,
-          ),
-        ),
-        trailing: item.trailing ??
-            (item.badgeText != null
-                ? Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      item.badgeText!,
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  )
-                : Icon(Icons.chevron_right,
-                    color:
-                        theme.colorScheme.onBackground.withValues(alpha: 0.6))),
-        onTap: item.onTap,
-      ),
-    );
-  }
-
-  void goToPortfolioPage() {
-    //Go to OTP entering Page
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => PortfolioPage()),
-    );
-  }
-
-  void goToLeaderBoardPage() {
-    //Go to OTP entering Page
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => LeaderboardPage()),
-    );
-  }
-
-  void gotoBrokerConnect() {
-    //Go to OTP entering Page
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => BrokerConnectPage()),
-    );
-  }
-
-  void gotoSubscriptionPage() {
-    //Go to OTP entering Page
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => ModernSubscriptionScreen()),
-    );
-  }
-
-  void showCommingSoon() {
-    final theme = Theme.of(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('This feature will be comming soon!, Stay tuned',
-            style: GoogleFonts.inter(color: theme.colorScheme.onPrimary)),
-        backgroundColor:
-            theme.colorScheme.primary, // SnackBar consistent with primary color
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-    );
-  }
-
-  void goToMarketNews() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (context) => TradingNewsPage()));
-  }
-
-  void goToTradersPredictions() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (context) => PredictionPage()));
-  }
-
-  void goToTradingIdeas() {
-    Navigator.push(
-        context, MaterialPageRoute(builder: (context) => TradingIdeasPage()));
-  }
-}
-
-class OptionItem {
-  final String title;
-  final IconData icon;
-  final String? badgeText;
-  final Widget? trailing;
-  final VoidCallback? onTap;
-
-  OptionItem(this.title, this.icon,
-      {this.badgeText, this.trailing, this.onTap});
-}
-
-Widget _buildFooter(bool isDark) {
-  return Container(
-    margin: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-    padding: EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: isDark ? Color(0xFF1E293B) : Colors.grey[50],
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(
-        color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!,
-      ),
-    ),
-    child: Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            _buildFooterItem(
-                'Smart', FontAwesomeIcons.brain, Color(0xFF3B82F6), isDark),
-            _buildFooterItem(
-                'Fast', FontAwesomeIcons.bolt, Color(0xFFEF4444), isDark),
-            _buildFooterItem('Reliable', FontAwesomeIcons.heartPulse,
-                Color(0xFF8B5CF6), isDark),
-          ],
-        ),
-        SizedBox(height: 20),
-        Divider(
-          color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[300],
-        ),
-        SizedBox(height: 20),
-
-        // GitHub Section
-        Container(
-          padding: EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: isDark ? Color(0xFF0F172A) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200]!,
-            ),
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  FaIcon(
-                    FontAwesomeIcons.github,
-                    size: 20,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                  SizedBox(width: 8),
-                  Text(
-                    'Open Source',
-                    style: GoogleFonts.inter(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black,
+            child: Column(
+              children: [
+                _buildModernTile(
+                  title: "Privacy Mode",
+                  icon: Icons.privacy_tip_outlined,
+                  color: Colors.orange,
+                  theme: theme,
+                  trailing: SizedBox(
+                    height: 24,
+                    child: Switch(
+                      value: _privacyMode,
+                      onChanged: _updatePrivacySetting,
+                      activeColor: theme.colorScheme.primary,
                     ),
                   ),
-                ],
-              ),
-              SizedBox(height: 8),
-              Text(
-                'optionxi/optionxi-flutter-community',
-                style: GoogleFonts.inter(
-                  fontSize: 13,
-                  color: isDark ? Colors.grey[400] : Colors.grey[600],
                 ),
-              ),
-              SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Color(0xFFFBBF24).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: Color(0xFFFBBF24).withOpacity(0.3),
+                // _buildDivider(isDark),
+                // _buildModernTile(
+                //   title: "Verification Status",
+                //   icon: Icons.verified_user_outlined,
+                //   color: Colors.green,
+                //   theme: theme,
+                //   trailing: const Icon(Icons.arrow_forward_ios,
+                //       size: 14, color: Colors.grey),
+                //   onTap: () => Navigator.push(context,
+                //       MaterialPageRoute(builder: (c) => LinkPhoneScreen())),
+                // ),
+                _buildDivider(isDark),
+                GetBuilder<ThemeController>(
+                  builder: (controller) {
+                    return _buildModernTile(
+                      title: "Dark Mode",
+                      icon: controller.isDarkMode
+                          ? Icons.dark_mode
+                          : Icons.light_mode,
+                      color: Colors.indigo,
+                      theme: theme,
+                      trailing: SizedBox(
+                        height: 24,
+                        child: Switch(
+                          value: controller.isDarkMode,
+                          onChanged: (val) => controller.toggleTheme(),
+                          activeColor: theme.colorScheme.primary,
+                        ),
                       ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FaIcon(
-                          FontAwesomeIcons.star,
-                          size: 12,
-                          color: Color(0xFFFBBF24),
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Star us',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFFFBBF24),
-                          ),
-                        ),
-                      ],
-                    ),
+                    );
+                  },
+                ),
+                _buildDivider(isDark),
+                _buildModernTile(
+                  title: "Help & Support",
+                  icon: Icons.headset_mic_outlined,
+                  color: Colors.pinkAccent,
+                  theme: theme,
+                  trailing: const Icon(Icons.arrow_forward_ios,
+                      size: 14, color: Colors.grey),
+                  onTap: () => showContactOptions(context),
+                ),
+                _buildModernTile(
+                  title: "Health Status",
+                  icon: Icons.favorite_rounded,
+                  color: const Color(0xFFE53935), // modern medical red
+                  theme: theme,
+                  trailing: const Icon(
+                    Icons.arrow_forward_ios,
+                    size: 14,
+                    color: Colors.grey,
                   ),
-                  SizedBox(width: 12),
-                  Container(
-                    padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: Color(0xFF10B981),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FaIcon(
-                          FontAwesomeIcons.externalLinkAlt,
-                          size: 10,
-                          color: Colors.white,
-                        ),
-                        SizedBox(width: 6),
-                        Text(
-                          'View on GitHub',
-                          style: GoogleFonts.inter(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  onTap: () => openHealthMonitorPage(),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void openHealthMonitorPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => HealthDashboard()),
+    );
+  }
+
+  Widget _buildModernTile({
+    required String title,
+    required IconData icon,
+    required Color color,
+    required ThemeData theme,
+    Widget? trailing,
+    VoidCallback? onTap,
+  }) {
+    return ListTile(
+      onTap: onTap,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(icon, color: color, size: 20),
+      ),
+      title: Text(
+        title,
+        style: GoogleFonts.inter(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: theme.colorScheme.onBackground,
+        ),
+      ),
+      trailing: trailing,
+    );
+  }
+
+  Widget _buildDivider(bool isDark) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      indent: 60,
+      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+    );
+  }
+
+  // ---------------------------------------------------------------------------
+  // 5. CLEAN FOOTER
+  // ---------------------------------------------------------------------------
+  Widget _buildCleanFooter(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: isDark
+              ? [const Color(0xFF0F172A), const Color(0xFF1E293B)]
+              : [const Color(0xFFF8FAFC), Colors.white],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border:
+            Border.all(color: isDark ? Colors.white10 : Colors.grey.shade200),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              FaIcon(FontAwesomeIcons.github,
+                  size: 18, color: isDark ? Colors.white70 : Colors.black87),
+              const SizedBox(width: 8),
+              Text(
+                'Open Source Community',
+                style: GoogleFonts.inter(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
               ),
             ],
           ),
-        ),
-
-        SizedBox(height: 16),
-        Text(
-          '© 2025 OptionXi. Built for traders, by traders.',
-          style: GoogleFonts.inter(
-            fontSize: 12,
-            color: isDark ? Colors.grey[500] : Colors.grey[600],
+          const SizedBox(height: 8),
+          Text(
+            'Built by traders, for traders.',
+            style: GoogleFonts.inter(fontSize: 12, color: Colors.grey),
           ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildFooterItem(String label, IconData icon, Color color, bool isDark) {
-  return Column(
-    children: [
-      Container(
-        padding: EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: FaIcon(
-          icon,
-          size: 16,
-          color: color,
-        ),
+        ],
       ),
-      SizedBox(height: 6),
-      Text(
-        label,
-        style: GoogleFonts.inter(
-          fontSize: 11,
-          color: isDark ? Colors.grey[400] : Colors.grey[600],
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    ],
-  );
+    );
+  }
 }

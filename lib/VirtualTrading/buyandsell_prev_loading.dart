@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:optionxi/VirtualTrading/VComponents/cust_colorful_action_button.dart';
 
 class StockTradingSkeleton extends StatefulWidget {
   final bool isDark;
@@ -12,23 +11,25 @@ class StockTradingSkeleton extends StatefulWidget {
 }
 
 class _StockTradingSkeletonState extends State<StockTradingSkeleton>
-    with TickerProviderStateMixin {
+    with SingleTickerProviderStateMixin {
   late AnimationController _shimmerController;
-  late Animation<double> _animation;
+  late Animation<double> _shimmerAnimation;
 
   @override
   void initState() {
     super.initState();
-
-    // Shimmer animation for loading elements
     _shimmerController = AnimationController(
-      duration: const Duration(milliseconds: 1500),
+      duration: const Duration(milliseconds: 1400),
       vsync: this,
-    );
+    )..repeat();
 
-    _shimmerController.repeat();
-    _animation =
-        Tween<double>(begin: 0.0, end: 2.0).animate(_shimmerController);
+    _shimmerAnimation = Tween<double>(
+      begin: -1.5,
+      end: 2.5,
+    ).animate(CurvedAnimation(
+      parent: _shimmerController,
+      curve: Curves.easeInOut,
+    ));
   }
 
   @override
@@ -37,99 +38,38 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildStockInfoSkeleton(),
-                const SizedBox(height: 20),
-                _buildQuantityInputSkeleton(),
-                const SizedBox(height: 20),
-                _buildOrderTypeSelectionSkeleton(),
-                const SizedBox(height: 20),
-                _buildProductTypeSelectionSkeleton(),
-                const SizedBox(height: 20),
-                _buildPriceTypeSelectionSkeleton(),
-              ],
-            ),
-          ),
-        ),
-        _buildVirtualBalance(),
-        const SizedBox(height: 4),
-        _buildBottomBarSkeleton(),
-      ],
-    );
-  }
-
-  Container _buildVirtualBalance() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: widget.isDark ? Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color:
-              widget.isDark ? const Color(0xFF2E2E2E) : const Color(0xFFE0E0E0),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.account_balance_wallet_outlined,
-            color: widget.isDark ? Colors.blue[300] : Colors.blue[700],
-          ),
-          const SizedBox(width: 12),
-          Text(
-            'Virtual Balance:',
-            style: TextStyle(
-              fontSize: 16,
-              color: widget.isDark ? Colors.grey[300] : Colors.grey[700],
-            ),
-          ),
-          const Spacer(),
-          _buildShimmerBox(90, 20, borderRadius: 6),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildShimmerBox(
+  // ── Core shimmer box ─────────────────────────────────────────────────────────
+  Widget _shimmerBox(
     double width,
     double height, {
     double borderRadius = 8,
-    bool isCircular = false,
   }) {
     return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
+      animation: _shimmerAnimation,
+      builder: (context, _) {
         return Container(
           width: width,
           height: height,
           decoration: BoxDecoration(
-            borderRadius: isCircular
-                ? BorderRadius.circular(width / 2)
-                : BorderRadius.circular(borderRadius),
+            borderRadius: BorderRadius.circular(borderRadius),
             gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              stops: const [0.0, 0.45, 0.55, 1.0],
               colors: widget.isDark
                   ? [
-                      Colors.grey[800]!,
-                      Colors.grey[700]!,
-                      Colors.grey[800]!,
+                      const Color(0xFF1E1E1E),
+                      const Color(0xFF2A2A2A),
+                      const Color(0xFF333333),
+                      const Color(0xFF1E1E1E),
                     ]
                   : [
-                      Colors.grey[300]!,
-                      Colors.grey[200]!,
-                      Colors.grey[300]!,
+                      const Color(0xFFE8E8E8),
+                      const Color(0xFFF0F0F0),
+                      const Color(0xFFF8F8F8),
+                      const Color(0xFFE8E8E8),
                     ],
-              stops: const [0.0, 0.5, 1.0],
-              begin: Alignment(-1.0 + _animation.value, 0.0),
-              end: Alignment(-0.5 + _animation.value, 0.0),
+              transform: _SlidingGradientTransform(_shimmerAnimation.value),
             ),
           ),
         );
@@ -137,110 +77,51 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     );
   }
 
-  Widget _buildStockInfoSkeleton() {
+  // ── Stock header skeleton ────────────────────────────────────────────────────
+  Widget _buildStockHeaderSkeleton() {
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1A1A1A) : Colors.white,
+        color: widget.isDark ? const Color(0xFF0D0D0D) : Colors.white,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color:
-              widget.isDark ? const Color(0xFF2A2A2A) : const Color(0xFFE5E5E5),
+          color: widget.isDark
+              ? Colors.white.withOpacity(0.07)
+              : Colors.black.withOpacity(0.06),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: widget.isDark
-                ? Colors.black.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: widget.isDark
+            ? []
+            : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 12,
+                  offset: const Offset(0, 2),
+                ),
+              ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Header section with shimmer
+          // Row 1: stock name + price
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildShimmerBox(48, 48, isCircular: true),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildShimmerBox(120, 20, borderRadius: 6),
-                  const SizedBox(height: 6),
-                  Container(
-                    width: 40,
-                    height: 18,
-                    decoration: BoxDecoration(
-                      color:
-                          (widget.isDark ? Colors.grey[700] : Colors.grey[200])!
-                              .withOpacity(0.5),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'EQ',
-                        style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w500,
-                            color: widget.isDark
-                                ? Colors.grey[300]
-                                : Colors.grey[600]),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              _shimmerBox(140, 15, borderRadius: 5),
               const Spacer(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  _buildShimmerBox(100, 24, borderRadius: 6),
-                  const SizedBox(height: 6),
-                  _buildShimmerBox(70, 22, borderRadius: 12),
-                ],
-              ),
+              _shimmerBox(80, 15, borderRadius: 5),
             ],
           ),
-          const Divider(height: 24),
-          // OHLC section with shimmer
+          const SizedBox(height: 10),
+          // Row 2: segment chip + change badge + chevron
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              _buildOhlcItemSkeleton('Open'),
-              _buildOhlcItemSkeleton('High'),
-              _buildOhlcItemSkeleton('Low'),
-              _buildOhlcItemSkeleton('Prev. Close'),
-            ],
-          ),
-          const Divider(height: 24),
-          // Static action buttons
-          Row(
-            children: [
-              Expanded(
-                child: buildModernActionButton(
-                  context,
-                  widget.isDark,
-                  'View Chart',
-                  Icons.trending_up_rounded,
-                  () {},
-                  true, // isChart button
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: buildModernActionButton(
-                  context,
-                  widget.isDark,
-                  'Alerts',
-                  Icons.analytics_outlined,
-                  () {},
-                  false, // isChart button
-                ),
-              ),
+              _shimmerBox(34, 20, borderRadius: 6),
+              const Spacer(),
+              _shimmerBox(62, 20, borderRadius: 6),
+              const SizedBox(width: 6),
+              _shimmerBox(16, 16, borderRadius: 4),
             ],
           ),
         ],
@@ -248,118 +129,57 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     );
   }
 
-  Widget _buildOhlcItemSkeleton(String title) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500)),
-        const SizedBox(height: 4),
-        _buildShimmerBox(60, 16, borderRadius: 4),
-      ],
-    );
-  }
-
-  Widget _buildQuantityInputSkeleton() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Static Label
-        Text(
-          'Quantity',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: widget.isDark ? Colors.white : Colors.black87,
-          ),
-        ),
-        const SizedBox(height: 8),
-        // Shimmer Box for TextFormField
-        Container(
-          height: 56,
-          decoration: BoxDecoration(
-            color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: widget.isDark
-                  ? const Color(0xFF2E2E2E)
-                  : const Color(0xFFE0E0E0),
-            ),
-          ),
-          child: Row(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12.0),
-                child: Icon(Icons.format_list_numbered,
-                    color: widget.isDark ? Colors.grey[400] : Colors.grey[600]),
-              ),
-              _buildShimmerBox(100, 20, borderRadius: 6),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildOrderTypeSelectionSkeleton() {
+  // ── Buy / Sell toggle skeleton ───────────────────────────────────────────────
+  Widget _buildOrderTypeSkeleton() {
     return Container(
+      height: 56,
       decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: widget.isDark ? const Color(0xFF111111) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-            color: widget.isDark
-                ? const Color(0xFF2E2E2E)
-                : const Color(0xFFE0E0E0)),
+          color: widget.isDark
+              ? Colors.white.withOpacity(0.05)
+              : Colors.black.withOpacity(0.05),
+        ),
       ),
       child: Row(
         children: [
-          // Static BUY Button (Selected state)
+          // BUY side — pre-highlighted
           Expanded(
             child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
+              alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.15),
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(12),
-                  bottomLeft: Radius.circular(12),
-                ),
+                color: const Color(0xFF10B981).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(16),
               ),
-              child: Text(
+              child: const Text(
                 'BUY',
-                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green.shade600,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF10B981),
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
           ),
           Container(
             width: 1,
-            height: 35,
+            height: 32,
             color: widget.isDark
-                ? const Color(0xFF2E2E2E)
-                : const Color(0xFFE0E0E0),
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
           ),
-          // Static SELL Button (Unselected state)
+          // SELL side
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              decoration: const BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.only(
-                  topRight: Radius.circular(12),
-                  bottomRight: Radius.circular(12),
-                ),
-              ),
+            child: Center(
               child: Text(
                 'SELL',
-                textAlign: TextAlign.center,
                 style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: widget.isDark ? Colors.white38 : Colors.black38,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
@@ -369,190 +189,296 @@ class _StockTradingSkeletonState extends State<StockTradingSkeleton>
     );
   }
 
-  Widget _buildProductTypeSelectionSkeleton() {
+  // ── Quantity input skeleton ──────────────────────────────────────────────────
+  Widget _buildQuantitySkeleton() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Product Type',
+          'Quantity',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: widget.isDark ? Colors.white : Colors.black87,
+            color: widget.isDark ? Colors.white70 : Colors.black54,
+            letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            // Static INTRADAY chip (selected)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color:
-                    widget.isDark ? Colors.blue.shade700 : Colors.blue.shade600,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: widget.isDark
-                        ? Colors.blue.shade600
-                        : Colors.blue.shade500),
-              ),
-              child: const Text(
-                'INTRADAY',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+          decoration: BoxDecoration(
+            color: widget.isDark ? const Color(0xFF111111) : Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: widget.isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.05),
             ),
-            const SizedBox(width: 12),
-            // Static NORMAL chip (locked)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: widget.isDark
-                        ? const Color(0xFF2E2E2E)
-                        : Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              _buildQtyButtonSkeleton(Icons.remove_rounded),
+              Expanded(
+                child: Center(child: _shimmerBox(40, 24, borderRadius: 6)),
               ),
-              child: Row(
-                children: [
-                  Text(
-                    'NORMAL',
-                    style: TextStyle(color: Colors.grey.shade600),
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 6),
-                    child: Icon(Icons.lock, size: 14, color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-          ],
+              _buildQtyButtonSkeleton(Icons.add_rounded),
+            ],
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildPriceTypeSelectionSkeleton() {
+  Widget _buildQtyButtonSkeleton(IconData icon) {
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: widget.isDark
+            ? Colors.white.withOpacity(0.08)
+            : Colors.black.withOpacity(0.05),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        icon,
+        color: widget.isDark ? Colors.white38 : Colors.black38,
+        size: 20,
+      ),
+    );
+  }
+
+  // ── Order type chips skeleton ────────────────────────────────────────────────
+  Widget _buildPriceTypeSkeleton() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           'Order Type',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: widget.isDark ? Colors.white : Colors.black87,
+            color: widget.isDark ? Colors.white70 : Colors.black54,
+            letterSpacing: 0.2,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         Wrap(
-          spacing: 12,
-          runSpacing: 8,
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            _buildStaticChip('MKT', true),
-            _buildStaticChip('LIMIT', false, isLocked: true),
-            _buildStaticChip('SL', false, isLocked: true),
-            _buildStaticChip('SLM', false, isLocked: true),
+            _buildChipSkeleton(isSelected: true), // MKT — active
+            _buildChipSkeleton(isLocked: true),
+            _buildChipSkeleton(isLocked: true),
+            _buildChipSkeleton(isLocked: true),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildStaticChip(String type, bool isSelected,
-      {bool isLocked = false}) {
+  Widget _buildChipSkeleton({bool isSelected = false, bool isLocked = false}) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
         color: isSelected
-            ? (widget.isDark ? Colors.blue.shade700 : Colors.blue.shade600)
-            : (widget.isDark ? const Color(0xFF1E1E1E) : Colors.white),
-        borderRadius: BorderRadius.circular(20),
+            ? const Color(0xFF10B981)
+            : (widget.isDark ? const Color(0xFF111111) : Colors.white),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
-            color: isSelected
-                ? (widget.isDark ? Colors.blue.shade600 : Colors.blue.shade500)
-                : (widget.isDark
-                    ? const Color(0xFF2E2E2E)
-                    : Colors.grey.shade300)),
+          color: isSelected
+              ? Colors.transparent
+              : (widget.isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : Colors.black.withOpacity(0.05)),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            type,
-            style: TextStyle(
-              color: isSelected
-                  ? Colors.white
-                  : isLocked
-                      ? Colors.grey.shade600
-                      : (widget.isDark ? Colors.white70 : Colors.black87),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          // Shimmer bar instead of static text for unselected chips
+          isSelected
+              ? const Text(
+                  'MKT',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                    letterSpacing: 0.5,
+                  ),
+                )
+              : _shimmerBox(32, 14, borderRadius: 4),
+          if (isLocked) ...[
+            const SizedBox(width: 6),
+            Icon(
+              Icons.lock_rounded,
+              size: 14,
+              color: widget.isDark ? Colors.white24 : Colors.black26,
             ),
-          ),
-          if (isLocked)
-            const Padding(
-              padding: EdgeInsets.only(left: 6),
-              child: Icon(Icons.lock, size: 14, color: Colors.grey),
-            ),
+          ],
         ],
       ),
     );
   }
 
+  // ── Bottom bar skeleton ──────────────────────────────────────────────────────
   Widget _buildBottomBarSkeleton() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: widget.isDark ? const Color(0xFF1E1E1E) : Colors.white,
+        color: widget.isDark ? const Color(0xFF111111) : Colors.white,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
         border: Border(
           top: BorderSide(
-              color: widget.isDark
-                  ? const Color(0xFF2E2E2E)
-                  : const Color(0xFFE0E0E0)),
+            color: widget.isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
+          ),
         ),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const SizedBox(height: 12),
+          // Balance row
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Margin Required',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: widget.isDark ? Colors.grey[400] : Colors.grey[600],
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Balance',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: widget.isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _shimmerBox(90, 22, borderRadius: 6),
+                ],
               ),
-              _buildShimmerBox(80, 20, borderRadius: 6),
+              Icon(
+                Icons.arrow_forward_rounded,
+                color: widget.isDark ? Colors.white24 : Colors.black26,
+                size: 20,
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'After Order',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: widget.isDark ? Colors.white38 : Colors.black38,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _shimmerBox(90, 22, borderRadius: 6),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          // Static BUY button appearance
+          const SizedBox(height: 20),
+          // Margin row
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: widget.isDark
+                  ? Colors.white.withOpacity(0.03)
+                  : Colors.black.withOpacity(0.02),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Margin Required',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: widget.isDark ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                _shimmerBox(80, 18, borderRadius: 5),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+          // CTA button
           Container(
             width: double.infinity,
-            height: 52,
+            height: 56,
             decoration: BoxDecoration(
-              color: Colors.green.shade600,
-              borderRadius: BorderRadius.circular(12),
+              color: const Color(0xFF10B981),
+              borderRadius: BorderRadius.circular(16),
             ),
             child: const Center(
               child: Text(
                 'BUY',
                 style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 32),
         ],
       ),
     );
+  }
+
+// ── Root build ───────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            physics: const NeverScrollableScrollPhysics(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildStockHeaderSkeleton(),
+
+                // Match the exact padding wrapper from the real UI
+                Padding(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildOrderTypeSkeleton(),
+                      const SizedBox(height: 24),
+
+                      // Removed extra inner Padding here to match the main layout
+                      _buildQuantitySkeleton(),
+                      const SizedBox(height: 24),
+
+                      // Moved Price Type inside the same block with equal spacing
+                      _buildPriceTypeSkeleton(),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        _buildBottomBarSkeleton(),
+      ],
+    );
+  }
+}
+
+// ── Gradient slide transform ─────────────────────────────────────────────────
+class _SlidingGradientTransform extends GradientTransform {
+  final double slidePercent;
+  const _SlidingGradientTransform(this.slidePercent);
+
+  @override
+  Matrix4? transform(Rect bounds, {TextDirection? textDirection}) {
+    return Matrix4.translationValues(bounds.width * slidePercent, 0, 0);
   }
 }

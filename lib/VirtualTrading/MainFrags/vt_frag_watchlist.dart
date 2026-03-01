@@ -474,7 +474,7 @@ class _FNOShimmerLoaderState extends State<FNOShimmerLoader>
   Widget build(BuildContext context) {
     return ListView.builder(
       itemCount: 8,
-      padding: const EdgeInsets.all(16),
+      // padding: const EdgeInsets.all(16),
       itemBuilder: (context, index) {
         return AnimatedBuilder(
           animation: _animation,
@@ -490,15 +490,15 @@ class _FNOShimmerLoaderState extends State<FNOShimmerLoader>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).dividerColor,
-          width: 1,
-        ),
-      ),
+      // margin: const EdgeInsets.only(bottom: 12),
+      // decoration: BoxDecoration(
+      //   color: Theme.of(context).cardColor,
+      //   borderRadius: BorderRadius.circular(16),
+      //   border: Border.all(
+      //     color: Theme.of(context).dividerColor,
+      //     width: 1,
+      //   ),
+      // ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(

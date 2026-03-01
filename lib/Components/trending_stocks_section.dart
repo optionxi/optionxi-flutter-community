@@ -17,16 +17,13 @@ class TrendingStocksSection extends StatefulWidget {
 class _TrendingStocksSectionState extends State<TrendingStocksSection>
     with TickerProviderStateMixin {
   late AnimationController _fadeController;
-  late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
-  late Animation<Offset> _slideAnimation;
 
   List<StockData> bullishStocks = [];
   List<StockData> bearishStocks = [];
   bool isLoading = true;
   String? error;
 
-  // Add these for authentication handling
   StreamSubscription<User?>? _authSubscription;
   bool _isUserAuthenticated = false;
 
@@ -39,45 +36,22 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
 
   void _initializeAnimations() {
     _fadeController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
-
-    _slideController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
-
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
+    _fadeAnimation = CurvedAnimation(
       parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.3),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
+      curve: Curves.easeOut,
+    );
   }
 
-  // Method 1: Check authentication before fetching data
   void _checkAuthAndFetchData() {
-    // Listen to auth state changes
     _authSubscription =
         FirebaseAuth.instance.authStateChanges().listen((User? user) {
       if (user != null) {
-        // User is authenticated, safe to fetch data
         _isUserAuthenticated = true;
-        if (mounted) {
-          _fetchTrendingStocks();
-        }
+        if (mounted) _fetchTrendingStocks();
       } else {
-        // User is not authenticated
         _isUserAuthenticated = false;
         if (mounted) {
           setState(() {
@@ -89,37 +63,7 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
     });
   }
 
-  // // Method 2: Alternative - Wait for authentication then fetch
-  // Future<void> _waitForAuthAndFetch() async {
-  //   try {
-  //     // Wait for current user to be available
-  //     User? currentUser = FirebaseAuth.instance.currentUser;
-
-  //     if (currentUser == null) {
-  //       // Wait for auth state to change
-  //       await FirebaseAuth.instance.authStateChanges().first;
-  //       currentUser = FirebaseAuth.instance.currentUser;
-  //     }
-
-  //     if (currentUser != null) {
-  //       _isUserAuthenticated = true;
-  //       await _fetchTrendingStocks();
-  //     } else {
-  //       setState(() {
-  //         error = 'Authentication required';
-  //         isLoading = false;
-  //       });
-  //     }
-  //   } catch (e) {
-  //     setState(() {
-  //       error = 'Authentication error: ${e.toString()}';
-  //       isLoading = false;
-  //     });
-  //   }
-  // }
-
   Future<void> _fetchTrendingStocks() async {
-    // Double-check authentication before proceeding
     if (!_isUserAuthenticated || FirebaseAuth.instance.currentUser == null) {
       setState(() {
         error = 'User not authenticated';
@@ -140,66 +84,49 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
 
       if (snapshot.exists && snapshot.value != null) {
         final data = snapshot.value as Map<dynamic, dynamic>;
-
-        // Parse AI recommended stocks with new structure
         final aiRecommendedStocks =
             data['ai_recommended_stocks'] as Map<dynamic, dynamic>?;
 
         if (aiRecommendedStocks != null) {
-          // Extract bullish stocks from bullish_long_positions
           final bullishPositions =
               aiRecommendedStocks['bullish_long_positions'] as List<dynamic>?;
-
-          // Extract bearish stocks from bearish_short_positions
           final bearishPositions =
               aiRecommendedStocks['bearish_short_positions'] as List<dynamic>?;
 
           if (mounted) {
+            final parsedBullish = bullishPositions
+                    ?.map((stock) => StockData.fromRealtimeDatabase(
+                        stock as Map<dynamic, dynamic>))
+                    .toList() ??
+                [];
+            final parsedBearish = bearishPositions
+                    ?.map((stock) => StockData.fromRealtimeDatabase(
+                        stock as Map<dynamic, dynamic>))
+                    .toList() ??
+                [];
+
+            // Sort by highest absolute percent change
+            parsedBullish.sort((a, b) => b.pcnt.abs().compareTo(a.pcnt.abs()));
+            parsedBearish.sort((a, b) => b.pcnt.abs().compareTo(a.pcnt.abs()));
+
             setState(() {
-              // Parse bullish stocks
-              bullishStocks = bullishPositions
-                      ?.map((stock) => StockData.fromRealtimeDatabase(
-                          stock as Map<dynamic, dynamic>))
-                      .toList() ??
-                  [];
-
-              // Parse bearish stocks
-              bearishStocks = bearishPositions
-                      ?.map((stock) => StockData.fromRealtimeDatabase(
-                          stock as Map<dynamic, dynamic>))
-                      .toList() ??
-                  [];
-
+              bullishStocks = parsedBullish;
+              bearishStocks = parsedBearish;
               isLoading = false;
             });
 
-            // Start animations once data is loaded
             _fadeController.forward();
-            await Future.delayed(const Duration(milliseconds: 200));
-            if (mounted) {
-              _slideController.forward();
-            }
           }
         } else {
-          if (mounted) {
-            setState(() {
-              // error = 'No stock data available';
-              isLoading = false;
-            });
-          }
+          if (mounted) setState(() => isLoading = false);
         }
       } else {
-        if (mounted) {
-          setState(() {
-            // error = 'No trending stocks found';
-            isLoading = false;
-          });
-        }
+        if (mounted) setState(() => isLoading = false);
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          error = 'Failed to load trending stocks: ${e.toString()}';
+          error = 'Failed to load trending stocks';
           isLoading = false;
         });
       }
@@ -210,208 +137,225 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
   void dispose() {
     _authSubscription?.cancel();
     _fadeController.dispose();
-    _slideController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return _buildLoadingAnimation();
-    }
+    if (isLoading) return _buildSkeleton();
+    if (error != null) return _buildErrorWidget();
 
-    if (error != null) {
-      return _buildErrorWidget();
+    final hasBullish = bullishStocks.isNotEmpty;
+    final hasBearish = bearishStocks.isNotEmpty;
+
+    if (!hasBullish && !hasBearish) {
+      return const _EmptyState();
     }
 
     return FadeTransition(
       opacity: _fadeAnimation,
-      child: SlideTransition(
-        position: _slideAnimation,
-        child: Container(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(context),
-              const SizedBox(height: 20),
-              if (bullishStocks.isNotEmpty) ...[
-                _buildSectionTitle(
-                    context, 'Bullish Stocks', Icons.trending_up, Colors.green),
-                const SizedBox(height: 12),
-                _buildStocksList(bullishStocks, true),
-                const SizedBox(height: 24),
-              ],
-              if (bearishStocks.isNotEmpty) ...[
-                _buildSectionTitle(
-                    context, 'Bearish Stocks', Icons.trending_down, Colors.red),
-                const SizedBox(height: 12),
-                _buildStocksList(bearishStocks, false),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLoadingAnimation() {
-    return Container(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          _buildLoadingHeader(),
+          _buildHeader(context),
           const SizedBox(height: 20),
-          _buildLoadingSection('Bullish Stocks'),
-          const SizedBox(height: 24),
-          _buildLoadingSection('Bearish Stocks'),
+          if (hasBullish) ...[
+            _buildSectionLabel(context, isBullish: true),
+            const SizedBox(height: 10),
+            ...bullishStocks.asMap().entries.map(
+                  (e) => _AnimatedStockCard(
+                    key: ValueKey('bull_${e.value.symbol}'),
+                    stock: e.value,
+                    isBullish: true,
+                    delay: Duration(milliseconds: e.key * 60),
+                  ),
+                ),
+          ],
+          if (hasBullish && hasBearish) const SizedBox(height: 20),
+          if (hasBearish) ...[
+            _buildSectionLabel(context, isBullish: false),
+            const SizedBox(height: 10),
+            ...bearishStocks.asMap().entries.map(
+                  (e) => _AnimatedStockCard(
+                    key: ValueKey('bear_${e.value.symbol}'),
+                    stock: e.value,
+                    isBullish: false,
+                    delay: Duration(
+                        milliseconds:
+                            (hasBullish ? bullishStocks.length : 0) * 60 +
+                                e.key * 60),
+                  ),
+                ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildLoadingHeader() {
+  Widget _buildSectionLabel(BuildContext context, {required bool isBullish}) {
+    final theme = Theme.of(context);
+    final color = isBullish ? const Color(0xFF00C896) : const Color(0xFFFF5B6B);
+    final bgColor = color.withOpacity(0.08);
+    final icon =
+        isBullish ? Icons.trending_up_rounded : Icons.trending_down_rounded;
+    final label = isBullish ? 'Bullish Picks' : 'Bearish Picks';
+    final count = isBullish ? bullishStocks.length : bearishStocks.length;
+
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildAnimatedPlaceholder(width: 150, height: 24),
-            const SizedBox(height: 4),
-            _buildAnimatedPlaceholder(width: 200, height: 16),
-          ],
-        ),
-        _buildAnimatedPlaceholder(width: 70, height: 36),
-      ],
-    );
-  }
-
-  Widget _buildLoadingSection(String title) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            _buildAnimatedPlaceholder(width: 20, height: 20, isCircle: true),
-            const SizedBox(width: 8),
-            _buildAnimatedPlaceholder(width: 120, height: 20),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 220,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            itemCount: 3,
-            itemBuilder: (context, index) => _buildLoadingCard(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: color.withOpacity(0.25), width: 1),
           ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoadingCard() {
-    return Container(
-      width: 280,
-      margin: const EdgeInsets.only(right: 16),
-      child: Card(
-        elevation: 2,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _buildAnimatedPlaceholder(width: 120, height: 20),
-                  _buildAnimatedPlaceholder(width: 60, height: 24),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildAnimatedPlaceholder(width: 80, height: 24),
-                  const SizedBox(width: 8),
-                  _buildAnimatedPlaceholder(width: 50, height: 20),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildAnimatedPlaceholder(width: 200, height: 16),
-              const SizedBox(height: 4),
-              _buildAnimatedPlaceholder(width: 150, height: 16),
-              const SizedBox(height: 4),
-              _buildAnimatedPlaceholder(width: 180, height: 16),
-              const Spacer(),
-              Row(
-                children: [
-                  _buildAnimatedPlaceholder(
-                      width: 16, height: 16, isCircle: true),
-                  const SizedBox(width: 4),
-                  _buildAnimatedPlaceholder(width: 80, height: 16),
-                  const Spacer(),
-                  _buildAnimatedPlaceholder(
-                      width: 14, height: 14, isCircle: true),
-                ],
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 5),
+              Text(
+                label,
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
               ),
             ],
           ),
         ),
-      ),
+        const SizedBox(width: 8),
+        Container(
+          width: 22,
+          height: 22,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.12),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(
+              '$count',
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _buildAnimatedPlaceholder({
-    required double width,
-    required double height,
-    bool isCircle = false,
-  }) {
-    return TweenAnimationBuilder<double>(
-      duration: const Duration(milliseconds: 1200),
-      tween: Tween(begin: 0.3, end: 1.0),
-      builder: (context, value, child) {
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 800),
-          width: width,
-          height: height,
-          decoration: BoxDecoration(
-            color: Theme.of(context)
-                .colorScheme
-                .onSurface
-                .withOpacity(0.1 * value),
-            borderRadius: isCircle
-                ? BorderRadius.circular(height / 2)
-                : BorderRadius.circular(8),
+  Widget _buildHeader(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Trending Stocks',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'AI-powered technical analysis',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.5),
+              ),
+            ),
+          ],
+        ),
+        TextButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const TopRecommendedStockPage()),
           ),
-        );
-      },
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+              side: BorderSide(
+                color: theme.colorScheme.outline.withOpacity(0.3),
+              ),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'View All',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.arrow_forward_ios_rounded,
+                  size: 10,
+                  color: theme.colorScheme.onSurface.withOpacity(0.6)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSkeleton() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildHeader(context),
+        const SizedBox(height: 20),
+        _SkeletonLoader(width: 120, height: 28, radius: 20),
+        const SizedBox(height: 10),
+        const _SkeletonCard(),
+        const SizedBox(height: 8),
+        const _SkeletonCard(),
+        const SizedBox(height: 20),
+        _SkeletonLoader(width: 120, height: 28, radius: 20),
+        const SizedBox(height: 10),
+        const _SkeletonCard(),
+      ],
     );
   }
 
   Widget _buildErrorWidget() {
+    final theme = Theme.of(context);
     return Container(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.error_outline,
-            size: 48,
-            color: Theme.of(context).colorScheme.error,
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.error.withOpacity(0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.wifi_off_rounded,
+                size: 26, color: theme.colorScheme.error),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           Text(
             error!,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurface.withOpacity(0.7),
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 16),
-          ElevatedButton(
+          FilledButton.icon(
             onPressed: () {
               setState(() {
                 isLoading = true;
@@ -419,301 +363,438 @@ class _TrendingStocksSectionState extends State<TrendingStocksSection>
               });
               _checkAuthAndFetchData();
             },
-            child: const Text('Retry'),
+            icon: const Icon(Icons.refresh_rounded, size: 16),
+            label: const Text('Retry'),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Trending Stocks',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Powered by technical analysis',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.7),
-                  ),
-            ),
-          ],
-        ),
-        TextButton(
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => const TopRecommendedStockPage(),
-              ),
-            );
-          },
-          child: const Text('View All'),
-        ),
-      ],
-    );
+// ─── Animated Stock Card ────────────────────────────────────────────────────
+
+class _AnimatedStockCard extends StatefulWidget {
+  final StockData stock;
+  final bool isBullish;
+  final Duration delay;
+
+  const _AnimatedStockCard({
+    Key? key,
+    required this.stock,
+    required this.isBullish,
+    required this.delay,
+  }) : super(key: key);
+
+  @override
+  State<_AnimatedStockCard> createState() => _AnimatedStockCardState();
+}
+
+class _AnimatedStockCardState extends State<_AnimatedStockCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _slide;
+  late Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 450));
+    _slide = Tween<double>(begin: 24, end: 0)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+
+    Future.delayed(widget.delay, () {
+      if (mounted) _ctrl.forward();
+    });
   }
 
-  Widget _buildSectionTitle(
-      BuildContext context, String title, IconData icon, Color color) {
-    return Row(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          title,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-      ],
-    );
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
   }
 
-  Widget _buildStocksList(List<StockData> stocks, bool isBullish) {
-    return SizedBox(
-      height: 230,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: stocks.length,
-        itemBuilder: (context, index) {
-          return TweenAnimationBuilder<double>(
-            duration: Duration(milliseconds: 600 + (index * 100)),
-            tween: Tween(begin: 0.0, end: 1.0),
-            builder: (context, value, child) {
-              return Transform.translate(
-                offset: Offset(0, 20 * (1 - value)),
-                child: Opacity(
-                  opacity: value,
-                  child: _buildStockCard(context, stocks[index], isBullish),
-                ),
-              );
-            },
-          );
-        },
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (context, child) => Transform.translate(
+        offset: Offset(0, _slide.value),
+        child: Opacity(opacity: _fade.value, child: child),
       ),
-    );
-  }
-
-  Widget _buildStockCard(
-      BuildContext context, StockData stock, bool isBullish) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return Container(
-      width: 300,
-      margin: const EdgeInsets.only(right: 16),
-      child: Card(
-        elevation: isDark ? 8 : 2,
-        shadowColor: isDark
-            ? Colors.black.withOpacity(0.3)
-            : Colors.grey.withOpacity(0.2),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => TopRecommendedStockPage(stock: stock),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [
-                        theme.colorScheme.surface,
-                        theme.colorScheme.surface.withOpacity(0.8),
-                      ]
-                    : [
-                        Colors.white,
-                        Colors.grey.shade50,
-                      ],
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Stock Icon
-                    Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: CachedNetworkImage(
-                          height: 48,
-                          width: 48,
-                          imageUrl:
-                              "${Constants.OptionXiS3Loc}${stock.symbol.replaceAll('-EQ', '').replaceAll('-BZ', '').replaceAll('NSE:', '')}.png",
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Image.asset(
-                            'assets/images/stockdefault.png',
-                            fit: BoxFit.cover,
-                          ),
-                          errorWidget: (context, url, error) => Image.asset(
-                            'assets/images/stockdefault.png',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 8,
-                    ),
-                    Expanded(
-                      child: Text(
-                        stock.symbol
-                            .replaceAll('-EQ', '')
-                            .replaceAll('-BZ', '')
-                            .replaceAll('NSE:', ''),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isBullish
-                            ? Colors.green.withOpacity(0.1)
-                            : Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        stock.sentiment.replaceAll('ISH', ''),
-                        style: TextStyle(
-                          color: isBullish ? Colors.green : Colors.red,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(
-                      '₹${stock.price.toStringAsFixed(2)}',
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: stock.pcnt >= 0 ? Colors.green : Colors.red,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        '${stock.pcnt >= 0 ? '+' : ''}${stock.pcnt.toStringAsFixed(2)}%',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                if (stock.sector != 'N/A') ...[
-                  _buildInfoRow(context, 'Sector', stock.sector),
-                  const SizedBox(height: 4),
-                ],
-                _buildInfoRow(context, 'Risk Level', stock.riskLevel),
-                _buildInfoRow(context, 'Signal', stock.signalStrength),
-                const Spacer(),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.analytics,
-                      size: 16,
-                      color: theme.colorScheme.primary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${stock.dataChecked.length} signals',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Spacer(),
-                    Icon(
-                      Icons.arrow_forward_ios,
-                      size: 14,
-                      color: theme.colorScheme.onSurface.withOpacity(0.5),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(BuildContext context, String label, String value) {
-    return Row(
-      children: [
-        Text(
-          '$label: ',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-        ),
-      ],
+      child: _StockCard(stock: widget.stock, isBullish: widget.isBullish),
     );
   }
 }
 
-// StockData class remains the same
+// ─── Stock Card ─────────────────────────────────────────────────────────────
+
+class _StockCard extends StatelessWidget {
+  final StockData stock;
+  final bool isBullish;
+
+  const _StockCard({required this.stock, required this.isBullish});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final accentColor =
+        isBullish ? const Color(0xFF00C896) : const Color(0xFFFF5B6B);
+    final cleanSymbol = stock.symbol
+        .replaceAll('-EQ', '')
+        .replaceAll('-BZ', '')
+        .replaceAll('NSE:', '');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => TopRecommendedStockPage(stock: stock)),
+          ),
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark
+                  ? theme.colorScheme.surface.withOpacity(0.9)
+                  : theme.colorScheme.surface,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.06)
+                    : Colors.black.withOpacity(0.06),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.25)
+                      : Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Row(
+                children: [
+                  // Left accent bar
+                  Container(
+                    width: 3,
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: accentColor,
+                      borderRadius: BorderRadius.circular(99),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Logo
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(10),
+                      color: isDark
+                          ? Colors.white.withOpacity(0.06)
+                          : Colors.grey.shade100,
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: CachedNetworkImage(
+                      imageUrl: "${Constants.OptionXiS3Loc}$cleanSymbol.png",
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) =>
+                          _StockLogoFallback(symbol: cleanSymbol),
+                      errorWidget: (_, __, ___) =>
+                          _StockLogoFallback(symbol: cleanSymbol),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+
+                  // Name + sector
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          cleanSymbol,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: -0.2,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (stock.sector != 'N/A') ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            stock.sector,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color:
+                                  theme.colorScheme.onSurface.withOpacity(0.45),
+                              fontSize: 11,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // Signal strength badge
+                  if (stock.signalStrength.isNotEmpty)
+                    _SignalBadge(strength: stock.signalStrength),
+
+                  const SizedBox(width: 10),
+
+                  // Price + percent
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '₹${stock.price.toStringAsFixed(2)}',
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      _PctBadge(pcnt: stock.pcnt, color: accentColor),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Sub-widgets ─────────────────────────────────────────────────────────────
+
+class _StockLogoFallback extends StatelessWidget {
+  final String symbol;
+  const _StockLogoFallback({required this.symbol});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Text(
+        symbol.isNotEmpty ? symbol[0] : '?',
+        style: TextStyle(
+          fontWeight: FontWeight.w800,
+          fontSize: 16,
+          color: theme.colorScheme.onSurface.withOpacity(0.5),
+        ),
+      ),
+    );
+  }
+}
+
+class _PctBadge extends StatelessWidget {
+  final double pcnt;
+  final Color color;
+  const _PctBadge({required this.pcnt, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        '${pcnt >= 0 ? '+' : ''}${pcnt.toStringAsFixed(2)}%',
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _SignalBadge extends StatelessWidget {
+  final String strength;
+  const _SignalBadge({required this.strength});
+
+  static Color _colorFor(String s) {
+    switch (s.toLowerCase()) {
+      case 'strong':
+        return const Color(0xFF00C896);
+      case 'weak':
+        return const Color(0xFFFF8C42);
+      default:
+        return const Color(0xFF5B8CFF);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorFor(strength);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(5),
+        border: Border.all(color: color.withOpacity(0.2)),
+      ),
+      child: Text(
+        strength,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.bar_chart_rounded,
+                size: 40, color: theme.colorScheme.onSurface.withOpacity(0.2)),
+            const SizedBox(height: 10),
+            Text(
+              'No trending stocks right now',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.4),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+class _SkeletonLoader extends StatefulWidget {
+  final double width;
+  final double height;
+  final double radius;
+  const _SkeletonLoader(
+      {required this.width, required this.height, this.radius = 8});
+
+  @override
+  State<_SkeletonLoader> createState() => _SkeletonLoaderState();
+}
+
+class _SkeletonLoaderState extends State<_SkeletonLoader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1000))
+      ..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.4, end: 0.9)
+        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: (isDark ? Colors.white : Colors.black)
+              .withOpacity(0.07 * _anim.value * 1.5),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonCard extends StatelessWidget {
+  const _SkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark
+              ? Colors.white.withOpacity(0.04)
+              : Colors.black.withOpacity(0.03),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.black.withOpacity(0.05),
+          ),
+        ),
+        child: Row(
+          children: [
+            _SkeletonLoader(width: 3, height: 42, radius: 99),
+            const SizedBox(width: 12),
+            _SkeletonLoader(width: 40, height: 40, radius: 10),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _SkeletonLoader(width: 90, height: 14),
+                  const SizedBox(height: 6),
+                  _SkeletonLoader(width: 120, height: 11),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                _SkeletonLoader(width: 64, height: 14),
+                const SizedBox(height: 5),
+                _SkeletonLoader(width: 50, height: 22, radius: 6),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── StockData Model ─────────────────────────────────────────────────────────
+
 class StockData {
   final String symbol;
   final double price;

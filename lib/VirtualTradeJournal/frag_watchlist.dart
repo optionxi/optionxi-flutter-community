@@ -5,7 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Components/custom_searchbar.dart';
 import 'package:optionxi/Components/custom_watchlist_item.dart';
 import 'package:optionxi/Controllers/watchlist_controller.dart';
-import 'package:optionxi/Main_Pages/act_search_stocks.dart';
+import 'package:optionxi/Main_Pages/act_search_stocks_meili.dart';
 
 class WatchlistFragment extends StatefulWidget {
   const WatchlistFragment({Key? key}) : super(key: key);
@@ -36,14 +36,10 @@ class _WatchlistFragmentState extends State<WatchlistFragment> {
       body: SafeArea(
         child: CustomScrollView(
           slivers: [
-            SliverToBoxAdapter(child: _buildHeader(context)),
+            // SliverToBoxAdapter(child: _buildHeader(context)),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 16, 8),
-              sliver: Obx(() =>
-                  watchlistController.filteredWatchlistStocks.isNotEmpty
-                      ? SliverToBoxAdapter(child: _buildSearchBar(context))
-                      : const SliverToBoxAdapter(child: SizedBox.shrink())),
-            ),
+                padding: const EdgeInsets.fromLTRB(8, 0, 16, 8),
+                sliver: SliverToBoxAdapter(child: _buildSearchBar(context))),
             Obx(() {
               if (watchlistController.isLoading.value) {
                 return const SliverFillRemaining(
@@ -89,42 +85,12 @@ class _WatchlistFragmentState extends State<WatchlistFragment> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            'Watchlist',
-            style: GoogleFonts.poppins(
-              fontSize: 28,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).textTheme.titleLarge?.color,
-            ),
-          ),
-          IconButton(
-            icon: Icon(Icons.add, color: Theme.of(context).iconTheme.color),
-            onPressed: () async {
-              await Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => StockSearchPage(true)),
-              );
-              // Refresh the watchlist after returning from StockSearchPage
-              await watchlistController.loadWatchlist();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSearchBar(BuildContext context) {
     return GestureDetector(
       onTap: () async {
         await Navigator.push(
           context,
-          MaterialPageRoute(builder: (context) => StockSearchPage(true)),
+          MaterialPageRoute(builder: (context) => AllSearchPageMeili()),
         );
         // Optionally refresh watchlist after returning
         await watchlistController.loadWatchlist();
@@ -200,7 +166,7 @@ class _WatchlistFragmentState extends State<WatchlistFragment> {
             onPressed: () async {
               await Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => StockSearchPage(true)),
+                MaterialPageRoute(builder: (context) => AllSearchPageMeili()),
               );
               setState(() {
                 watchlistController.loadWatchlist();
@@ -298,15 +264,15 @@ class _WatchlistShimmerLoaderState extends State<WatchlistShimmerLoader>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).dividerColor,
-          width: 1,
-        ),
-      ),
+      // margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      // decoration: BoxDecoration(
+      //   color: Theme.of(context).cardColor,
+      //   borderRadius: BorderRadius.circular(16),
+      //   border: Border.all(
+      //     color: Theme.of(context).dividerColor,
+      //     width: 1,
+      //   ),
+      // ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(

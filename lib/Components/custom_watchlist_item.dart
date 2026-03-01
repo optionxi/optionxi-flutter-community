@@ -61,14 +61,15 @@ class _WatchlistItemState extends State<WatchlistItem> {
     return Slidable(
       endActionPane: ActionPane(
         motion: const ScrollMotion(),
+        extentRatio: 0.4, // Add this to control slide distance
         children: [
           SlidableAction(
             onPressed: (context) => _showStockDialog(widget.stock, context),
             backgroundColor:
                 isDark ? const Color(0xFF1E4731) : Colors.green.shade100,
             foregroundColor: isDark ? Colors.green[100] : Colors.green[800],
-            icon: Icons.add_rounded,
-            label: 'Info',
+            icon: Icons.remove_red_eye,
+            // label: 'Info',
             borderRadius:
                 const BorderRadius.horizontal(left: Radius.circular(16)),
           ),
@@ -79,13 +80,13 @@ class _WatchlistItemState extends State<WatchlistItem> {
                 isDark ? const Color(0xFF4A1F23) : Colors.red.shade100,
             foregroundColor: isDark ? Colors.red[100] : Colors.red[800],
             icon: Icons.delete_rounded,
-            label: 'Remove',
+            // label: 'Remove',
             borderRadius:
                 const BorderRadius.horizontal(right: Radius.circular(16)),
           ),
         ],
       ),
-      child: GestureDetector(
+      child: InkWell(
         onTap: () => _showStockDialog(widget.stock, context),
         child: stockLogo(context, isPositiveChange, isDark),
       ),
@@ -100,17 +101,8 @@ class _WatchlistItemState extends State<WatchlistItem> {
     );
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Theme.of(context).dividerColor,
-          width: 1,
-        ),
-      ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(8),
         child: Row(
           children: [
             CachedNetworkImage(
@@ -171,7 +163,7 @@ class _WatchlistItemState extends State<WatchlistItem> {
                     children: [
                       Expanded(
                         child: Text(
-                          widget.stock.stckname,
+                          "Vol: " + formatVolume(widget.stock.vol),
                           style: TextStyle(
                             color:
                                 Theme.of(context).textTheme.titleSmall?.color,
@@ -336,14 +328,14 @@ class _WatchlistItemState extends State<WatchlistItem> {
                               ),
                             ],
                           ),
-                          Text(
-                            stock.stckname,
-                            style: TextStyle(
-                              color:
-                                  Theme.of(context).textTheme.titleSmall?.color,
-                              fontSize: 14,
-                            ),
-                          ),
+                          // Text(
+                          //   stock.stckname,
+                          //   style: TextStyle(
+                          //     color:
+                          //         Theme.of(context).textTheme.titleSmall?.color,
+                          //     fontSize: 14,
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),
@@ -483,14 +475,12 @@ class _WatchlistItemState extends State<WatchlistItem> {
             // Add haptic feedback for better UX
             HapticFeedback.lightImpact();
 
-            await Navigator.push(
+            Navigator.push(
               context,
               MaterialPageRoute(
                 builder: (context) => AddToBasketPage(stock: stock),
               ),
             );
-
-            Navigator.pop(context);
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -528,7 +518,7 @@ class _WatchlistItemState extends State<WatchlistItem> {
                         ),
                       ),
                       Text(
-                        'Track performance without real investment',
+                        'Track performance virtually',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w400,

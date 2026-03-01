@@ -69,6 +69,34 @@ class DataStockModel {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Design tokens
+// ─────────────────────────────────────────────────────────────────────────────
+class _AppColors {
+  // Bullish palette
+  static const bullishPrimary = Color(0xFF00C896);
+  static const bullishLight = Color(0xFFE6FAF5);
+
+  // Bearish palette
+  static const bearishPrimary = Color(0xFFFF4D6D);
+  static const bearishLight = Color(0xFFFFEBEE);
+
+  // Neutrals
+  static const surface = Color(0xFFF8F9FB);
+  static const surfaceDark = Color(0xFF0F1117);
+  static const cardLight = Color(0xFFFFFFFF);
+  static const cardDark = Color(0xFF1A1D27);
+  static const borderLight = Color(0xFFE8ECF0);
+  static const borderDark = Color(0xFF272B3A);
+  static const textPrimaryLight = Color(0xFF0D1117);
+  static const textPrimaryDark = Color(0xFFF0F2F5);
+  static const textSecondaryLight = Color(0xFF6B7280);
+  static const textSecondaryDark = Color(0xFF8B92A5);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Main Page
+// ─────────────────────────────────────────────────────────────────────────────
 class ScannerDetailPage extends StatefulWidget {
   final String scanName;
   final String? category;
@@ -87,13 +115,14 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
     with SingleTickerProviderStateMixin {
   final SupabaseClient _supabase = Supabase.instance.client;
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  final ScrollController _chipScrollController = ScrollController();
 
   String _selectedCategory = 'bullish';
   List<Screener> _screeners = [];
   String _selectedScreenerId = '';
   bool _isLoadingScreeners = true;
 
-  // Stock results variables
   List<DataStockModel> _stocks = [];
   bool _isLoadingStocks = true;
   String _search = '';
@@ -117,15 +146,14 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
+    _chipScrollController.dispose();
     super.dispose();
   }
 
   Future<void> _loadScreeners() async {
     if (!mounted) return;
-
-    setState(() {
-      _isLoadingScreeners = true;
-    });
+    setState(() => _isLoadingScreeners = true);
 
     try {
       final response = await _supabase
@@ -135,17 +163,14 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
           .order('timeframe', ascending: true)
           .order('created_at', ascending: false);
 
-      final List<Screener> fetchedScreeners =
+      final fetchedScreeners =
           (response as List).map((item) => Screener.fromJson(item)).toList();
 
       if (mounted) {
         setState(() {
           _screeners = fetchedScreeners;
-
-          final matchingScreener = fetchedScreeners.firstWhere(
-            (screener) =>
-                screener.name.toLowerCase().replaceAll(' ', '-') ==
-                widget.scanName,
+          final match = fetchedScreeners.firstWhere(
+            (s) => s.name.toLowerCase().replaceAll(' ', '-') == widget.scanName,
             orElse: () => fetchedScreeners.isNotEmpty
                 ? fetchedScreeners.first
                 : Screener(
@@ -155,42 +180,26 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
                     timeframe: '',
                     createdAt: DateTime.now()),
           );
-
-          if (matchingScreener.id.isNotEmpty) {
-            _selectedScreenerId = matchingScreener.id;
-          } else if (fetchedScreeners.isNotEmpty) {
-            _selectedScreenerId = fetchedScreeners.first.id;
-          }
+          _selectedScreenerId =
+              match.id.isNotEmpty && fetchedScreeners.isNotEmpty
+                  ? match.id
+                  : fetchedScreeners.isNotEmpty
+                      ? fetchedScreeners.first.id
+                      : '';
         });
       }
-    } catch (error) {
-      debugPrint('Error fetching screeners: $error');
-      if (mounted) {
-        setState(() {
-          _screeners = [];
-        });
-      }
+    } catch (e) {
+      debugPrint('Error fetching screeners: $e');
+      if (mounted) setState(() => _screeners = []);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingScreeners = false;
-        });
-      }
-
-      if (_selectedScreenerId.isNotEmpty && mounted) {
-        _loadScreenerResults();
-      }
+      if (mounted) setState(() => _isLoadingScreeners = false);
+      if (_selectedScreenerId.isNotEmpty && mounted) _loadScreenerResults();
     }
   }
 
   Future<void> _loadScreenerResults() async {
     if (_selectedScreenerId.isEmpty || !mounted) return;
-
-    if (mounted) {
-      setState(() {
-        _isLoadingStocks = true;
-      });
-    }
+    if (mounted) setState(() => _isLoadingStocks = true);
 
     try {
       final countQuery = _supabase
@@ -198,75 +207,68 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
           .select()
           .eq('screener_id', _selectedScreenerId);
 
-      final countQueryWithSearch = _search.trim().isNotEmpty
+      final countWithSearch = _search.trim().isNotEmpty
           ? countQuery.ilike('stckname', '%${_search.trim().toUpperCase()}%')
           : countQuery;
 
-      final countResponse = await countQueryWithSearch;
+      final countResponse = await countWithSearch;
       if (!mounted) return;
-
-      final totalCount = countResponse.length;
+      final totalCount = (countResponse as List).length;
 
       final dataQuery = _supabase
           .from('screener_results')
           .select()
           .eq('screener_id', _selectedScreenerId);
 
-      final dataQueryWithSearch = _search.trim().isNotEmpty
+      final dataWithSearch = _search.trim().isNotEmpty
           ? dataQuery.ilike('stckname', '%${_search.trim().toUpperCase()}%')
           : dataQuery;
 
       final startIndex = (_currentPage - 1) * _pageSize;
-      final response = await dataQueryWithSearch
+      final response = await dataWithSearch
           .order('pcnt', ascending: _sortOrder == 'asc')
           .range(startIndex, startIndex + _pageSize - 1);
 
       if (!mounted) return;
-
-      final List<DataStockModel> transformedData = (response as List)
+      final transformed = (response as List)
           .map((item) => DataStockModel.fromJson(item))
           .toList();
 
       if (mounted) {
         setState(() {
-          _stocks = transformedData;
+          _stocks = transformed;
           _totalStocks = totalCount;
         });
       }
-    } catch (error) {
-      debugPrint('Error fetching screener results: $error');
-      if (mounted) {
+    } catch (e) {
+      debugPrint('Error fetching results: $e');
+      if (mounted)
         setState(() {
           _stocks = [];
           _totalStocks = 0;
         });
-      }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingStocks = false;
-        });
-      }
+      if (mounted) setState(() => _isLoadingStocks = false);
     }
   }
 
   void _handleCategoryChange(String value) {
     if (!mounted) return;
-
     setState(() {
       _selectedCategory = value;
+      _currentPage = 1;
+      _search = '';
+      _searchController.clear();
     });
-
     _loadScreeners();
   }
 
   void _handleScreenerChange(Screener screener) {
     if (!mounted) return;
-
     setState(() {
       _selectedScreenerId = screener.id;
+      _currentPage = 1;
     });
-
     _loadScreenerResults();
   }
 
@@ -279,9 +281,7 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
   }
 
   void _handlePageChange(int newPage) {
-    setState(() {
-      _currentPage = newPage;
-    });
+    setState(() => _currentPage = newPage);
     _loadScreenerResults();
   }
 
@@ -297,425 +297,666 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
     Get.toNamed('/stocks/${stock.stckname.toUpperCase()}');
   }
 
-  Widget _renderTimeframeIcon(String timeframe) {
-    const double iconSize = 16.0;
+  bool get _isBullish => _selectedCategory == 'bullish';
 
-    if (timeframe == 'daily') {
-      return Tooltip(
-        message: 'Daily timeframe',
-        child: Icon(Icons.calendar_today, size: iconSize),
-      );
-    } else if (timeframe == 'weekly') {
-      return Tooltip(
-        message: 'Weekly timeframe',
-        child: Icon(Icons.calendar_month, size: iconSize),
-      );
-    }
-    return const SizedBox.shrink();
-  }
+  Color get _accentColor =>
+      _isBullish ? _AppColors.bullishPrimary : _AppColors.bearishPrimary;
 
   @override
   Widget build(BuildContext context) {
-    final int totalPages = (_totalStocks / _pageSize).ceil();
-    final List<Screener> filteredScreeners =
-        _screeners.where((s) => s.category == _selectedCategory).toList();
     final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
+    final isDark = theme.brightness == Brightness.dark;
+    final totalPages = (_totalStocks / _pageSize).ceil();
+    final filteredScreeners =
+        _screeners.where((s) => s.category == _selectedCategory).toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Stock Screeners'),
-        elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          onTap: (index) {
-            _handleCategoryChange(index == 0 ? 'bullish' : 'bearish');
-          },
-          tabs: const [
-            Tab(
-              child: Text('BULLISH',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-            Tab(
-              child: Text('BEARISH',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-            ),
-          ],
-        ),
-      ),
+      backgroundColor: isDark ? _AppColors.surfaceDark : _AppColors.surface,
       body: SafeArea(
         child: Column(
           children: [
-            // Screener Chips
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              height: 60,
-              child: _isLoadingScreeners
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: filteredScreeners.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, index) {
-                        final screener = filteredScreeners[index];
-                        return ChoiceChip(
-                          label: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(screener.name),
-                              const SizedBox(width: 4),
-                              _renderTimeframeIcon(screener.timeframe),
-                            ],
-                          ),
-                          selected: _selectedScreenerId == screener.id,
-                          onSelected: (selected) {
-                            if (selected) {
-                              _handleScreenerChange(screener);
-                            }
-                          },
-                          selectedColor: theme.primaryColor,
-                          labelStyle: TextStyle(
-                            color: _selectedScreenerId == screener.id
-                                ? Colors.white
-                                : null,
-                          ),
-                        );
-                      },
-                    ),
-            ),
-
-            // Search and Sort Controls
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      decoration: InputDecoration(
-                        hintText: 'Search stocks...',
-                        prefixIcon: const Icon(Icons.search),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(vertical: 8),
-                        isDense: true,
-                      ),
-                      onChanged: _handleSearch,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Tooltip(
-                    message: 'Sort by percentage',
-                    child: InkWell(
-                      onTap: _handleSortToggle,
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color:
-                              isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.percent,
-                              size: 18,
-                              color: theme.iconTheme.color,
-                            ),
-                            const SizedBox(width: 4),
-                            Icon(
-                              _sortOrder == 'desc'
-                                  ? Icons.arrow_downward
-                                  : Icons.arrow_upward,
-                              size: 16,
-                              color: theme.iconTheme.color,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Results List
+            _buildHeader(isDark),
+            _buildTabBar(isDark),
+            _buildScreenerChips(filteredScreeners, isDark),
+            _buildSearchBar(isDark),
+            _buildResultsHeader(isDark),
             Expanded(
               child: _isLoadingStocks
                   ? const Center(child: StockListSkeleton())
                   : _stocks.isEmpty
-                      ? _buildNoResultsFound()
-                      : _buildStockList(),
+                      ? _buildEmptyState(isDark)
+                      : _buildStockList(isDark),
             ),
-
-            // Pagination
             if (!_isLoadingStocks && _stocks.isNotEmpty && totalPages > 1)
-              _buildPagination(totalPages),
+              _buildPagination(totalPages, isDark),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildNoResultsFound() {
-    final theme = Theme.of(context);
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+  // ── Header ─────────────────────────────────────────────────────────────────
+  Widget _buildHeader(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 16, 0),
+      child: Row(
         children: [
-          Icon(
-            Icons.search_off,
-            size: 64,
-            color: theme.disabledColor,
+          IconButton(
+            icon: Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 20,
+              color: isDark
+                  ? _AppColors.textPrimaryDark
+                  : _AppColors.textPrimaryLight,
+            ),
+            onPressed: () => Get.back(),
           ),
-          const SizedBox(height: 16),
-          Text(
-            'No Stocks found',
-            style: theme.textTheme.titleLarge,
+          const SizedBox(width: 4),
+          Expanded(
+            child: Text(
+              'Stock Screeners',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+                color: isDark
+                    ? _AppColors.textPrimaryDark
+                    : _AppColors.textPrimaryLight,
+              ),
+            ),
           ),
-          const SizedBox(height: 8),
-          const Text('Try different filters'),
+          // Live badge
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: _accentColor.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: _accentColor.withOpacity(0.3)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _accentColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  'LIVE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1,
+                    color: _accentColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildStockList() {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      itemCount: _stocks.length,
-      itemBuilder: (context, index) {
-        final stock = _stocks[index];
-        return _buildStockListItem(stock);
-      },
+  // ── Tab Bar ────────────────────────────────────────────────────────────────
+  Widget _buildTabBar(bool isDark) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      height: 44,
+      decoration: BoxDecoration(
+        color: isDark ? _AppColors.cardDark : _AppColors.borderLight,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        onTap: (i) => _handleCategoryChange(i == 0 ? 'bullish' : 'bearish'),
+        indicator: BoxDecoration(
+          color: _accentColor,
+          borderRadius: BorderRadius.circular(10),
+          boxShadow: [
+            BoxShadow(
+              color: _accentColor.withOpacity(0.35),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        dividerColor: Colors.transparent,
+        labelPadding: EdgeInsets.zero,
+        tabs: [
+          _buildTab('Bullish', Icons.trending_up_rounded, 0),
+          _buildTab('Bearish', Icons.trending_down_rounded, 1),
+        ],
+      ),
     );
   }
 
-  Widget _buildStockListItem(DataStockModel stock) {
-    final theme = Theme.of(context);
-    final isDarkMode = theme.brightness == Brightness.dark;
-    final colors = _getColorScheme(stock.pcnt, isDarkMode);
-    final stockSymbol = stock.stckname.split(':')[1].split('-')[0];
-    final exchange = stock.stckname.split(':')[0];
+  Widget _buildTab(String label, IconData icon, int index) {
+    final isSelected = _tabController.index == index;
+    // We re-render on tab change via setState so color reacts
+    return Tab(
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            icon,
+            size: 16,
+            color: isSelected
+                ? Colors.white
+                : (Theme.of(context).brightness == Brightness.dark
+                    ? _AppColors.textSecondaryDark
+                    : _AppColors.textSecondaryLight),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected
+                  ? Colors.white
+                  : (Theme.of(context).brightness == Brightness.dark
+                      ? _AppColors.textSecondaryDark
+                      : _AppColors.textSecondaryLight),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      elevation: 0,
-      color: colors['background'],
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: colors['borderColor']!,
-          width: 1,
+  // ── Screener Chips ─────────────────────────────────────────────────────────
+  Widget _buildScreenerChips(List<Screener> screeners, bool isDark) {
+    return Container(
+      height: 52,
+      margin: const EdgeInsets.only(top: 12),
+      child: _isLoadingScreeners
+          ? Center(
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: _accentColor,
+                ),
+              ),
+            )
+          : screeners.isEmpty
+              ? const SizedBox.shrink()
+              : ListView.separated(
+                  controller: _chipScrollController,
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  itemCount: screeners.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (context, index) {
+                    final screener = screeners[index];
+                    final isSelected = _selectedScreenerId == screener.id;
+                    return _buildScreenerChip(screener, isSelected, isDark);
+                  },
+                ),
+    );
+  }
+
+  Widget _buildScreenerChip(Screener screener, bool isSelected, bool isDark) {
+    final timeframeIcon = screener.timeframe == 'daily'
+        ? Icons.calendar_today_rounded
+        : screener.timeframe == 'weekly'
+            ? Icons.calendar_month_rounded
+            : null;
+
+    return GestureDetector(
+      onTap: () => _handleScreenerChange(screener),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? _accentColor
+              : isDark
+                  ? _AppColors.cardDark
+                  : _AppColors.cardLight,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? _accentColor
+                : isDark
+                    ? _AppColors.borderDark
+                    : _AppColors.borderLight,
+            width: 1.5,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: _accentColor.withOpacity(0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              screener.name,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: isSelected
+                    ? Colors.white
+                    : isDark
+                        ? _AppColors.textSecondaryDark
+                        : _AppColors.textSecondaryLight,
+              ),
+            ),
+            if (timeframeIcon != null) ...[
+              const SizedBox(width: 5),
+              Icon(
+                timeframeIcon,
+                size: 13,
+                color: isSelected
+                    ? Colors.white.withOpacity(0.8)
+                    : isDark
+                        ? _AppColors.textSecondaryDark
+                        : _AppColors.textSecondaryLight,
+              ),
+            ],
+          ],
         ),
       ),
-      child: InkWell(
-        onTap: () => _showStockDetails(stock),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            children: [
-              // Upper section: Stock info and current price
-              Row(
-                children: [
-                  // Stock Icon
-                  CachedNetworkImage(
-                    height: 40,
-                    width: 40,
-                    imageUrl: Constants.OptionXiS3Loc + stockSymbol + ".png",
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: isDarkMode ? Colors.grey[800] : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Center(
-                        child: Text(
-                          stockSymbol.isNotEmpty ? stockSymbol[0] : 'S',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                            color: theme.textTheme.titleLarge?.color,
+    );
+  }
+
+  // ── Search Bar ─────────────────────────────────────────────────────────────
+  Widget _buildSearchBar(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                color: isDark ? _AppColors.cardDark : _AppColors.cardLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color:
+                      isDark ? _AppColors.borderDark : _AppColors.borderLight,
+                ),
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _handleSearch,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: isDark
+                      ? _AppColors.textPrimaryDark
+                      : _AppColors.textPrimaryLight,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Search by symbol…',
+                  hintStyle: TextStyle(
+                    fontSize: 14,
+                    color: isDark
+                        ? _AppColors.textSecondaryDark
+                        : _AppColors.textSecondaryLight,
+                  ),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    size: 20,
+                    color: isDark
+                        ? _AppColors.textSecondaryDark
+                        : _AppColors.textSecondaryLight,
+                  ),
+                  suffixIcon: _search.isNotEmpty
+                      ? IconButton(
+                          icon: Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: isDark
+                                ? _AppColors.textSecondaryDark
+                                : _AppColors.textSecondaryLight,
                           ),
-                        ),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => ClipRRect(
-                      borderRadius: BorderRadius.circular(25),
-                      child: Image.asset(
-                        'assets/images/stockdefault.png',
-                        fit: BoxFit.cover,
+                          onPressed: () {
+                            _searchController.clear();
+                            _handleSearch('');
+                          },
+                        )
+                      : null,
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Sort button
+          GestureDetector(
+            onTap: _handleSortToggle,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: _sortOrder == 'desc'
+                    ? _accentColor.withOpacity(0.12)
+                    : isDark
+                        ? _AppColors.cardDark
+                        : _AppColors.cardLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _sortOrder == 'desc'
+                      ? _accentColor.withOpacity(0.4)
+                      : isDark
+                          ? _AppColors.borderDark
+                          : _AppColors.borderLight,
+                ),
+              ),
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    _sortOrder == 'desc'
+                        ? Icons.arrow_downward_rounded
+                        : Icons.arrow_upward_rounded,
+                    size: 20,
+                    color: _sortOrder == 'desc'
+                        ? _accentColor
+                        : isDark
+                            ? _AppColors.textSecondaryDark
+                            : _AppColors.textSecondaryLight,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Results Header ─────────────────────────────────────────────────────────
+  Widget _buildResultsHeader(bool isDark) {
+    if (_isLoadingStocks) return const SizedBox(height: 12);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Row(
+        children: [
+          Text(
+            '$_totalStocks Results',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? _AppColors.textSecondaryDark
+                  : _AppColors.textSecondaryLight,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            'Sorted by % ${_sortOrder == 'desc' ? '↓' : '↑'}',
+            style: TextStyle(
+              fontSize: 12,
+              color: isDark
+                  ? _AppColors.textSecondaryDark
+                  : _AppColors.textSecondaryLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Empty State ────────────────────────────────────────────────────────────
+  Widget _buildEmptyState(bool isDark) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: isDark ? _AppColors.cardDark : _AppColors.borderLight,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.search_off_rounded,
+              size: 36,
+              color: isDark
+                  ? _AppColors.textSecondaryDark
+                  : _AppColors.textSecondaryLight,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No stocks found',
+            style: TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w600,
+              color: isDark
+                  ? _AppColors.textPrimaryDark
+                  : _AppColors.textPrimaryLight,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try adjusting your filters or search term',
+            style: TextStyle(
+              fontSize: 14,
+              color: isDark
+                  ? _AppColors.textSecondaryDark
+                  : _AppColors.textSecondaryLight,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Stock List ─────────────────────────────────────────────────────────────
+  Widget _buildStockList(bool isDark) {
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      itemCount: _stocks.length,
+      itemBuilder: (context, index) => _buildStockCard(_stocks[index], isDark),
+    );
+  }
+
+  Widget _buildStockCard(DataStockModel stock, bool isDark) {
+    final parts = stock.stckname.split(':');
+    final stockSymbol =
+        parts.length > 1 ? parts[1].split('-')[0] : stock.stckname;
+    final exchange = parts[0];
+    final isPositive = stock.pcnt >= 0;
+
+    final gainColor =
+        isPositive ? _AppColors.bullishPrimary : _AppColors.bearishPrimary;
+    final gainBg = isPositive
+        ? (isDark
+            ? _AppColors.bullishPrimary.withOpacity(0.12)
+            : _AppColors.bullishLight)
+        : (isDark
+            ? _AppColors.bearishPrimary.withOpacity(0.12)
+            : _AppColors.bearishLight);
+
+    final priceChange = stock.close - stock.pclose;
+
+    return GestureDetector(
+      onTap: () => _showStockDetails(stock),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: isDark ? _AppColors.cardDark : _AppColors.cardLight,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? _AppColors.borderDark : _AppColors.borderLight,
+          ),
+          boxShadow: isDark
+              ? []
+              : [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              // Stock logo
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: isDark ? _AppColors.borderDark : _AppColors.surface,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: CachedNetworkImage(
+                  imageUrl: Constants.OptionXiS3Loc + stockSymbol + ".png",
+                  fit: BoxFit.cover,
+                  placeholder: (_, __) => Center(
+                    child: Text(
+                      stockSymbol.isNotEmpty ? stockSymbol[0] : 'S',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _accentColor,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  errorWidget: (_, __, ___) => ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/images/stockdefault.png',
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+              ),
 
-                  // Stock Info
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          stockSymbol,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: colors['text'],
+              const SizedBox(width: 12),
+
+              // Symbol + exchange
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      stockSymbol,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
+                        color: isDark
+                            ? _AppColors.textPrimaryDark
+                            : _AppColors.textPrimaryLight,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      exchange,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark
+                            ? _AppColors.textSecondaryDark
+                            : _AppColors.textSecondaryLight,
+                      ),
+                    ),
+                    // Sector tag
+                    if (stock.sec.isNotEmpty) ...[
+                      const SizedBox(height: 5),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 7, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: isDark
+                              ? _AppColors.borderDark
+                              : _AppColors.surface,
+                          borderRadius: BorderRadius.circular(5),
+                        ),
+                        child: Text(
+                          stock.sec,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: isDark
+                                ? _AppColors.textSecondaryDark
+                                : _AppColors.textSecondaryLight,
                           ),
                         ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              // Price + badge
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '₹${stock.close.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: isDark
+                          ? _AppColors.textPrimaryDark
+                          : _AppColors.textPrimaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${isPositive ? '+' : ''}${priceChange.toStringAsFixed(2)}',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: isDark
+                          ? _AppColors.textSecondaryDark
+                          : _AppColors.textSecondaryLight,
+                    ),
+                  ),
+                  const SizedBox(height: 5),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: gainBg,
+                      borderRadius: BorderRadius.circular(7),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isPositive
+                              ? Icons.arrow_upward_rounded
+                              : Icons.arrow_downward_rounded,
+                          size: 12,
+                          color: gainColor,
+                        ),
+                        const SizedBox(width: 2),
                         Text(
-                          exchange,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.textTheme.bodySmall?.color
-                                ?.withValues(alpha: 0.7),
+                          '${stock.pcnt.abs().toStringAsFixed(2)}%',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: gainColor,
                           ),
                         ),
                       ],
                     ),
                   ),
-
-                  // Price Info
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '₹${stock.close.toStringAsFixed(2)}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          Icon(
-                            stock.pcnt >= 0
-                                ? Icons.arrow_upward
-                                : Icons.arrow_downward,
-                            size: 14,
-                            color: colors['text'],
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${stock.pcnt.abs().toStringAsFixed(2)}%',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colors['text'],
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
                 ],
               ),
-
-              // Divider between sections
-              // Padding(
-              //   padding: const EdgeInsets.symmetric(vertical: 8),
-              //   child: Divider(
-              //     height: 1,
-              //     color: colors['borderColor']!.withValues(alpha:0.5),
-              //   ),
-              // ),
-
-              // Lower section: OHLC details
-              // Row(
-              //   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              //   children: [
-              //     // Open
-              //     Expanded(
-              //       child: Column(
-              //         crossAxisAlignment: CrossAxisAlignment.start,
-              //         children: [
-              //           Text(
-              //             'Open',
-              //             style: theme.textTheme.bodySmall?.copyWith(
-              //               color: theme.textTheme.bodySmall?.color
-              //                   ?.withValues(alpha:0.7),
-              //             ),
-              //           ),
-              //           Text(
-              //             '₹${stock.open.toStringAsFixed(2)}',
-              //             style: theme.textTheme.bodyMedium?.copyWith(
-              //               fontWeight: FontWeight.bold,
-              //             ),
-              //           ),
-              //         ],
-              //       ),
-              //     ),
-
-              //     // High
-              //     Expanded(
-              //       child: Column(
-              //         crossAxisAlignment: CrossAxisAlignment.start,
-              //         children: [
-              //           Text(
-              //             'High',
-              //             style: theme.textTheme.bodySmall?.copyWith(
-              //               color: theme.textTheme.bodySmall?.color
-              //                   ?.withValues(alpha:0.7),
-              //             ),
-              //           ),
-              //           Text(
-              //             '₹${stock.high.toStringAsFixed(2)}',
-              //             style: theme.textTheme.bodyMedium?.copyWith(
-              //               fontWeight: FontWeight.bold,
-              //               color: Colors.green[700],
-              //             ),
-              //           ),
-              //         ],
-              //       ),
-              //     ),
-
-              //     // Low
-              //     Expanded(
-              //       child: Column(
-              //         crossAxisAlignment: CrossAxisAlignment.start,
-              //         children: [
-              //           Text(
-              //             'Low',
-              //             style: theme.textTheme.bodySmall?.copyWith(
-              //               color: theme.textTheme.bodySmall?.color
-              //                   ?.withValues(alpha:0.7),
-              //             ),
-              //           ),
-              //           Text(
-              //             '₹${stock.low.toStringAsFixed(2)}',
-              //             style: theme.textTheme.bodyMedium?.copyWith(
-              //               fontWeight: FontWeight.bold,
-              //               color: Colors.red[700],
-              //             ),
-              //           ),
-              //         ],
-              //       ),
-              //     ),
-
-              //     // Volume
-              //     Expanded(
-              //       child: Column(
-              //         crossAxisAlignment: CrossAxisAlignment.start,
-              //         children: [
-              //           Text(
-              //             'Vol',
-              //             style: theme.textTheme.bodySmall?.copyWith(
-              //               color: theme.textTheme.bodySmall?.color
-              //                   ?.withValues(alpha:0.7),
-              //             ),
-              //           ),
-              //           Text(
-              //             _formatVolume(stock.vol),
-              //             style: theme.textTheme.bodyMedium?.copyWith(
-              //               fontWeight: FontWeight.bold,
-              //             ),
-              //           ),
-              //         ],
-              //       ),
-              //     ),
-              //   ],
-              // ),
             ],
           ),
         ),
@@ -723,133 +964,145 @@ class _ScannerDetailPageState extends State<ScannerDetailPage>
     );
   }
 
-// Helper method to format volume numbers
-  // String _formatVolume(int volume) {
-  //   if (volume >= 10000000) {
-  //     return '${(volume / 10000000).toStringAsFixed(1)}Cr';
-  //   } else if (volume >= 100000) {
-  //     return '${(volume / 100000).toStringAsFixed(1)}L';
-  //   } else if (volume >= 1000) {
-  //     return '${(volume / 1000).toStringAsFixed(1)}K';
-  //   }
-  //   return volume.toString();
-  // }
-
-  Widget _buildPagination(int totalPages) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
+  // ── Pagination ─────────────────────────────────────────────────────────────
+  Widget _buildPagination(int totalPages, bool isDark) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          IconButton(
-            icon: const Icon(Icons.chevron_left),
-            onPressed: _currentPage > 1
-                ? () => _handlePageChange(_currentPage - 1)
-                : null,
+          _buildPageButton(
+            icon: Icons.chevron_left_rounded,
+            enabled: _currentPage > 1,
+            onTap: () => _handlePageChange(_currentPage - 1),
+            isDark: isDark,
           ),
-          Text(
-            'Page $_currentPage of $totalPages',
-            style: theme.textTheme.bodyLarge,
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right),
-            onPressed: _currentPage < totalPages
-                ? () => _handlePageChange(_currentPage + 1)
-                : null,
+          const SizedBox(width: 12),
+          // Page pills
+          ..._buildPageNumbers(totalPages, isDark),
+          const SizedBox(width: 12),
+          _buildPageButton(
+            icon: Icons.chevron_right_rounded,
+            enabled: _currentPage < totalPages,
+            onTap: () => _handlePageChange(_currentPage + 1),
+            isDark: isDark,
           ),
         ],
       ),
     );
   }
 
-  Map<String, Color?> _getColorScheme(double percentage, bool isDarkMode) {
-    final colors = {
-      'background': isDarkMode ? Colors.grey[900] : Colors.white,
-      'text': isDarkMode ? Colors.white : Colors.black,
-      'borderColor': isDarkMode ? Colors.grey[800]! : Colors.grey[300]!,
-    };
+  List<Widget> _buildPageNumbers(int totalPages, bool isDark) {
+    final pages = <Widget>[];
+    final showPages = <int>[];
 
-    if (percentage >= 15) {
-      colors['background'] = isDarkMode
-          ? Colors.green[900]!.withValues(alpha: 0.3)
-          : Colors.green[100]!;
-      colors['text'] = isDarkMode ? Colors.green[300]! : Colors.green[800]!;
-      colors['borderColor'] =
-          isDarkMode ? Colors.green[800]! : Colors.green[300]!;
-    } else if (percentage >= 10) {
-      colors['background'] = isDarkMode
-          ? Colors.green[900]!.withValues(alpha: 0.2)
-          : Colors.green[50]!;
-      colors['text'] = isDarkMode ? Colors.green[300]! : Colors.green[700]!;
-      colors['borderColor'] =
-          isDarkMode ? Colors.green[700]! : Colors.green[200]!;
-    } else if (percentage >= 5) {
-      colors['background'] = isDarkMode
-          ? Colors.green[900]!.withValues(alpha: 0.15)
-          : Colors.green[50]!;
-      colors['text'] = isDarkMode ? Colors.green[300]! : Colors.green[600]!;
-      colors['borderColor'] =
-          isDarkMode ? Colors.green[600]! : Colors.green[200]!;
-    } else if (percentage >= 2) {
-      colors['background'] = isDarkMode
-          ? Colors.green[900]!.withValues(alpha: 0.1)
-          : const Color(0xFFA5D6A7).withValues(alpha: 0.2);
-      colors['text'] = isDarkMode ? Colors.green[300]! : Colors.green;
-      colors['borderColor'] = isDarkMode
-          ? Colors.green[800]!.withValues(alpha: 0.4)
-          : const Color(0xFFA5D6A7).withValues(alpha: 0.3);
-    } else if (percentage >= 0) {
-      colors['background'] = isDarkMode
-          ? Colors.green[900]!.withValues(alpha: 0.05)
-          : const Color(0xFFC8E6C9).withValues(alpha: 0.2);
-      colors['text'] =
-          isDarkMode ? Colors.green[300]! : const Color(0xFF66BB6A);
-      colors['borderColor'] = isDarkMode
-          ? Colors.green[800]!.withValues(alpha: 0.3)
-          : const Color(0xFFC8E6C9).withValues(alpha: 0.3);
-    } else if (percentage >= -2) {
-      colors['background'] = isDarkMode
-          ? Colors.red[900]!.withValues(alpha: 0.05)
-          : const Color(0xFFFFCDD2).withValues(alpha: 0.2);
-      colors['text'] = isDarkMode ? Colors.red[300]! : const Color(0xFFE53935);
-      colors['borderColor'] = isDarkMode
-          ? Colors.red[800]!.withValues(alpha: 0.3)
-          : const Color(0xFFFFCDD2).withValues(alpha: 0.3);
-    } else if (percentage >= -5) {
-      colors['background'] = isDarkMode
-          ? Colors.red[900]!.withValues(alpha: 0.1)
-          : const Color(0xFFEF9A9A).withValues(alpha: 0.2);
-      colors['text'] = isDarkMode ? Colors.red[300]! : const Color(0xFFD32F2F);
-      colors['borderColor'] = isDarkMode
-          ? Colors.red[800]!.withValues(alpha: 0.4)
-          : const Color(0xFFEF9A9A).withValues(alpha: 0.3);
-    } else if (percentage >= -10) {
-      colors['background'] = isDarkMode
-          ? Colors.red[900]!.withValues(alpha: 0.15)
-          : const Color(0xFFE57373).withValues(alpha: 0.2);
-      colors['text'] = isDarkMode ? Colors.red[300]! : const Color(0xFFC62828);
-      colors['borderColor'] = isDarkMode
-          ? Colors.red[800]!.withValues(alpha: 0.5)
-          : const Color(0xFFE57373).withValues(alpha: 0.3);
-    } else if (percentage >= -15) {
-      colors['background'] = isDarkMode
-          ? Colors.red[900]!.withValues(alpha: 0.2)
-          : const Color(0xFFF44336).withValues(alpha: 0.2);
-      colors['text'] = isDarkMode ? Colors.red[300]! : const Color(0xFFB71C1C);
-      colors['borderColor'] = isDarkMode
-          ? Colors.red[800]!
-          : const Color(0xFFF44336).withValues(alpha: 0.3);
+    if (totalPages <= 5) {
+      for (var i = 1; i <= totalPages; i++) showPages.add(i);
     } else {
-      colors['background'] = isDarkMode
-          ? Colors.red[900]!.withValues(alpha: 0.25)
-          : const Color(0xFFC62828).withValues(alpha: 0.2);
-      colors['text'] = isDarkMode ? Colors.red[300]! : const Color(0xFFB71C1C);
-      colors['borderColor'] = isDarkMode
-          ? Colors.red[800]!
-          : const Color(0xFFC62828).withValues(alpha: 0.3);
+      showPages.add(1);
+      if (_currentPage > 3) showPages.add(-1); // ellipsis
+      for (var i = (_currentPage - 1).clamp(2, totalPages - 1);
+          i <= (_currentPage + 1).clamp(2, totalPages - 1);
+          i++) {
+        showPages.add(i);
+      }
+      if (_currentPage < totalPages - 2) showPages.add(-1);
+      showPages.add(totalPages);
     }
 
-    return colors;
+    for (final p in showPages) {
+      if (p == -1) {
+        pages.add(Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Text('…',
+              style: TextStyle(
+                  color: isDark
+                      ? _AppColors.textSecondaryDark
+                      : _AppColors.textSecondaryLight)),
+        ));
+      } else {
+        final isCurrent = p == _currentPage;
+        pages.add(GestureDetector(
+          onTap: () => _handlePageChange(p),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: 36,
+            height: 36,
+            margin: const EdgeInsets.symmetric(horizontal: 2),
+            decoration: BoxDecoration(
+              color: isCurrent
+                  ? _accentColor
+                  : isDark
+                      ? _AppColors.cardDark
+                      : _AppColors.cardLight,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: isCurrent
+                    ? _accentColor
+                    : isDark
+                        ? _AppColors.borderDark
+                        : _AppColors.borderLight,
+              ),
+            ),
+            child: Center(
+              child: Text(
+                '$p',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: isCurrent
+                      ? Colors.white
+                      : isDark
+                          ? _AppColors.textSecondaryDark
+                          : _AppColors.textSecondaryLight,
+                ),
+              ),
+            ),
+          ),
+        ));
+      }
+    }
+    return pages;
+  }
+
+  Widget _buildPageButton({
+    required IconData icon,
+    required bool enabled,
+    required VoidCallback onTap,
+    required bool isDark,
+  }) {
+    return GestureDetector(
+      onTap: enabled ? onTap : null,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: enabled
+              ? isDark
+                  ? _AppColors.cardDark
+                  : _AppColors.cardLight
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: enabled
+                ? isDark
+                    ? _AppColors.borderDark
+                    : _AppColors.borderLight
+                : Colors.transparent,
+          ),
+        ),
+        child: Icon(
+          icon,
+          size: 20,
+          color: enabled
+              ? isDark
+                  ? _AppColors.textPrimaryDark
+                  : _AppColors.textPrimaryLight
+              : (isDark
+                  ? _AppColors.textSecondaryDark
+                  : _AppColors.textSecondaryLight),
+        ),
+      ),
+    );
   }
 }

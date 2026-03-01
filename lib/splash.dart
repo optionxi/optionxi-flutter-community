@@ -1,6 +1,6 @@
 // import 'package:appoptionxi/Auth_Service/auth_service.dart';
 import 'package:flutter/material.dart';
-import 'package:optionxi/Login_Signup/login.dart';
+import 'package:optionxi/Login_Signup/login2.dart';
 
 class Splash extends StatefulWidget {
   const Splash({Key? key}) : super(key: key);
@@ -19,10 +19,8 @@ class _SplashState extends State<Splash> {
   navigatehome() async {
     await Future.delayed(const Duration(milliseconds: 500), () {});
     if (mounted) {
-      Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-              builder: (context) => const ModernTradingLoginPage()));
+      Navigator.pushReplacement(context,
+          MaterialPageRoute(builder: (context) => const ModernLoginPage()));
     }
   }
 

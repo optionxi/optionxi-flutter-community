@@ -6,6 +6,7 @@ class BadgeService {
   static const String _ordersKey = 'orders_badge_count';
   static const String _portfolioKey = 'portfolio_badge_count';
   static const String _notificationsKey = 'notifications_badge_count';
+  static const String _alertsKey = 'alerts_badge_count';
 
   // Stream controllers for real-time updates
   static final StreamController<int> _ordersController =
@@ -15,10 +16,14 @@ class BadgeService {
   static final StreamController<int> _notificationsController =
       StreamController<int>.broadcast();
 
+  static final StreamController<int> _alertsController =
+      StreamController<int>.broadcast();
+
   // Streams for listening to badge changes
   static Stream<int> get ordersStream => _ordersController.stream;
   static Stream<int> get portfolioStream => _portfolioController.stream;
   static Stream<int> get notificationsStream => _notificationsController.stream;
+  static Stream<int> get alertsStream => _alertsController.stream;
 
   // Get badge count for orders
   static Future<int> getOrdersBadgeCount() async {
@@ -49,6 +54,17 @@ class BadgeService {
       return prefs.getInt(_notificationsKey) ?? 0;
     } catch (e) {
       debugPrint("Error getting notifications badge count: $e");
+      return 0;
+    }
+  }
+
+  // Get badge count for alerts
+  static Future<int> getAlertsBadgeCount() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getInt(_alertsKey) ?? 0;
+    } catch (e) {
+      debugPrint("Error getting alerts badge count: $e");
       return 0;
     }
   }
@@ -86,6 +102,17 @@ class BadgeService {
     }
   }
 
+  // Set badge count for notifications
+  static Future<void> setAlertsBadgeCount(int count) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_alertsKey, count);
+      _alertsController.add(count); // Notify listeners
+    } catch (e) {
+      debugPrint("Error setting alerts badge count: $e");
+    }
+  }
+
   // Increment orders badge
   static Future<void> incrementOrdersBadge() async {
     try {
@@ -116,6 +143,16 @@ class BadgeService {
     }
   }
 
+  // Increment alert badge
+  static Future<void> incrementAlertBadge() async {
+    try {
+      final current = await getAlertsBadgeCount();
+      await setAlertsBadgeCount(current + 1);
+    } catch (e) {
+      debugPrint("Error incrementing notifications badge: $e");
+    }
+  }
+
   // Clear orders badge
   static Future<void> clearOrdersBadge() async {
     try {
@@ -140,6 +177,15 @@ class BadgeService {
       await setNotificationsBadgeCount(0);
     } catch (e) {
       debugPrint("Error clearing notifications badge: $e");
+    }
+  }
+
+  // Clear notifications badge
+  static Future<void> clearAlertsBadge() async {
+    try {
+      await setAlertsBadgeCount(0);
+    } catch (e) {
+      debugPrint("Error clearing alerts badge: $e");
     }
   }
 
@@ -217,6 +263,14 @@ class BadgeService {
 
     // Then, yield all future updates
     yield* _notificationsController.stream;
+  }
+
+  static Stream<int> get alertsStreamWithInitial async* {
+    // First, yield the current stored value
+    yield await getAlertsBadgeCount();
+
+    // Then, yield all future updates
+    yield* _alertsController.stream;
   }
 
 // Enhanced stream getter for orders

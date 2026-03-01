@@ -159,7 +159,7 @@ class _StockItemHeatMapState extends State<StockItemHeatMap>
     );
     _scaleAnimation = Tween<double>(
       begin: 1.0,
-      end: 0.95,
+      end: 0.98,
     ).animate(CurvedAnimation(
       parent: _animationController,
       curve: Curves.easeInOut,
@@ -172,81 +172,17 @@ class _StockItemHeatMapState extends State<StockItemHeatMap>
     super.dispose();
   }
 
-  ColorScheme _getColorScheme(double percentage) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    if (percentage >= 15) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4D4CAF50) : const Color(0x334CAF50),
-        text: isDark ? const Color(0xFF81C784) : const Color(0xFF2E7D32),
-        border: isDark ? const Color(0x664CAF50) : const Color(0x4D4CAF50),
-      );
-    } else if (percentage >= 10) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4D66BB6A) : const Color(0x3366BB6A),
-        text: isDark ? const Color(0xFFA5D6A7) : const Color(0xFF388E3C),
-        border: isDark ? const Color(0x6666BB6A) : const Color(0x4D66BB6A),
-      );
-    } else if (percentage >= 5) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4D81C784) : const Color(0x3381C784),
-        text: isDark ? const Color(0xFFC8E6C9) : const Color(0xFF43A047),
-        border: isDark ? const Color(0x6681C784) : const Color(0x4D81C784),
-      );
-    } else if (percentage >= 2) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DA5D6A7) : const Color(0x33A5D6A7),
-        text: isDark ? const Color(0xFFE8F5E9) : const Color(0xFF4CAF50),
-        border: isDark ? const Color(0x66A5D6A7) : const Color(0x4DA5D6A7),
-      );
-    } else if (percentage >= 0) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DC8E6C9) : const Color(0x33C8E6C9),
-        text: isDark ? const Color(0xFFE8F5E9) : const Color(0xFF66BB6A),
-        border: isDark ? const Color(0x66C8E6C9) : const Color(0x4DC8E6C9),
-      );
-    } else if (percentage >= -2) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DFFCDD2) : const Color(0x33FFCDD2),
-        text: isDark ? const Color(0xFFFFCDD2) : const Color(0xFFE53935),
-        border: isDark ? const Color(0x66FFCDD2) : const Color(0x4DFFCDD2),
-      );
-    } else if (percentage >= -5) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DEF9A9A) : const Color(0x33EF9A9A),
-        text: isDark ? const Color(0xFFEF9A9A) : const Color(0xFFD32F2F),
-        border: isDark ? const Color(0x66EF9A9A) : const Color(0x4DEF9A9A),
-      );
-    } else if (percentage >= -10) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DE57373) : const Color(0x33E57373),
-        text: isDark ? const Color(0xFFE57373) : const Color(0xFFC62828),
-        border: isDark ? const Color(0x66E57373) : const Color(0x4DE57373),
-      );
-    } else if (percentage >= -15) {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DF44336) : const Color(0x33F44336),
-        text: isDark ? const Color(0xFFF44336) : const Color(0xFFB71C1C),
-        border: isDark ? const Color(0x66F44336) : const Color(0x4DF44336),
-      );
-    } else {
-      return ColorScheme(
-        background: isDark ? const Color(0x4DC62828) : const Color(0x33C62828),
-        text: isDark ? const Color(0xFFEF5350) : const Color(0xFFB71C1C),
-        border: isDark ? const Color(0x66C62828) : const Color(0x4DC62828),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
-    final colorScheme = _getColorScheme(widget.stock.percentChange);
     final stockSymbol = widget.stock.stockName.split(":").length > 1
         ? widget.stock.stockName.split(":")[1].split("-")[0]
         : widget.stock.stockName;
     final exchange = widget.stock.stockName.split(":")[0];
 
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final isPositive = widget.stock.percentChange >= 0;
+
     return GestureDetector(
       onTapDown: (_) => _animationController.forward(),
       onTapUp: (_) => _animationController.reverse(),
@@ -260,129 +196,151 @@ class _StockItemHeatMapState extends State<StockItemHeatMap>
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                Container(
-                  margin: const EdgeInsets.all(4),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: colorScheme.background,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colorScheme.border),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
+                Card(
+                  elevation: isDark ? 4 : 2,
+                  shadowColor: isDark
+                      ? Colors.black.withOpacity(0.3)
+                      : Colors.grey.withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Row(
-                    children: [
-                      // Stock Logo
-                      CachedNetworkImage(
-                        height: 40,
-                        width: 40,
-                        imageUrl:
-                            Constants.OptionXiS3Loc + stockSymbol + ".png",
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Center(
-                            child: Text(
-                              stockSymbol.isNotEmpty ? stockSymbol[0] : 'S',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: theme.textTheme.titleLarge?.color,
-                              ),
-                            ),
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => ClipRRect(
-                          borderRadius: BorderRadius.circular(25),
-                          child: Image.asset(
-                            'assets/images/stockdefault.png',
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-
-                      // Stock Info
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  stockSymbol,
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                    color: colorScheme.text,
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  width: 20,
-                                  height: 20,
-                                  decoration: BoxDecoration(
-                                    // color: Colors.white.withValues(alpha:0.8),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    widget.stock.percentChange >= 0
-                                        ? Icons.trending_up
-                                        : Icons.trending_down,
-                                    size: 12,
-                                    color: colorScheme.text,
-                                  ),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                  child: InkWell(
+                    onTap: widget.onTap,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          // Stock Icon
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(10),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.08),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
                                 ),
                               ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              exchange,
-                              style: TextStyle(
-                                fontSize: 12,
-                                // color: Colors.grey[600],
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: CachedNetworkImage(
+                                height: 40,
+                                width: 40,
+                                imageUrl: Constants.OptionXiS3Loc +
+                                    stockSymbol +
+                                    ".png",
+                                fit: BoxFit.cover,
+                                placeholder: (context, url) => Container(
+                                  width: 40,
+                                  height: 40,
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(10),
+                                    color: theme
+                                        .colorScheme.surfaceContainerHighest,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      stockSymbol.isNotEmpty
+                                          ? stockSymbol[0]
+                                          : 'S',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                        color:
+                                            theme.textTheme.titleLarge?.color,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                errorWidget: (context, url, error) => ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.asset(
+                                    'assets/images/stockdefault.png',
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                          const SizedBox(width: 12),
 
-                      // Price Info
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            '₹${widget.stock.lastPrice.toStringAsFixed(1)}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.black87,
+                          // Stock Info
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        stockSymbol,
+                                        style: theme.textTheme.titleMedium
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                  ],
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  exchange,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurface
+                                        .withOpacity(0.6),
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
                             ),
                           ),
-                          Text(
-                            '${widget.stock.percentChange.toStringAsFixed(2)}%',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w500,
-                              color: colorScheme.text,
-                            ),
+                          const SizedBox(width: 12),
+
+                          // Price Info
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '₹${widget.stock.lastPrice.toStringAsFixed(2)}',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isPositive
+                                      ? Colors.green.withOpacity(0.15)
+                                      : Colors.red.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  '${isPositive ? '+' : ''}${widget.stock.percentChange.toStringAsFixed(2)}%',
+                                  style: TextStyle(
+                                    color:
+                                        isPositive ? Colors.green : Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
 
-                // Signal Count Badge - iOS style notification
+                // Signal Count Badge
                 Positioned(
                   top: 0,
                   right: 0,
@@ -395,12 +353,14 @@ class _StockItemHeatMapState extends State<StockItemHeatMap>
                       color: theme.colorScheme.primary,
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(
-                        color: Colors.white,
+                        color: isDark
+                            ? theme.scaffoldBackgroundColor
+                            : Colors.white,
                         width: 2,
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
+                          color: Colors.black.withOpacity(0.2),
                           blurRadius: 4,
                           offset: const Offset(0, 2),
                         ),
@@ -566,11 +526,6 @@ class StockItemSkeleton extends StatelessWidget {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     const SizedBox(width: 8),
-                    LoadingSkeleton(
-                      width: 20,
-                      height: 20,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
@@ -789,14 +744,11 @@ class _TopStocksHeatMapState extends State<TopStocksHeatMap> {
   Widget _buildStocksList() {
     return Column(
       children: stocks.map((stock) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: StockItemHeatMap(
-            stock: stock,
-            onTap: () {
-              Get.toNamed('/stocks/${(stock.stockName.toUpperCase())}');
-            },
-          ),
+        return StockItemHeatMap(
+          stock: stock,
+          onTap: () {
+            Get.toNamed('/stocks/${(stock.stockName.toUpperCase())}');
+          },
         );
       }).toList(),
     );

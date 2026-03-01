@@ -1,4 +1,4 @@
-import 'dart:async'; // Added import
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/VirtualTradeJournal/db_read_supabase_journal_portfolio.dart';
@@ -16,7 +16,19 @@ class PortfolioJournalController extends GetxController {
 
   // --- Observables for UI State ---
   final RxBool isLoading = true.obs;
-  final RxDouble availableBalance = 0.0.obs;
+
+  /// Currently selected date filter in days. Default = 30.
+  final RxInt selectedDays = 30.obs;
+
+  /// Available filter options: label → days value
+  static const List<({String label, int days})> filterOptions = [
+    (label: '7D', days: 7),
+    (label: '30D', days: 30),
+    (label: '3M', days: 90),
+    (label: '6M', days: 180),
+    (label: '1Y', days: 365),
+    (label: 'All', days: 3650),
+  ];
 
   // --- Observables for Data Lists ---
   final RxList<BasketUserHolding> holdings = <BasketUserHolding>[].obs;
@@ -26,15 +38,14 @@ class PortfolioJournalController extends GetxController {
   // --- Live Data ---
   final RxMap<String, double> livePrices = <String, double>{}.obs;
 
-  // --- UPDATED: Observables for Detailed Stats ---
-  final RxDouble totalProfit = 0.0.obs; // Overall P&L (Realised + Unrealised)
-  final RxDouble totalInvestment =
-      0.0.obs; // Current investment in open positions
+  // --- Observables for Detailed Stats ---
+  final RxDouble totalProfit = 0.0.obs;
+  final RxDouble totalInvestment = 0.0.obs;
   final RxDouble realisedPnl = 0.0.obs;
   final RxDouble unrealisedPnl = 0.0.obs;
-  final RxInt totalWins = 0.obs; // Renamed from profitableTrades
+  final RxInt totalWins = 0.obs;
   final RxInt totalLosses = 0.obs;
-  final RxInt totalTrades = 0.obs; // Total closed trades
+  final RxInt totalTrades = 0.obs;
 
   // --- Previous counts for detecting new items ---
   int _previousHoldingsCount = 0;
@@ -42,7 +53,6 @@ class PortfolioJournalController extends GetxController {
   int _previousTradesCount = 0;
 
   // --- Subscriptions ---
-  StreamSubscription? _balanceSubscription;
   StreamSubscription? _holdingsSubscription;
   StreamSubscription? _shortsSubscription;
   StreamSubscription? _historySubscription;
@@ -53,7 +63,6 @@ class PortfolioJournalController extends GetxController {
   void onInit() {
     super.onInit();
     userSuid = suid ?? FirebaseAuth.instance.currentUser?.uid ?? '';
-
     fetchAllData();
     _setupSubscriptions();
   }
@@ -64,26 +73,59 @@ class PortfolioJournalController extends GetxController {
     super.onClose();
   }
 
+  /// Called when user taps a filter chip. Re-fetches trade history for new range.
+  void onFilterChanged(int days) {
+    if (selectedDays.value == days) return;
+    selectedDays.value = days;
+    _fetchTradeHistoryWithFilter();
+    _restartTradeHistorySubscription();
+  }
+
+  Future<void> _fetchTradeHistoryWithFilter() async {
+    try {
+      final history = await _portfolioService.fetchTradeHistory(
+        userSuid,
+        days: selectedDays.value,
+      );
+      tradeHistory.assignAll(history.reversed.toList());
+      _previousTradesCount = tradeHistory.length;
+      _calculateStats();
+    } catch (e) {
+      print("Trade history filter fetch error: $e");
+    }
+  }
+
+  void _restartTradeHistorySubscription() {
+    _historySubscription?.cancel();
+    _historySubscription =
+        _portfolioService.subscribeToTradeHistoryChanges(userSuid).listen(
+      (_) async {
+        final prev = _previousTradesCount;
+        await _fetchTradeHistoryWithFilter();
+        if (tradeHistory.length > prev) {
+          _showNewItemSnackbar("Trade Journal Added!");
+        }
+      },
+      onError: (e) => _handleSubscriptionError("Trade History", e),
+    );
+  }
+
   Future<void> fetchAllData() async {
     isLoading(true);
     try {
       final results = await Future.wait([
-        _portfolioService.fetchBalance(userSuid),
         _portfolioService.fetchHoldings(userSuid),
         _portfolioService.fetchShortPositions(userSuid),
-        _portfolioService.fetchTradeHistory(userSuid),
+        _portfolioService.fetchTradeHistory(userSuid, days: selectedDays.value),
       ]);
 
-      // Assign data from futures
-      availableBalance.value = results[0] as double;
       holdings
-          .assignAll((results[1] as List<BasketUserHolding>).reversed.toList());
+          .assignAll((results[0] as List<BasketUserHolding>).reversed.toList());
       shortPositions
-          .assignAll((results[2] as List<BasketUserHolding>).reversed.toList());
+          .assignAll((results[1] as List<BasketUserHolding>).reversed.toList());
       tradeHistory.assignAll(
-          (results[3] as List<JournalTradeHistory>).reversed.toList());
+          (results[2] as List<JournalTradeHistory>).reversed.toList());
 
-      // Initialize previous counts to prevent snackbars on first load
       _previousHoldingsCount = holdings.length;
       _previousShortsCount = shortPositions.length;
       _previousTradesCount = tradeHistory.length;
@@ -103,16 +145,6 @@ class PortfolioJournalController extends GetxController {
 
   void _setupSubscriptions() {
     _cancelSubscriptions();
-
-    _balanceSubscription =
-        _portfolioService.subscribeToBalance(userSuid).listen(
-      (balance) {
-        if (balance != availableBalance.value) {
-          availableBalance.value = balance;
-        }
-      },
-      onError: (e) => _handleSubscriptionError("Balance", e),
-    );
 
     _holdingsSubscription =
         _portfolioService.subscribeToHoldings(userSuid).listen(
@@ -141,14 +173,13 @@ class PortfolioJournalController extends GetxController {
     );
 
     _historySubscription =
-        _portfolioService.subscribeToTradeHistory(userSuid).listen(
-      (data) {
-        tradeHistory.assignAll(data.reversed.toList());
-        _calculateStats();
-        if (data.length > _previousTradesCount) {
+        _portfolioService.subscribeToTradeHistoryChanges(userSuid).listen(
+      (_) async {
+        final prev = _previousTradesCount;
+        await _fetchTradeHistoryWithFilter();
+        if (tradeHistory.length > prev) {
           _showNewItemSnackbar("Trade Journal Added!");
         }
-        _previousTradesCount = data.length;
       },
       onError: (e) => _handleSubscriptionError("Trade History", e),
     );
@@ -166,23 +197,13 @@ class PortfolioJournalController extends GetxController {
 
   void _handleSubscriptionError(String name, dynamic error) {
     print("$name subscription error: $error");
-    // Optional: Add logic to attempt reconnection after a delay
     Timer(const Duration(seconds: 5), () {
       print("Attempting to restart subscriptions...");
       _setupSubscriptions();
     });
   }
 
-  void _showNewItemSnackbar(String message) {
-    // if (!_isInitialLoad) {
-    //   Get.snackbar(
-    //     'Portfolio Update',
-    //     message,
-    //     snackPosition: SnackPosition.TOP,
-    //     duration: const Duration(seconds: 2),
-    //   );
-    // }
-  }
+  void _showNewItemSnackbar(String message) {}
 
   void _updateLivePrices(List<Map<String, dynamic>> data) {
     bool pricesUpdated = false;
@@ -203,7 +224,6 @@ class PortfolioJournalController extends GetxController {
     }
   }
 
-  // ### UPDATED: Refactored statistics calculation logic ###
   void _calculateStats() {
     // --- 1. Realised P&L (from closed trades) ---
     realisedPnl.value =
@@ -221,10 +241,10 @@ class PortfolioJournalController extends GetxController {
     }
     unrealisedPnl.value = currentUnrealisedPnl;
 
-    // --- 3. Total P&L (Realised + Unrealised) ---
+    // --- 3. Total P&L ---
     totalProfit.value = realisedPnl.value + unrealisedPnl.value;
 
-    // --- 4. Total Investment (Value of current open positions) ---
+    // --- 4. Total Investment ---
     double currentInvestment = 0.0;
     currentInvestment += holdings.fold(
         0.0, (sum, item) => sum + (item.averagePrice * item.quantity));
@@ -232,7 +252,7 @@ class PortfolioJournalController extends GetxController {
         0.0, (sum, item) => sum + (item.averagePrice * item.quantity));
     totalInvestment.value = currentInvestment;
 
-    // --- 5. Win/Loss Stats (from closed trades) ---
+    // --- 5. Win/Loss Stats ---
     totalTrades.value = tradeHistory.length;
     totalWins.value =
         tradeHistory.where((trade) => trade.profitLoss > 0).length;
@@ -241,12 +261,10 @@ class PortfolioJournalController extends GetxController {
   }
 
   double getLtp(String symbol) {
-    // Return live price if available, otherwise 0.
     return livePrices[symbol] ?? 0.0;
   }
 
   void _cancelSubscriptions() {
-    _balanceSubscription?.cancel();
     _holdingsSubscription?.cancel();
     _shortsSubscription?.cancel();
     _historySubscription?.cancel();
