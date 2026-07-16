@@ -1,4 +1,3 @@
-import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
@@ -7,14 +6,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Auth_Service/auth_service.dart';
+import 'package:optionxi/Main_Pages/BrokersConnect/connect_fyers_page.dart';
+import 'package:optionxi/Main_Pages/BrokersConnect/connect_upstox_page.dart';
+import 'package:optionxi/Main_Pages/BrokersConnect/connect_zerodha_page.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Helpers/get_database.dart';
 import 'package:optionxi/Login_Signup/login2.dart';
-import 'package:optionxi/Main_Pages/act_alert_stocks.dart';
-import 'package:optionxi/Main_Pages/act_notifications.dart';
-import 'package:optionxi/Main_Pages/act_scanner_result.dart';
-import 'package:optionxi/Main_Pages/act_search_stocks_meili.dart';
-import 'package:optionxi/Main_Pages/act_stock_detail.dart';
+import 'package:optionxi/Main_Pages/Achivements/act_achievement_page.dart';
+import 'package:optionxi/Main_Pages/Community/community_sync_gate.dart';
+import 'package:optionxi/Main_Pages/MarketSentiments/act_market_sentiments.dart';
+import 'package:optionxi/Main_Pages/MarketSentiments/act_market_sentiments_chart.dart';
+import 'package:optionxi/Main_Pages/ScreenerPro/act_custom_screener_pro.dart';
+import 'package:optionxi/Main_Pages/DeployedAlgos/Act_DeployedAlgos.dart';
+import 'package:optionxi/Main_Pages/AccuracyNiftyStocks/act_nifty_accuracy.dart';
+import 'package:optionxi/Main_Pages/AccuracyNiftyStocks/act_stocks_accuracy.dart';
+import 'package:optionxi/Main_Pages/StockPages/act_alert_stocks.dart';
+import 'package:optionxi/Main_Pages/Notification/act_notifications.dart';
+import 'package:optionxi/Main_Pages/PracticeTrading/act_prevday_trading.dart';
+import 'package:optionxi/Main_Pages/Scanner/act_scanner_result.dart';
+import 'package:optionxi/Main_Pages/Screener/act_screener_history.dart';
+import 'package:optionxi/Main_Pages/Search/act_search_stocks_meili.dart';
+import 'package:optionxi/Main_Pages/StockPages/act_setalert_page_all.dart';
+import 'package:optionxi/Main_Pages/StockPages/act_stock_detail.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
@@ -28,7 +41,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await _initializeApp();
-
   final themeController = Get.put(ThemeController());
   await themeController.initTheme();
 
@@ -176,12 +188,8 @@ void _initializeTimezones() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  static FirebaseAnalytics analytics = FirebaseAnalytics.instance;
-
   @override
   Widget build(BuildContext context) {
-    _setUserProperty();
-
     return GetX<ThemeController>(
       builder: (themeController) {
         return GetMaterialApp(
@@ -189,6 +197,7 @@ class MyApp extends StatelessWidget {
           debugShowCheckedModeBanner: false,
           theme: themeController.lightTheme,
           darkTheme: themeController.darkTheme,
+          initialRoute: '/',
           themeMode:
               themeController.isDarkMode ? ThemeMode.dark : ThemeMode.light,
           home: AuthService().handleAuthState(),
@@ -200,11 +209,16 @@ class MyApp extends StatelessWidget {
 
   List<GetPage> _buildRoutes() {
     return [
+      GetPage(name: '/', page: () => AuthService().handleAuthState()),
       GetPage(name: '/home', page: () => Homepage()),
       GetPage(name: '/login', page: () => ModernLoginPage()),
-      GetPage(name: '/messages', page: () => NotificationPage()),
+      GetPage(name: '/alerts', page: () => MyAlertsPage()),
+      GetPage(name: '/notifications', page: () => NotificationPage()),
+      GetPage(name: '/achievements', page: () => AchievementsPage()),
       GetPage(name: '/basket', page: () => BasketFullPage()),
       GetPage(name: '/stocks', page: () => AllSearchPageMeili()),
+      GetPage(name: '/screenerpro', page: () => StockScreenerPagePro()),
+      GetPage(name: '/community', page: () => const CommunitySyncGate()),
       GetPage(
         name: '/stocks/:stockName',
         page: () {
@@ -236,23 +250,43 @@ class MyApp extends StatelessWidget {
       ),
       GetPage(
         name: '/trade/orders',
-        page: () => Homepage(initialIndex: 1, tradeFragIndex: 1),
+        page: () => PreviousDayTrading(initialFragIndex: 1),
+        transition: Transition.fade,
+      ),
+      GetPage(name: '/connect/zerodha', page: () => ZerodhaConnectPage()),
+      GetPage(name: '/connect/upstox', page: () => UpstoxConnectPage()),
+      GetPage(name: '/connect/fyers', page: () => FyersConnectPage()),
+      GetPage(name: '/practice-trading', page: () => PreviousDayTrading()),
+      GetPage(name: '/deploy-algo', page: () => DeployedAlgosScreen()),
+
+      //Backtesting routes
+      GetPage(
+        name: '/backtest/nifty',
+        page: () => NiftyDashboardShell(),
         transition: Transition.fade,
       ),
       GetPage(
-        name: '/trade/watchlist',
-        page: () => Homepage(initialIndex: 1, tradeFragIndex: 0),
+        name: '/backtest/ai-picks',
+        page: () => StockDashboardShell(),
+        transition: Transition.fade,
+      ),
+      GetPage(
+        name: '/backtest/screener',
+        page: () => ScreenerHistoryPage(),
+        transition: Transition.fade,
+      ),
+
+      //Market Sentiments routes
+      GetPage(
+        name: '/market-sentiments',
+        page: () => MarketSentimentPage(),
+        transition: Transition.fade,
+      ),
+      GetPage(
+        name: '/market-sentiments-chart',
+        page: () => MarketSentimentChartPage(),
         transition: Transition.fade,
       ),
     ];
-  }
-
-  void _setUserProperty() {
-    analytics.setUserProperty(name: 'regular', value: 'user').catchError(
-      (error) {
-        debugPrint('Analytics error: $error');
-        return null;
-      },
-    );
   }
 }

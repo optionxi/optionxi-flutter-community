@@ -3,7 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Helpers/constants.dart';
 
-import 'trending_stocks_section.dart';
+import '../Main_Frags/home_sections/sec_trending_stocks.dart';
 
 class ModernStockCard extends StatelessWidget {
   final StockData stock;
@@ -314,7 +314,7 @@ class ModernStockCard extends StatelessWidget {
             onPressed: () =>
                 Get.toNamed('/stocks/${stock.symbol.toUpperCase()}'),
             icon: const Icon(Icons.analytics_outlined, size: 18),
-            label: const Text('View Analysis',
+            label: const Text('View More Details',
                 style: TextStyle(fontWeight: FontWeight.w600)),
             style: ElevatedButton.styleFrom(
               backgroundColor: sentimentColor,

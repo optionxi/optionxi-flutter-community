@@ -23,7 +23,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:meilisearch/meilisearch.dart' as meili;
 import 'package:optionxi/Helpers/constants.dart';
-import 'package:optionxi/Main_Pages/act_nifty_ai_summary.dart';
+import 'package:optionxi/Main_Pages/AISummary/act_nifty_ai_summary.dart';
 
 // ─── Theme tokens ─────────────────────────────────────────────
 class _T {
@@ -70,6 +70,7 @@ void showAIActionSheet(
   BuildContext context, {
   required VoidCallback onChat,
   required void Function(String symbol) onAnalyse,
+  bool startOnSearch = false, // ← simple public bool instead of _Step
 }) {
   HapticFeedback.mediumImpact();
   showModalBottomSheet(
@@ -77,7 +78,11 @@ void showAIActionSheet(
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
     useSafeArea: true,
-    builder: (_) => _AIActionSheet(onChat: onChat, onAnalyse: onAnalyse),
+    builder: (_) => _AIActionSheet(
+      onChat: onChat, onAnalyse: onAnalyse,
+      initialStep:
+          startOnSearch ? _Step.search : _Step.choose, // ← convert internally
+    ),
   );
 }
 
@@ -89,15 +94,21 @@ enum _Step { choose, search }
 class _AIActionSheet extends StatefulWidget {
   final VoidCallback onChat;
   final void Function(String symbol) onAnalyse;
+  final _Step initialStep; // ← add
 
-  const _AIActionSheet({required this.onChat, required this.onAnalyse});
+  const _AIActionSheet({
+    required this.onChat,
+    required this.onAnalyse,
+    this.initialStep = _Step.choose,
+  });
 
   @override
   State<_AIActionSheet> createState() => _AIActionSheetState();
 }
 
 class _AIActionSheetState extends State<_AIActionSheet> {
-  _Step _step = _Step.choose;
+  // _Step _step = _Step.choose;
+  late _Step _step = widget.initialStep; // ← was: _Step _step = _Step.choose;
 
   late final meili.MeiliSearchClient _client;
   final _ctrl = TextEditingController();
@@ -771,7 +782,7 @@ class _ChooseHeader extends StatelessWidget {
                   colors: [_T.aiStart, _T.aiEnd],
                 ).createShader(bounds),
                 child: const Text(
-                  'AI Research',
+                  'AI Analyse',
                   style: TextStyle(
                     color: Colors.white, // masked by shader
                     fontSize: 22,

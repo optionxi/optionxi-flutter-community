@@ -9,6 +9,23 @@ import 'package:optionxi/Helpers/global_snackbar_get.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_tradehistory.dart';
 
+/// Formats a P&L value with K / L / Cr shortening.
+/// Examples: 1500 → 1.50K, 250000 → 2.50L, 12500000 → 1.25Cr
+String formatShortPnL(double value) {
+  final abs = value.abs();
+  String formatted;
+  if (abs >= 10000000) {
+    formatted = '${(abs / 10000000).toStringAsFixed(2)}Cr';
+  } else if (abs >= 100000) {
+    formatted = '${(abs / 100000).toStringAsFixed(2)}L';
+  } else if (abs >= 1000) {
+    formatted = '${(abs / 1000).toStringAsFixed(2)}K';
+  } else {
+    formatted = abs.toStringAsFixed(2);
+  }
+  return value < 0 ? '-$formatted' : formatted;
+}
+
 class EditJournalPage extends StatefulWidget {
   final JournalTradeHistory journal;
 
@@ -277,6 +294,7 @@ class _EditJournalPageState extends State<EditJournalPage>
                   action: _selectedAction,
                   logoUrl: '${Constants.OptionXiS3Loc}$_displaySymbol.png',
                   onBack: () => Navigator.pop(context),
+                  livePnl: _pnlValue,
                 ),
 
                 // ── Scrollable body ────────────────────────────────────────
@@ -508,6 +526,7 @@ class _StockHeader extends StatelessWidget {
   final String action;
   final String logoUrl;
   final VoidCallback onBack;
+  final double livePnl;
 
   const _StockHeader({
     required this.displaySymbol,
@@ -517,6 +536,7 @@ class _StockHeader extends StatelessWidget {
     required this.action,
     required this.logoUrl,
     required this.onBack,
+    required this.livePnl,
   });
 
   @override
@@ -631,7 +651,7 @@ class _StockHeader extends StatelessWidget {
                 ),
               ),
 
-              // P&L Badge
+              // P&L Badge — uses formatShortPnL for compact display
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
@@ -646,11 +666,11 @@ class _StockHeader extends StatelessWidget {
                   ),
                   const SizedBox(height: 1),
                   Text(
-                    '₹${journal.profitLoss.toStringAsFixed(2)}',
+                    '₹${formatShortPnL(livePnl)}',
                     style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
-                      color: journal.profitLoss >= 0
+                      color: livePnl >= 0
                           ? const Color(0xFF00C896)
                           : const Color(0xFFFF4D6A),
                       letterSpacing: -0.5,
@@ -1212,8 +1232,9 @@ class _PnLDisplay extends StatelessWidget {
               ),
               const SizedBox(width: 4),
               Expanded(
+                // Uses formatShortPnL — displays K / L / Cr suffix
                 child: Text(
-                  pnl.abs().toStringAsFixed(2),
+                  formatShortPnL(pnl),
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w900,

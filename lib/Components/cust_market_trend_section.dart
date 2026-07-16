@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:optionxi/Main_Pages/act_sectorwise_stocks.dart';
+import 'package:optionxi/Main_Pages/Sectorwise/act_sectorwise_stocks.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:get/get.dart';
 

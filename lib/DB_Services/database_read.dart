@@ -1,33 +1,11 @@
 import 'package:optionxi/DB_Services/database_write.dart';
 import 'package:optionxi/DataModels/dm_reg_users.dart';
-import 'package:optionxi/DataModels/dm_testimonials.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:optionxi/DataModels/dm_watchlist_stock.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
 
 class DatabaseReadService {
   FirebaseDatabase db = FirebaseDatabase.instance;
-  //Get Gallery
-  Future<List<dm_testimonials>?> getTestimonials() async {
-    final ref = db.ref();
-    DataSnapshot snapshot =
-        await ref.child('testimonials').orderByChild("timeinmill").get();
-
-    List<dm_testimonials> testimoniallist = [];
-    if (snapshot.exists) {
-      var datalist = snapshot.value as Map<dynamic, dynamic>;
-      datalist.forEach((key, value) {
-        // print("Data is: $value");
-        dm_testimonials testi = dm_testimonials();
-        testi = dm_testimonials.fromJson(value);
-        testi.tskey = key;
-        testimoniallist.add(testi);
-      });
-    } else {
-      print('No testimonials found');
-    }
-    return testimoniallist;
-  }
 
   //Get Adminlist
   Future<bool> getAdminList(suid) async {

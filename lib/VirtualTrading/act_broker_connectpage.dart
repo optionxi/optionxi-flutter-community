@@ -4,9 +4,9 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // --- YOUR IMPORTS ---
-import 'package:optionxi/BrokersConnect/connect_fyers_page.dart';
-import 'package:optionxi/BrokersConnect/connect_upstox_page.dart';
-import 'package:optionxi/BrokersConnect/connect_zerodha_page.dart';
+import 'package:optionxi/Main_Pages/BrokersConnect/connect_fyers_page.dart';
+import 'package:optionxi/Main_Pages/BrokersConnect/connect_upstox_page.dart';
+import 'package:optionxi/Main_Pages/BrokersConnect/connect_zerodha_page.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/connect_broker_dialog.dart';
 
 class BrokerConnectPage extends StatelessWidget {
@@ -98,25 +98,27 @@ class BrokerConnectPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: backgroundColor,
       extendBodyBehindAppBar: true,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          _buildModernHeader(context, theme, isDark),
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  return _BrokerCard(
-                    broker: brokers[index],
-                    isDark: isDark,
-                  );
-                },
-                childCount: brokers.length,
+      body: SafeArea(
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
+            _buildModernHeader(context, theme, isDark),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    return _BrokerCard(
+                      broker: brokers[index],
+                      isDark: isDark,
+                    );
+                  },
+                  childCount: brokers.length,
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

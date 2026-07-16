@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:optionxi/Components/custom_searchbar.dart';
-import 'package:optionxi/Components/custom_watchlist_item.dart';
+import 'package:optionxi/Components/cust_searchbar.dart';
+import 'package:optionxi/Components/cust_watchlist_item.dart';
 import 'package:optionxi/Controllers/watchlist_controller.dart';
-import 'package:optionxi/Main_Pages/act_search_stocks_meili.dart';
+import 'package:optionxi/Main_Pages/Search/act_search_stocks_meili.dart';
 
 class WatchlistFragment extends StatefulWidget {
   const WatchlistFragment({Key? key}) : super(key: key);

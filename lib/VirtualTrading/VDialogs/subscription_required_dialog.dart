@@ -32,8 +32,6 @@ void showSubscriptionRequiredDialog(
         ElevatedButton(
           onPressed: () async {
             Navigator.pop(context);
-            //  await BadgeService.incrementPortfolioBadge();
-            // Get.offAllNamed('/trade/orders');
           },
           child: Text('Okay', style: GoogleFonts.inter()),
           style: ElevatedButton.styleFrom(

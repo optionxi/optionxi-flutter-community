@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:optionxi/Main_Pages/act_tutor_detail_page.dart';
+import 'package:optionxi/Main_Pages/TutorPage/act_tutor_detail_page.dart';
 
 class TradingTutor {
   final int id;

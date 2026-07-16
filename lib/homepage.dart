@@ -2,24 +2,20 @@ import 'dart:io';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:optionxi/Components/custom_nav_bar.dart';
+import 'package:optionxi/Components/cust_nav_bar.dart';
 import 'package:optionxi/Dialogs/custom_dialog.dart';
 import 'package:optionxi/Helpers/open_url.dart';
 import 'package:optionxi/Helpers/update_helper.dart';
 import 'package:optionxi/Main_Frags/frag_home.dart';
-import 'package:optionxi/Main_Frags/frag_prev.dart';
 import 'package:optionxi/Main_Frags/frag_profile.dart';
 import 'package:optionxi/Main_Frags/frag_live.dart';
+import 'package:optionxi/Main_Frags/frag_search.dart';
 import 'package:optionxi/Main_Frags/frag_tools_v2.dart';
+import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 
 class Homepage extends StatefulWidget {
-  final int initialIndex;
-  final int? tradeFragIndex;
-
   const Homepage({
     Key? key,
-    this.initialIndex = 0,
-    this.tradeFragIndex,
   }) : super(key: key);
 
   @override
@@ -37,9 +33,13 @@ class _HomepageState extends State<Homepage> {
   @override
   void initState() {
     super.initState();
-    currentIndex = widget.initialIndex; // Set initial index
-
+    // currentIndex = widget.initialIndex;
     fetchRemoteConfig();
+
+    // ✅ Handle notification tap when app was killed or in background
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      NotificationServiceFirebase().handlePendingNavigation();
+    });
   }
 
   void onTap(int index) {
@@ -51,12 +51,9 @@ class _HomepageState extends State<Homepage> {
       case 0:
         return TradingHomeScreen();
       case 1:
-        return VirtualTradingFragment(
-          initialFragIndex: widget.tradeFragIndex,
-        );
+        return FragSearchMeili();
       case 2:
         return WatchlistFragmentMain();
-
       case 3:
         return AdvancedTradingToolsPageV2();
       case 4:
@@ -74,7 +71,7 @@ class _HomepageState extends State<Homepage> {
           duration: 400.ms,
           transitionBuilder: (child, animation) =>
               FadeTransition(opacity: animation, child: child),
-          child: getPage(currentIndex), // <-- rebuilt dynamically
+          child: getPage(currentIndex),
         ),
       ),
       bottomNavigationBar: CustomBottomNavBar(
@@ -118,7 +115,7 @@ class _HomepageState extends State<Homepage> {
         );
       }
     } catch (e) {
-      print('Error fetching remote config: $e');
+      debugPrint('Error fetching remote config: $e');
     }
   }
 

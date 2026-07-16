@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/DataModels/sample_stock_symbols.dart';
 import 'package:optionxi/Helpers/constants.dart';
-import 'package:optionxi/Main_Pages/act_alert_stocks.dart';
+import 'package:optionxi/Main_Pages/StockPages/act_alert_stocks.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
 class _AlertItemState extends State<AlertItem>

@@ -8,7 +8,7 @@ import 'package:optionxi/Helpers/lotsize_helper.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/order_placed_dialog.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/subscription_required_dialog.dart';
 import 'package:optionxi/VirtualTrading/buyandsell_prev_loading.dart';
-import 'package:optionxi/browser_lite.dart';
+import 'package:optionxi/Helpers/browser_lite.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timezone/timezone.dart' as tz;
 
@@ -495,11 +495,15 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                                   _buildOrderTypeSelector(isDark),
                                   const SizedBox(height: 24),
 
-                                  // Removed the extra inner Padding here
+                                  // Quantity Input
                                   _buildQuantityInput(isDark),
+                                  const SizedBox(height: 16),
+
+                                  // Margin Required moved below quantity
+                                  _buildMarginRequiredBelowQuantity(isDark),
                                   const SizedBox(height: 24),
 
-                                  // Moved Price Selectors inside the same padded block
+                                  // Price Selectors
                                   _buildPriceTypeSelector(isDark),
 
                                   if (_priceType != 'MKT') ...[
@@ -517,6 +521,71 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                   _buildBottomSection(isDark),
                 ],
               ),
+      ),
+    );
+  }
+
+  // New widget: Margin required displayed just below the quantity input
+  Widget _buildMarginRequiredBelowQuantity(bool isDark) {
+    String marginLabel;
+    final qty = int.tryParse(_qtyController.text) ?? 0;
+    int lotsize = getLotSize(
+      segment: widget.segment,
+      stockName: widget.stockname,
+    );
+    final totalQty = qty * lotsize;
+
+    if (_orderType == 'SELL' && _hasHolding && totalQty <= _holdingQuantity) {
+      marginLabel = 'Selling from Holdings';
+    } else if (_orderType == 'SELL' &&
+        _hasHolding &&
+        totalQty > _holdingQuantity) {
+      marginLabel = 'Net Margin';
+    } else if (_orderType == 'BUY' &&
+        _hasShortPosition &&
+        totalQty <= _shortPositionQuantity) {
+      marginLabel = 'Buyback Value';
+    } else if (_orderType == 'BUY' &&
+        _hasShortPosition &&
+        totalQty > _shortPositionQuantity) {
+      marginLabel = 'Net Margin';
+    } else if (_orderType == 'BUY') {
+      marginLabel = 'Margin Required';
+    } else {
+      marginLabel = 'Short Value';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark
+            ? const Color(0xFF60A5FA).withOpacity(0.08)
+            : const Color(0xFF60A5FA).withOpacity(0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFF60A5FA).withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            marginLabel,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isDark ? Colors.white70 : Colors.black54,
+            ),
+          ),
+          Text(
+            '₹${_marginRequired.toStringAsFixed(2)}',
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF60A5FA),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1460,34 +1529,6 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   }
 
   Widget _buildBottomSection(bool isDark) {
-    final qty = int.tryParse(_qtyController.text) ?? 0;
-    int lotsize = getLotSize(
-      segment: widget.segment,
-      stockName: widget.stockname,
-    );
-    final totalQty = qty * lotsize;
-
-    String marginLabel;
-    if (_orderType == 'SELL' && _hasHolding && totalQty <= _holdingQuantity) {
-      marginLabel = 'Selling from Holdings';
-    } else if (_orderType == 'SELL' &&
-        _hasHolding &&
-        totalQty > _holdingQuantity) {
-      marginLabel = 'Net Margin';
-    } else if (_orderType == 'BUY' &&
-        _hasShortPosition &&
-        totalQty <= _shortPositionQuantity) {
-      marginLabel = 'Buyback Value';
-    } else if (_orderType == 'BUY' &&
-        _hasShortPosition &&
-        totalQty > _shortPositionQuantity) {
-      marginLabel = 'Net Margin';
-    } else if (_orderType == 'BUY') {
-      marginLabel = 'Margin Required';
-    } else {
-      marginLabel = 'Short Value';
-    }
-
     final balanceChange = _projectedBalance - _originalAvailableBalance;
     final isProfit = balanceChange > 0;
     final goesNegative = _projectedBalance < 0;
@@ -1570,37 +1611,6 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
                 ],
               ),
             ],
-          ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? Colors.white.withOpacity(0.03)
-                  : Colors.black.withOpacity(0.02),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  marginLabel,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-                Text(
-                  '₹${_marginRequired.toStringAsFixed(2)}',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black,
-                  ),
-                ),
-              ],
-            ),
           ),
           const SizedBox(height: 20),
           SizedBox(

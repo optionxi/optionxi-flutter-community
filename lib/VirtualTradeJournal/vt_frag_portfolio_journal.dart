@@ -5,7 +5,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/conversions.dart';
-import 'package:optionxi/Main_Pages/act_leaderboard.dart';
+import 'package:optionxi/Main_Pages/Leaderboard/act_leaderboard.dart';
+import 'package:optionxi/VirtualTradeJournal/act_journal_analytics.dart';
 import 'package:optionxi/VirtualTradeJournal/bottom_exit_position_dialog.dart';
 import 'package:optionxi/VirtualTradeJournal/edit_basket_page.dart';
 import 'package:optionxi/VirtualTradeJournal/edit_journal_page.dart';
@@ -362,7 +363,10 @@ class _PortfolioFragmentJournalState extends State<PortfolioFragmentJournal>
                     label: 'Realised P&L', pnl: controller.realisedPnl.value),
                 const SizedBox(height: 10),
                 _JournalFilterBar(controller: controller),
-                const SizedBox(height: 30),
+                const SizedBox(height: 10),
+                // ── Analytics entry point ──────────────────────
+                _AnalyticsBanner(onTap: _openAnalytics),
+                const SizedBox(height: 20),
                 Expanded(
                   child: _Empty(
                       icon: Icons.history_toggle_off_outlined,
@@ -390,6 +394,13 @@ class _PortfolioFragmentJournalState extends State<PortfolioFragmentJournal>
                 child: _JournalFilterBar(controller: controller),
               );
             }
+            // ── Analytics entry point (index 2) ──────────────
+            if (i == 2) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _AnalyticsBanner(onTap: _openAnalytics),
+              );
+            }
             final trade = controller.tradeHistory[i - 2];
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
@@ -406,6 +417,12 @@ class _PortfolioFragmentJournalState extends State<PortfolioFragmentJournal>
         );
       });
 
+  // ── Add this method to _PortfolioFragmentJournalState ───────────────────────
+  void _openAnalytics() => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => JournalAnalyticsPage(),
+        ),
+      );
   // ── STATS SHEET ───────────────────────────────
   void _showStats() {
     final total = controller.totalWins.value + controller.totalLosses.value;
@@ -436,6 +453,100 @@ class _PortfolioFragmentJournalState extends State<PortfolioFragmentJournal>
     } catch (_) {
       return s;
     }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  New Widget: _AnalyticsBanner  — paste ANYWHERE in the file at top-level
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _AnalyticsBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AnalyticsBanner({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          // Subtle gradient background
+          gradient: LinearGradient(
+            colors: isDark
+                ? [const Color(0xFF172554), const Color(0xFF1E3A5F)]
+                : [const Color(0xFFEFF6FF), const Color(0xFFDBEAFE)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: const Color(0xFF3B82F6).withOpacity(0.25),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6).withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.bar_chart_rounded,
+                  color: Color(0xFF3B82F6), size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Journal Analytics',
+                    style: GoogleFonts.inter(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF3B82F6),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Calendar · Chart · Weekly breakdown',
+                    style: GoogleFonts.inter(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF3B82F6).withOpacity(0.7),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFF3B82F6),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('View',
+                      style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white)),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.arrow_forward_rounded,
+                      size: 12, color: Colors.white),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

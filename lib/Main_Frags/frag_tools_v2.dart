@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:optionxi/Main_Frags/sec_market_movers.dart';
-import 'package:optionxi/Main_Frags/sec_market_tabview.dart';
-import 'package:optionxi/Main_Frags/sec_stock_scanners.dart';
-import 'package:optionxi/Main_Frags/sec_stock_screeners.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_market_movers.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_market_tabview.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_stock_scanners.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_stock_screeners.dart';
 
 class AdvancedTradingToolsPageV2 extends StatefulWidget {
   const AdvancedTradingToolsPageV2({Key? key}) : super(key: key);

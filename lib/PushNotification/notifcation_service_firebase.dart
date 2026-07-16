@@ -8,45 +8,47 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:optionxi/DB_Services/database_write.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 
-// final navigatorKey = GlobalKey<NavigatorState>();
+// ─────────────────────────────────────────────────────────────
+// Determine target route from message content
+// ─────────────────────────────────────────────────────────────
+String _getRouteForMessage(RemoteMessage message) {
+  final title = message.notification?.title?.toLowerCase() ?? '';
+  final type = message.data['type']?.toString().toLowerCase() ?? '';
 
-Future<void> handleMessageBackground(RemoteMessage? message) async {
-  if (message == null) return;
-  debugPrint("Background message received");
-
-  // Check if message contains "alert"
-  bool containsTriggered = false;
-
-  // Check in notification title
-  if (message.notification?.title?.toLowerCase().contains('alert') ?? false) {
-    containsTriggered = true;
-  }
-
-  // // Check in notification body
-  // if (message.notification?.body?.toLowerCase().contains('triggered') ??
-  //     false) {
-  //   containsTriggered = true;
-  // }
-
-  // // Check in data payload
-  // if (message.data.toString().toLowerCase().contains('triggered')) {
-  //   containsTriggered = true;
-  // }
-
-  if (containsTriggered) {
-    // Do something else when "alert" is found
-    debugPrint("Alert message detected");
-    BadgeService.incrementAlertBadge();
-
-    // Handle triggered message differently
-    // Get.toNamed("/triggered-alerts", arguments: message);
+  if (title.contains('alert') || type == 'alert') {
+    return '/alerts'; // → NotificationPage showing alerts
+  } else if (title.contains('notification') || type == 'notification') {
+    return '/notifications'; // → NotificationPage
   } else {
-    // Original behavior
-    BadgeService.incrementNotificationsBadge();
-    Get.toNamed("/messages", arguments: message);
+    return '/home'; // → Homepage
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Background handler — must be top-level, NO Get/context here
+// ─────────────────────────────────────────────────────────────
+@pragma('vm:entry-point')
+Future<void> handleMessageBackground(RemoteMessage message) async {
+  debugPrint("Background message received: ${message.messageId}");
+
+  final title = message.notification?.title?.toLowerCase() ?? '';
+  if (title.contains('alert')) {
+    BadgeService.incrementAlertBadge();
+  } else {
+    BadgeService.incrementNotificationsBadge();
+  }
+
+  // Store pending route so app can navigate when it opens
+  final prefs = await SharedPreferences.getInstance();
+  final route = _getRouteForMessage(message);
+  await prefs.setString('pending_navigation_route', route);
+  await prefs.setString('pending_navigation_data', jsonEncode(message.data));
+  debugPrint("Background: stored pending route → $route");
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main Firebase notification service
+// ─────────────────────────────────────────────────────────────
 class NotificationServiceFirebase {
   static const String _tokenKey = 'fcm_token';
   static const String _pendingTokenKey = 'pending_fcm_token';
@@ -54,7 +56,6 @@ class NotificationServiceFirebase {
   String? _currentToken;
   bool _isInitialized = false;
 
-  // Singleton pattern
   static final NotificationServiceFirebase _instance =
       NotificationServiceFirebase._internal();
   factory NotificationServiceFirebase() => _instance;
@@ -66,27 +67,109 @@ class NotificationServiceFirebase {
     try {
       final messaging = FirebaseMessaging.instance;
 
-      // Step 1: Request permissions first
       await _requestPermission(messaging);
-
-      // Step 2: Get FCM token (regardless of auth state)
       await _getFCMToken(messaging);
-
-      // Step 3: Setup token refresh listener
       _setupTokenRefreshListener(messaging);
-
-      // Step 4: Setup other Firebase messaging features
       await _subscribeToTopic(messaging);
       await _setupForegroundOptions(messaging);
       _setupMessageHandlers(messaging);
-
-      // Step 5: Setup auth state listener
       _setupAuthStateListener();
 
       _isInitialized = true;
       debugPrint("Firebase messaging initialized successfully");
     } catch (e) {
       debugPrint("Firebase messaging initialization error: $e");
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Call this from Homepage.initState via addPostFrameCallback
+  // Handles the case where app was killed and user tapped notification
+  // ─────────────────────────────────────────────────────────────
+  Future<void> handlePendingNavigation() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final route = prefs.getString('pending_navigation_route');
+      final dataStr = prefs.getString('pending_navigation_data');
+
+      if (route != null) {
+        await prefs.remove('pending_navigation_route');
+        await prefs.remove('pending_navigation_data');
+
+        final data = dataStr != null ? jsonDecode(dataStr) : null;
+        debugPrint("Handling pending navigation → $route");
+
+        await Future.delayed(const Duration(milliseconds: 300));
+        Get.toNamed(route, arguments: data);
+      }
+    } catch (e) {
+      debugPrint("Pending navigation error: $e");
+    }
+  }
+
+  void _setupMessageHandlers(FirebaseMessaging messaging) {
+    // App launched from killed state by tapping notification
+    messaging.getInitialMessage().then((msg) {
+      if (msg != null) {
+        debugPrint("App opened from terminated state via notification");
+        Future.delayed(const Duration(milliseconds: 500), () {
+          _navigateForMessage(msg);
+        });
+      }
+    }).catchError((error) {
+      debugPrint("Initial message error: $error");
+      return null;
+    });
+
+    // App was backgrounded, user tapped notification
+    FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      debugPrint("App foregrounded via notification tap");
+      _navigateForMessage(msg);
+    });
+
+    // App is in foreground — show local notification
+    FirebaseMessaging.onMessage.listen((msg) {
+      debugPrint("Foreground message received");
+      _showForegroundNotification(msg);
+    });
+
+    // App is in background/killed — handled by top-level function
+    FirebaseMessaging.onBackgroundMessage(handleMessageBackground);
+  }
+
+  void _navigateForMessage(RemoteMessage message) {
+    final route = _getRouteForMessage(message);
+    debugPrint("Navigating to: $route");
+    try {
+      Get.toNamed(route, arguments: message.data);
+    } catch (e) {
+      debugPrint("Navigation error: $e");
+    }
+  }
+
+  void _showForegroundNotification(RemoteMessage message) {
+    try {
+      final title = message.notification?.title?.toLowerCase() ?? '';
+      if (title.contains('alert')) {
+        BadgeService.incrementAlertBadge();
+      } else {
+        BadgeService.incrementNotificationsBadge();
+      }
+
+      final route = _getRouteForMessage(message);
+
+      // Encode route + data as payload so tap handler routes correctly
+      NotificationService().showNotificationBasic(
+        id: message.hashCode,
+        title: message.notification?.title ?? "Notification",
+        body: message.notification?.body ?? "You have a new message",
+        payLoad: jsonEncode({
+          'route': route,
+          'data': message.data,
+        }),
+      );
+    } catch (e) {
+      debugPrint("Notification display error: $e");
     }
   }
 
@@ -98,9 +181,7 @@ class NotificationServiceFirebase {
         sound: true,
         provisional: false,
       );
-
       debugPrint("Permission status: ${settings.authorizationStatus}");
-
       if (settings.authorizationStatus == AuthorizationStatus.denied) {
         debugPrint("User denied permission - FCM may not work");
       }
@@ -112,17 +193,11 @@ class NotificationServiceFirebase {
   Future<void> _getFCMToken(FirebaseMessaging messaging) async {
     try {
       debugPrint("Attempting to get FCM token...");
-
       final token = await messaging.getToken();
-
       if (token != null && token.isNotEmpty) {
         debugPrint("FCM token obtained: ${token.substring(0, 20)}...");
         _currentToken = token;
-
-        // Store token locally
         await _storeTokenLocally(token);
-
-        // Try to update user's token if authenticated
         await _updateUserFCMToken(token);
       } else {
         debugPrint("Failed to get FCM token");
@@ -153,53 +228,14 @@ class NotificationServiceFirebase {
     }
   }
 
-  // Future<String?> _getStoredToken() async {
-  //   try {
-  //     final prefs = await SharedPreferences.getInstance();
-  //     return prefs.getString(_tokenKey);
-  //   } catch (e) {
-  //     debugPrint("Get stored token error: $e");
-  //     return null;
-  //   }
-  // }
-
-  Future<void> forceRefreshAndSyncToken() async {
-    try {
-      final messaging = FirebaseMessaging.instance;
-      final freshToken = await messaging.getToken();
-
-      if (freshToken != null && freshToken.isNotEmpty) {
-        _currentToken = freshToken;
-        await _storeTokenLocally(freshToken);
-
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await DatabaseWriteService().updateUserFCM(user.uid, freshToken);
-          debugPrint("Force-refreshed FCM token synced for user: ${user.uid}");
-        } else {
-          await _storePendingToken(freshToken);
-          debugPrint("Force-refreshed FCM token stored as pending (no user)");
-        }
-      } else {
-        debugPrint("Force-refresh failed: no token obtained");
-      }
-    } catch (e) {
-      debugPrint("Force-refresh token error: $e");
-    }
-  }
-
   Future<void> _updateUserFCMToken(String token) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        // User is authenticated, update their token
         await DatabaseWriteService().updateUserFCM(user.uid, token);
         debugPrint("FCM token updated for user: ${user.uid}");
-
-        // Clear any pending token
         await _clearPendingToken();
       } else {
-        // User is not authenticated, store as pending
         await _storePendingToken(token);
         debugPrint("User not authenticated, token stored as pending");
       }
@@ -232,15 +268,13 @@ class NotificationServiceFirebase {
         debugPrint("User authenticated: ${user.uid}");
         _onUserAuthenticated(user);
       } else {
-        debugPrint("User signed out");
-        _onUserSignedOut();
+        debugPrint("User signed out, FCM token retained for device");
       }
     });
   }
 
   Future<void> _onUserAuthenticated(User user) async {
     try {
-      // Check if we have a pending token to update
       final prefs = await SharedPreferences.getInstance();
       final pendingToken = prefs.getString(_pendingTokenKey);
 
@@ -249,13 +283,10 @@ class NotificationServiceFirebase {
         await DatabaseWriteService().updateUserFCM(user.uid, pendingToken);
         await _clearPendingToken();
       } else if (_currentToken != null) {
-        // Use current token if available
         debugPrint("Updating current FCM token for authenticated user");
         await DatabaseWriteService().updateUserFCM(user.uid, _currentToken!);
       } else {
-        // Get fresh token for authenticated user
-        final messaging = FirebaseMessaging.instance;
-        final token = await messaging.getToken();
+        final token = await FirebaseMessaging.instance.getToken();
         if (token != null) {
           await DatabaseWriteService().updateUserFCM(user.uid, token);
           _currentToken = token;
@@ -267,22 +298,27 @@ class NotificationServiceFirebase {
     }
   }
 
-  Future<void> _onUserSignedOut() async {
-    try {
-      // Optionally clear user-specific data
-      // Keep the FCM token as it's device-specific, not user-specific
-      debugPrint("User signed out, FCM token retained for device");
-    } catch (e) {
-      debugPrint("Error handling user sign out: $e");
-    }
-  }
-
-  // Public method to manually sync token (call after login)
   Future<void> syncTokenWithUser() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null && _currentToken != null) {
       await DatabaseWriteService().updateUserFCM(user.uid, _currentToken!);
       debugPrint("Token manually synced with user: ${user.uid}");
+    }
+  }
+
+  Future<void> forceRefreshAndSyncToken() async {
+    try {
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        _currentToken = token;
+        await _storeTokenLocally(token);
+        await _updateUserFCMToken(token);
+        debugPrint("Force-refreshed token synced");
+      } else {
+        debugPrint("Force-refresh failed: no token obtained");
+      }
+    } catch (e) {
+      debugPrint("Force-refresh token error: $e");
     }
   }
 
@@ -303,77 +339,6 @@ class NotificationServiceFirebase {
     );
   }
 
-  void _setupMessageHandlers(FirebaseMessaging messaging) {
-    messaging.getInitialMessage().then((msg) {
-      if (msg != null) {
-        debugPrint("Initial message received");
-        handleMessage(msg);
-      }
-    }).catchError((error) {
-      debugPrint("Initial message error: $error");
-      return null;
-    });
-
-    FirebaseMessaging.onMessageOpenedApp.listen((msg) {
-      debugPrint("Background message opened");
-      handleMessage(msg);
-      // _showNotification(msg); no need to show again, user clicked
-    });
-
-    FirebaseMessaging.onMessage.listen((msg) {
-      debugPrint("Foreground message received");
-      _showNotification(msg);
-    });
-
-    FirebaseMessaging.onBackgroundMessage(handleMessageBackground);
-  }
-
-  void _showNotification(RemoteMessage message) {
-    try {
-      // Check if message contains "alert"
-      bool containsTriggered = false;
-
-      // Check in notification title
-      if (message.notification?.title?.toLowerCase().contains('alert') ??
-          false) {
-        containsTriggered = true;
-      }
-
-      if (containsTriggered) {
-        BadgeService.incrementAlertBadge();
-      } else {
-        BadgeService.incrementNotificationsBadge();
-      }
-
-      // Increment the notifications badge count
-      // BadgeService.incrementNotificationsBadge();
-
-      NotificationService().showNotificationBasic(
-        id: 0,
-        title: message.notification?.title ?? "Notification",
-        body: message.notification?.body ?? "You have a new message",
-        payLoad: jsonEncode(message.data),
-      );
-    } catch (e) {
-      debugPrint("Notification display error: $e");
-    }
-  }
-
-  // Update the handleMessage method in NotificationServiceFirebase
-  void handleMessage(RemoteMessage? message) {
-    if (message == null) return;
-
-    try {
-      // navigatorKey.currentState?.pushNamed("/messages", arguments: message);
-      Get.toNamed("/messages", arguments: message);
-    } catch (e) {
-      debugPrint("Message navigation error: $e");
-    }
-  }
-
-  // Method to get current token
   String? getCurrentToken() => _currentToken;
-
-  // Method to check if service is initialized
   bool get isInitialized => _isInitialized;
 }

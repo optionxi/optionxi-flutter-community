@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -26,7 +27,7 @@ abstract class _CT {
 
 // ─── Entry Point ─────────────────────────────────────────────────────────────
 
-void showContactOptions(BuildContext context) {
+void showContactOptions(BuildContext context, [String? desc]) {
   HapticFeedback.lightImpact();
   showModalBottomSheet(
     context: context,
@@ -34,14 +35,15 @@ void showContactOptions(BuildContext context) {
     isScrollControlled: true,
     isDismissible: true,
     enableDrag: true,
-    builder: (_) => const _ContactSheet(),
+    builder: (_) => _ContactSheet(desc: desc),
   );
 }
 
 // ─── Bottom Sheet ─────────────────────────────────────────────────────────────
 
 class _ContactSheet extends StatelessWidget {
-  const _ContactSheet();
+  final String? desc;
+  const _ContactSheet({this.desc});
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +85,7 @@ class _ContactSheet extends StatelessWidget {
                   tint: _CT.whatsapp,
                   label: 'WhatsApp',
                   meta: 'Usually replies in minutes',
-                  onTap: () => _dismiss(context, _launchWhatsApp),
+                  onTap: () => _dismiss(context, () => _launchWhatsApp(desc)),
                 ),
                 _Divider(isDark: isDark),
                 _ContactRow(
@@ -92,7 +94,7 @@ class _ContactSheet extends StatelessWidget {
                   tint: _CT.email,
                   label: 'Email',
                   meta: 'For detailed inquiries',
-                  onTap: () => _dismiss(context, _launchGmail),
+                  onTap: () => _dismiss(context, () => _launchGmail(desc)),
                 ),
                 _Divider(isDark: isDark),
                 _ContactRow(
@@ -357,20 +359,23 @@ class _ContactRowState extends State<_ContactRow>
 
 // ─── Launch Helpers ───────────────────────────────────────────────────────────
 
-Future<void> _launchWhatsApp() async {
-  const phone = '9496672190';
-  const msg = "Hi! I'm new to OptionXi, can you help me?";
+Future<void> _launchWhatsApp([String? desc]) async {
+  final phone = dotenv.env['WHATSAPP_PHONE']!;
+  final base = "Hi! I'm new to OptionXi, can you help me?";
+  final msg =
+      desc != null && desc.isNotEmpty ? "$base\n\nMy strategy: $desc" : base;
   final uri =
       Uri.parse('https://wa.me/$phone?text=${Uri.encodeComponent(msg)}');
   if (await canLaunchUrl(uri))
     await launchUrl(uri, mode: LaunchMode.externalApplication);
 }
 
-Future<void> _launchGmail() async {
-  const email = 'optionxi24@gmail.com';
+Future<void> _launchGmail([String? desc]) async {
+  final email = dotenv.env['SUPPORT_EMAIL']!;
   const subject = 'Algorithm Deployment Inquiry';
-  const body =
-      'Hello,\n\nI would like to learn more about deploying my algorithm with OptionXi.\n\nBest regards';
+  final body = desc != null && desc.isNotEmpty
+      ? 'Hello,\n\nI would like to learn more about deploying my algorithm with OptionXi.\n\nStrategy details:\n$desc\n\nBest regards'
+      : 'Hello,\n\nI would like to learn more about deploying my algorithm with OptionXi.\n\nBest regards';
   final uri = Uri.parse(
       'mailto:$email?subject=${Uri.encodeComponent(subject)}&body=${Uri.encodeComponent(body)}');
   if (await canLaunchUrl(uri))
@@ -378,7 +383,9 @@ Future<void> _launchGmail() async {
 }
 
 Future<void> _launchInstagram() async {
-  final uri = Uri.parse('https://instagram.com/optionxi');
+  final url = dotenv.env['INSTAGRAM_URL']!;
+
+  final uri = Uri.parse(url);
   if (await canLaunchUrl(uri))
     await launchUrl(uri, mode: LaunchMode.externalApplication);
 }

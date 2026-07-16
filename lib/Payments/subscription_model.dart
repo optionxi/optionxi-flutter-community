@@ -22,51 +22,51 @@ class SubscriptionPlan {
       SubscriptionPlan(
         id: 'basic',
         name: 'Basic',
-        price: 299.0,
+        price: 399.0,
         maxBrokers: 1,
         realTimeData: false,
         customNotifications: true,
         features: [
           'Virtual Trading',
           'Basic Charts',
-          '1 Broker Connection',
+          '1 Broker Deployment',
           'Custom Notifications',
-          'Email Support'
+          'Whatsapp Support'
         ],
       ),
       SubscriptionPlan(
         id: 'premium',
         name: 'Premium',
-        price: 499.0,
+        price: 899.0,
         maxBrokers: 3,
         realTimeData: true,
         customNotifications: true,
         features: [
           'All Basic Features',
           'Real-time Data',
-          '3 Broker Connections',
-          'Advanced Charts',
+          '3 Broker Deployments',
+          'Advanced Daily Reports',
           'Portfolio Analytics',
           'Priority Support'
         ],
       ),
-      SubscriptionPlan(
-        id: 'pro',
-        name: 'Pro',
-        price: 899.0,
-        maxBrokers: -1, // Unlimited
-        realTimeData: true,
-        customNotifications: true,
-        features: [
-          'All Premium Features',
-          'Unlimited Brokers',
-          'Advanced Analytics',
-          'Custom Indicators',
-          'API Access',
-          '24/7 Phone Support',
-          'White-label Options'
-        ],
-      ),
+      // SubscriptionPlan(
+      //   id: 'pro',
+      //   name: 'Pro',
+      //   price: 899.0,
+      //   maxBrokers: -1, // Unlimited
+      //   realTimeData: true,
+      //   customNotifications: true,
+      //   features: [
+      //     'All Premium Features',
+      //     'Unlimited Brokers',
+      //     'Advanced Analytics',
+      //     'Custom Indicators',
+      //     'API Access',
+      //     '24/7 Phone Support',
+      //     'White-label Options'
+      //   ],
+      // ),
     ];
   }
 }

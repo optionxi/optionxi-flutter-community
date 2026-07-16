@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:optionxi/Main_Pages/act_atlas_page.dart';
+import 'package:optionxi/Main_Pages/MarketSentiments/act_market_sentiments.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'dart:convert'; // Add this import for jsonDecode
 

@@ -3,7 +3,7 @@ import 'package:get/get.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/Helpers/conversions.dart';
-import 'package:optionxi/Main_Pages/act_leaderboard.dart';
+import 'package:optionxi/Main_Pages/Leaderboard/act_leaderboard.dart';
 import 'package:optionxi/VirtualTrading/VComponents/cust_pulsating_effect.dart';
 import 'package:optionxi/VirtualTrading/VControllers/portfolio_prev_controller.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_holdings.dart';

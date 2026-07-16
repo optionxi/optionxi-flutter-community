@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:optionxi/Components/custom_animated_price.dart';
+import 'package:optionxi/Components/cust_animated_price.dart';
 import 'package:optionxi/DataModels/dm_stock_model.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_prev_fnodata.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_prev_fnoitem.dart';

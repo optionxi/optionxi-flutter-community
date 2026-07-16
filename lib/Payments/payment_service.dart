@@ -7,8 +7,8 @@ class PaymentService {
   static final DatabaseReference _database = FirebaseDatabase.instance.ref();
 
   static const Set<String> _productIds = {
-    'basic_monthly_299',
-    'premium_monthly_499',
+    'basic_monthly_399',
+    'premium_monthly_899',
     'pro_monthly_899',
   };
 

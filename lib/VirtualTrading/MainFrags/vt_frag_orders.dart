@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Helpers/conversions.dart';
-import 'package:optionxi/Main_Pages/act_leaderboard.dart';
+import 'package:optionxi/Main_Pages/Leaderboard/act_leaderboard.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/VirtualTrading/VComponents/custom_collapsible_headers.dart';
 import 'package:optionxi/VirtualTrading/act_buyandsell_prev.dart';
@@ -231,7 +231,7 @@ class _OrdersPageState extends State<OrdersPage>
           backgroundColor: backgroundColor,
           duration: Duration(milliseconds: 1500),
           behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(bottom: 70), // Add bottom margin
+          margin: EdgeInsets.only(bottom: 10), // Add bottom margin
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),

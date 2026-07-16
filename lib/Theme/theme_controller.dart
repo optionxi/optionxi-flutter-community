@@ -77,7 +77,7 @@ class ThemeController extends GetxController {
   // Initialize theme from shared preferences
   Future<void> initTheme() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    _isDarkMode.value = prefs.getBool('isDarkMode') ?? false;
+    _isDarkMode.value = prefs.getBool('isDarkMode') ?? true;
     // Remove the updateTheme() call from here
   }
 

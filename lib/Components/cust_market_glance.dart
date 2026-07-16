@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:optionxi/Main_Pages/act_full_index_page.dart';
-import 'package:optionxi/Main_Pages/act_set_alert.dart';
+import 'package:optionxi/Main_Pages/Indices/act_full_index_page.dart';
+import 'package:optionxi/Main_Pages/StockPages/act_set_alert.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class IndicesGlance extends StatefulWidget {
