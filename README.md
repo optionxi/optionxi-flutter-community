@@ -7,7 +7,6 @@
 ![TruffleHog Scan](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/trufflehog.yml/badge.svg)
 [![Gitleaks Scan](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/gitleaks.yml/badge.svg)](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/gitleaks.yml)
 ![Build Scan](https://github.com/optionxi/optionxi-flutter-community/actions/workflows/flutter-build.yml/badge.svg)
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/optionxi/optionxi-flutter-community?utm_source=oss&utm_medium=github&utm_campaign=optionxi%2Foptionxi-flutter-community&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
 ---
 
