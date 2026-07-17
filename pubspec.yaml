@@ -119,7 +119,7 @@ dependencies:
   #     ref: 188444d90dd89062ef8eb587be224a75f5c88cb5
 
   
-  flutter_document_picker: ^5.2.3
+  # flutter_document_picker: ^5.2.3
   flutter_datetime_picker:
     git:
       url: https://github.com/katmakhan/flutter_datetime_picker.git
