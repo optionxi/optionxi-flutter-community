@@ -224,9 +224,16 @@ flutter:
           weight: 600
         - asset: fonts/Montserrat-Bold.ttf
           weight: 700
+        - asset: fonts/Montserrat-BoldItalic.ttf
+          weight: 700
+          style: italic
         - asset: fonts/Montserrat-ExtraBold.ttf
           weight: 800
+        - asset: fonts/Montserrat-ExtraBoldItalic.ttf
+          weight: 800
+          style: italic
         - asset: fonts/Montserrat-Black.ttf
+          weight: 900
 
     - family: Kanit
       fonts:
