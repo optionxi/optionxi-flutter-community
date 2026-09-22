@@ -1,15 +1,15 @@
+import 'dart:ui' show FontFeature;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-// import 'package:optionxi/Payments/subsctiption_screen.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:syncfusion_flutter_charts/charts.dart';
-import 'dart:math' as math;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Models
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// MODELS (unchanged data contract with Supabase)
+// ═════════════════════════════════════════════════════════════════════════════
 
 class IndexEntry {
   final int id;
@@ -83,7 +83,6 @@ class GroupedIndex {
   double? priceChange;
   final List<IndexEntry> picks;
   List<OhlcvEntry> ohlcvData;
-  // First high/low breakout times
   String? firstHighIso;
   String? firstLowIso;
 
@@ -100,6 +99,13 @@ class GroupedIndex {
     this.firstHighIso,
     this.firstLowIso,
   });
+
+  int get upCount => picks.where((p) => p.isUpBreakout).length;
+  int get downCount => picks.length - upCount;
+
+  double? get changePct => (priceChange != null && (startPrice ?? 0) != 0)
+      ? priceChange! / startPrice! * 100
+      : null;
 }
 
 class ChartDataPoint {
@@ -118,18 +124,11 @@ class ChartDataPoint {
   });
 }
 
-// Time range filter options
-enum TimeRangeFilter {
-  all,
-  firstHour, // 9:15–10:15
-  midMorning, // 10:15–11:30
-  preNoon, // 11:30–12:30
-  afternoon, // 12:30–15:30
-}
+enum TimeRangeFilter { all, firstHour, midMorning, preNoon, afternoon }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ═════════════════════════════════════════════════════════════════════════════
 
 String mapSymbol(String s) {
   if (s == 'NIFTY50') return 'NIFTY';
@@ -137,51 +136,82 @@ String mapSymbol(String s) {
   return s;
 }
 
-DateTime getTodayIST() {
-  final now = DateTime.now().toUtc();
-  return now.add(const Duration(hours: 5, minutes: 30));
+String friendlyName(String mapped) {
+  switch (mapped) {
+    case 'NIFTY':
+      return 'Nifty 50';
+    case 'BANKNIFTY':
+      return 'Bank Nifty';
+    default:
+      return mapped;
+  }
 }
+
+DateTime getTodayIST() =>
+    DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
 
 String formatDateHeader(DateTime d) => DateFormat('dd MMM yyyy').format(d);
 
 String formatTimeIST(String iso) {
   final d =
       DateTime.parse(iso).toUtc().add(const Duration(hours: 5, minutes: 30));
-  return DateFormat('hh:mm a').format(d);
+  return DateFormat('h:mm a').format(d);
 }
 
 DateTime getLocalIstTime(String iso) {
-  final utcTime = DateTime.parse(iso).toUtc();
-  final istTime = utcTime.add(const Duration(hours: 5, minutes: 30));
-  return DateTime(
-      istTime.year, istTime.month, istTime.day, istTime.hour, istTime.minute);
+  final t =
+      DateTime.parse(iso).toUtc().add(const Duration(hours: 5, minutes: 30));
+  return DateTime(t.year, t.month, t.day, t.hour, t.minute);
 }
 
-Color dominantColor(List<IndexEntry> picks, {required bool isDark}) {
-  final upCount = picks.where((p) => p.isUpBreakout).length;
-  if (upCount >= picks.length / 2) {
-    return isDark ? const Color(0xFF10b981) : const Color(0xFF059669);
+final NumberFormat _priceFmt = NumberFormat('#,##0.00');
+String fmtPrice(double? v) => v == null ? '—' : _priceFmt.format(v);
+
+String sessionName(TimeRangeFilter f) {
+  switch (f) {
+    case TimeRangeFilter.all:
+      return 'Full day';
+    case TimeRangeFilter.firstHour:
+      return 'Opening hour';
+    case TimeRangeFilter.midMorning:
+      return 'Mid-morning';
+    case TimeRangeFilter.preNoon:
+      return 'Around noon';
+    case TimeRangeFilter.afternoon:
+      return 'Afternoon';
   }
-  return isDark ? const Color(0xFFef4444) : const Color(0xFFdc2626);
 }
 
-// Time range filter helpers
 String timeRangeLabel(TimeRangeFilter f) {
   switch (f) {
     case TimeRangeFilter.all:
-      return 'All Day';
+      return '9:15 – 3:30';
     case TimeRangeFilter.firstHour:
-      return '9:15–10:15';
+      return '9:15 – 10:15';
     case TimeRangeFilter.midMorning:
-      return '10:15–11:30';
+      return '10:15 – 11:30';
     case TimeRangeFilter.preNoon:
-      return '11:30–12:30';
+      return '11:30 – 12:30';
     case TimeRangeFilter.afternoon:
-      return '12:30–3:30';
+      return '12:30 – 3:30';
   }
 }
 
-// Returns (startHour, startMin, endHour, endMin) in IST local
+String sessionHint(TimeRangeFilter f) {
+  switch (f) {
+    case TimeRangeFilter.all:
+      return 'Showing the whole trading day, from opening bell to close.';
+    case TimeRangeFilter.firstHour:
+      return 'The first hour is usually the busiest. Prices often swing the most here.';
+    case TimeRangeFilter.midMorning:
+      return 'Things settle down a bit. Moves here often show which side is winning.';
+    case TimeRangeFilter.preNoon:
+      return 'Often the quietest stretch of the day, with smaller price moves.';
+    case TimeRangeFilter.afternoon:
+      return 'Activity usually picks up again as traders get ready for the close.';
+  }
+}
+
 ({int sh, int sm, int eh, int em}) timeRangeBounds(TimeRangeFilter f) {
   switch (f) {
     case TimeRangeFilter.all:
@@ -197,42 +227,689 @@ String timeRangeLabel(TimeRangeFilter f) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design Tokens
-// ─────────────────────────────────────────────────────────────────────────────
-
-class AppColors {
-  // Dark palette
-  static const darkBg = Color(0xFF080808);
-  static const darkSurface = Color(0xFF101010);
-  static const darkCard = Color(0xFF141414);
-  static const darkBorder = Color(0xFF222222);
-  static const darkSubBg = Color(0xFF0c0c0c);
-  static const darkTextPrimary = Color(0xFFf0f0f0);
-  static const darkTextSub = Color(0xFF888888);
-  static const darkTextMuted = Color(0xFF444444);
-
-  // Light palette
-  static const lightBg = Color(0xFFf5f5f5);
-  static const lightSurface = Color(0xFFffffff);
-  static const lightCard = Color(0xFFffffff);
-  static const lightBorder = Color(0xFFe8e8e8);
-  static const lightSubBg = Color(0xFFfafafa);
-  static const lightTextPrimary = Color(0xFF111111);
-  static const lightTextSub = Color(0xFF666666);
-  static const lightTextMuted = Color(0xFFbbbbbb);
-
-  // Semantic
-  static const bullDark = Color(0xFF00d68f);
-  static const bullLight = Color(0xFF00a86b);
-  static const bearDark = Color(0xFFff4757);
-  static const bearLight = Color(0xFFe8283a);
-  static const accent = Color(0xFFF59E0B);
+List<IndexEntry> picksInRange(
+    GroupedIndex g, TimeRangeFilter f, DateTime date) {
+  final b = timeRangeBounds(f);
+  final xMin = DateTime(date.year, date.month, date.day, b.sh, b.sm);
+  final xMax = DateTime(date.year, date.month, date.day, b.eh, b.em);
+  return g.picks.where((pick) {
+    final t = getLocalIstTime(pick.snapshotTime);
+    return !t.isBefore(xMin) && !t.isAfter(xMax);
+  }).toList();
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Page
-// ─────────────────────────────────────────────────────────────────────────────
+OhlcvEntry? closestCandle(List<OhlcvEntry> data, DateTime t) {
+  OhlcvEntry? best;
+  var minDiff = 1 << 30;
+  for (final o in data) {
+    final d = getLocalIstTime(o.ts).difference(t).inMinutes.abs();
+    if (d < minDiff) {
+      minDiff = d;
+      best = o;
+    }
+  }
+  return best;
+}
+
+TextStyle _ts(Color c, double size,
+        {FontWeight w = FontWeight.w500, double? ls, double? h}) =>
+    TextStyle(
+      color: c,
+      fontSize: size,
+      fontWeight: w,
+      letterSpacing: ls,
+      height: h,
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
+
+String _cap(String s) => s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
+
+// ── Market mood: a plain-language summary of highs vs lows ──────────────────
+
+enum MoodKind { buyers, sellers, mixed }
+
+class MoodInfo {
+  final MoodKind kind;
+  final String label;
+  final String line;
+  final IconData icon;
+  const MoodInfo(this.kind, this.label, this.line, this.icon);
+}
+
+MoodInfo moodFor(GroupedIndex g) {
+  final total = g.picks.length;
+  final ratio = total == 0 ? 0.5 : g.upCount / total;
+  if (ratio >= 0.65) {
+    return const MoodInfo(
+      MoodKind.buyers,
+      'Buyers are in control',
+      'Most alerts were new highs, so more people wanted to buy than sell.',
+      Icons.north_east_rounded,
+    );
+  }
+  if (ratio <= 0.35) {
+    return const MoodInfo(
+      MoodKind.sellers,
+      'Sellers are in control',
+      'Most alerts were new lows, so more people wanted to sell than buy.',
+      Icons.south_east_rounded,
+    );
+  }
+  return const MoodInfo(
+    MoodKind.mixed,
+    'Buyers and sellers are split',
+    'Both new highs and new lows showed up, so the market is undecided.',
+    Icons.swap_vert_rounded,
+  );
+}
+
+Color moodColor(MoodKind k, Pal p) {
+  switch (k) {
+    case MoodKind.buyers:
+      return p.bull;
+    case MoodKind.sellers:
+      return p.bear;
+    case MoodKind.mixed:
+      return p.amber;
+  }
+}
+
+String heroHeadline(List<GroupedIndex> gs) {
+  final moods = gs.map(moodFor).toList();
+  final names = gs.map((g) => friendlyName(g.mappedSymbol)).toList();
+  String phrase(int i) {
+    switch (moods[i].kind) {
+      case MoodKind.buyers:
+        return 'buyers are in control of ${names[i]}';
+      case MoodKind.sellers:
+        return 'sellers are in control of ${names[i]}';
+      case MoodKind.mixed:
+        return '${names[i]} is undecided';
+    }
+  }
+
+  if (gs.length == 1) return _cap(phrase(0));
+  final allSame = moods.every((m) => m.kind == moods.first.kind);
+  if (allSame) {
+    final joined = names.join(' and ');
+    switch (moods.first.kind) {
+      case MoodKind.buyers:
+        return 'Buyers are in control of $joined';
+      case MoodKind.sellers:
+        return 'Sellers are in control of $joined';
+      case MoodKind.mixed:
+        return '$joined are both undecided';
+    }
+  }
+  return _cap(List.generate(gs.length, phrase).join(', while '));
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// DESIGN TOKENS — flat surfaces, navy ink, marigold highlight
+// ═════════════════════════════════════════════════════════════════════════════
+
+class Pal {
+  final bool dark;
+  final Color bg, card, line, chip;
+  final Color ink, sub, muted;
+  final Color bull, bear, amber;
+  final Color accent, onAccent;
+  final Color hero, onHero, onHeroSub;
+
+  const Pal({
+    required this.dark,
+    required this.bg,
+    required this.card,
+    required this.line,
+    required this.chip,
+    required this.ink,
+    required this.sub,
+    required this.muted,
+    required this.bull,
+    required this.bear,
+    required this.amber,
+    required this.accent,
+    required this.onAccent,
+    required this.hero,
+    required this.onHero,
+    required this.onHeroSub,
+  });
+
+  static const light = Pal(
+    dark: false,
+    bg: Color(0xFFF1F4F8),
+    card: Color(0xFFFFFFFF),
+    line: Color(0xFFE1E6EE),
+    chip: Color(0xFFEDF1F6),
+    ink: Color(0xFF0E1A2B),
+    sub: Color(0xFF5B6778),
+    muted: Color(0xFF9AA5B5),
+    bull: Color(0xFF0E9F6E),
+    bear: Color(0xFFD9363E),
+    amber: Color(0xFFB7791F),
+    accent: Color(0xFFFFB020),
+    onAccent: Color(0xFF0E1A2B),
+    hero: Color(0xFF0E1A2B),
+    onHero: Color(0xFFF4F7FB),
+    onHeroSub: Color(0xFF9FB0C6),
+  );
+
+  static const darkPal = Pal(
+    dark: true,
+    bg: Color(0xFF0A121C),
+    card: Color(0xFF111C2B),
+    line: Color(0xFF1F2E44),
+    chip: Color(0xFF172538),
+    ink: Color(0xFFE8EEF6),
+    sub: Color(0xFF92A1B5),
+    muted: Color(0xFF5A6A80),
+    bull: Color(0xFF3ED598),
+    bear: Color(0xFFFF6B6F),
+    amber: Color(0xFFFFC24B),
+    accent: Color(0xFFFFB020),
+    onAccent: Color(0xFF0E1A2B),
+    hero: Color(0xFF16263B),
+    onHero: Color(0xFFF4F7FB),
+    onHeroSub: Color(0xFF9FB0C6),
+  );
+
+  static Pal of(bool dark) => dark ? darkPal : light;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// EDUCATION CONTENT — plain-language explanations shown in dialogs
+// ═════════════════════════════════════════════════════════════════════════════
+
+class InfoTopic {
+  final IconData icon;
+  final String title;
+  final String simple;
+  final List<String> more;
+  final String? example;
+  final String? tip;
+
+  const InfoTopic({
+    required this.icon,
+    required this.title,
+    required this.simple,
+    this.more = const [],
+    this.example,
+    this.tip,
+  });
+}
+
+class Topics {
+  static const breakout = InfoTopic(
+    icon: Icons.trending_up_rounded,
+    title: 'What is a breakout?',
+    simple:
+        'A breakout is when a price moves past the highest or lowest point it has reached so far today.',
+    more: [
+      'Picture the day\'s highest price as a ceiling and its lowest price as a floor. While the price stays between them, nothing unusual is happening. When it pushes through the ceiling or drops through the floor, that is a breakout.',
+      'Traders watch breakouts because they can mean a new wave of buying or selling has started. Our AI scans the market and posts an alert whenever one happens.',
+    ],
+    example:
+        'Say Nifty has moved between 24,800 and 24,950 all morning. At 10:42 it touches 24,955. That is a new high for the day, so an upside breakout alert appears.',
+    tip: 'An alert means "pay attention", not "the price will keep going".',
+  );
+
+  static const newHigh = InfoTopic(
+    icon: Icons.arrow_upward_rounded,
+    title: 'New highs',
+    simple:
+        'This counts how many times the price climbed above its highest level of the day.',
+    more: [
+      'Each new high means buyers were willing to pay more than anyone had paid earlier that day.',
+      'A few new highs in a row usually show steady buying. One lone high that quickly falls back can be a false alarm.',
+    ],
+    tip: 'More new highs than new lows usually means buyers are stronger.',
+  );
+
+  static const newLow = InfoTopic(
+    icon: Icons.arrow_downward_rounded,
+    title: 'New lows',
+    simple:
+        'This counts how many times the price dropped below its lowest level of the day.',
+    more: [
+      'Each new low means sellers accepted a lower price than anyone had earlier that day.',
+      'Several new lows close together often show that selling pressure is building.',
+    ],
+    tip: 'More new lows than new highs usually means sellers are stronger.',
+  );
+
+  static const firstAlert = InfoTopic(
+    icon: Icons.schedule_rounded,
+    title: 'First alert',
+    simple:
+        'The time of the very first breakout alert for this index on the selected day.',
+    more: [
+      'Early alerts can show which way the day started. The price shown next to the index is measured from this first alert, so you can see how far it has moved since.',
+    ],
+  );
+
+  static const mood = InfoTopic(
+    icon: Icons.balance_rounded,
+    title: 'Market mood',
+    simple:
+        'A quick summary we work out for you by comparing how many new highs and new lows appeared.',
+    more: [
+      'Mostly highs: "Buyers are in control".',
+      'Mostly lows: "Sellers are in control".',
+      'A fairly even mix: "Buyers and sellers are split", meaning the market can\'t decide yet.',
+      'The mood only describes what already happened today. It does not predict what comes next.',
+    ],
+    tip:
+        'Think of it as a tug of war. The mood tells you who is pulling harder right now.',
+  );
+
+  static const indices = InfoTopic(
+    icon: Icons.stacked_bar_chart_rounded,
+    title: 'What are Nifty 50 and Bank Nifty?',
+    simple:
+        'They are scoreboards that track how a group of big companies is doing, instead of just one company.',
+    more: [
+      'Nifty 50 follows 50 of the largest companies listed on India\'s National Stock Exchange. It is the most common way to describe how "the market" is doing.',
+      'Bank Nifty follows the biggest banking companies. It tends to move faster and more sharply than Nifty 50.',
+      'When the index goes up, most of the companies inside it are generally rising too.',
+    ],
+  );
+
+  static const candles = InfoTopic(
+    icon: Icons.candlestick_chart_rounded,
+    title: 'How to read the chart',
+    simple:
+        'Each little bar (a candle) shows what the price did during one short slice of time.',
+    more: [
+      'Green candle: the price finished higher than it started in that slice.',
+      'Red candle: the price finished lower than it started.',
+      'The thick part is where the price opened and closed. The thin lines above and below show the highest and lowest points it touched.',
+      'Vertical lines mark alerts. The solid line is the first alert. Dashed lines are later ones. The small triangles point to the first new high and first new low.',
+      'Tap the chart to see exact numbers for any candle.',
+    ],
+    tip: 'Tap and hold on a candle to see Open, High, Low and Close.',
+  );
+
+  static const session = InfoTopic(
+    icon: Icons.access_time_rounded,
+    title: 'Trading sessions',
+    simple:
+        'The market is open from 9:15 AM to 3:30 PM (India time). Sessions let you zoom into one part of that day.',
+    more: [
+      'The opening hour is usually the busiest and most unpredictable.',
+      'Around noon things often go quiet.',
+      'The last couple of hours can get busy again as traders close out their positions.',
+      'Choosing a session only changes what you see on this screen. Nothing is lost.',
+    ],
+  );
+
+  static const accuracy = InfoTopic(
+    icon: Icons.insights_rounded,
+    title: 'Past accuracy',
+    simple:
+        'Opens a report that looks back at earlier alerts and checks what the price did afterwards.',
+    more: [
+      'This is called a back-test. It helps you judge how reliable alerts have been, instead of trusting them blindly.',
+      'Past results never guarantee future results, but they are a good reality check.',
+    ],
+  );
+
+  static const disclaimer = InfoTopic(
+    icon: Icons.school_rounded,
+    title: 'Learning tool, not advice',
+    simple:
+        'Everything on this page is meant to help you understand the market. It is not a recommendation to buy or sell anything.',
+    more: [
+      'Breakouts can fail. Prices sometimes poke through a high or low and then turn back. Traders call this a "false breakout".',
+      'Before making any financial decision, do your own research and consider speaking with a licensed advisor.',
+    ],
+    tip: 'Never risk money you can\'t afford to lose.',
+  );
+
+  static const all = <InfoTopic>[
+    breakout,
+    newHigh,
+    newLow,
+    mood,
+    firstAlert,
+    indices,
+    candles,
+    session,
+    accuracy,
+    disclaimer,
+  ];
+}
+
+// Shown once per app run.
+bool _welcomeShown = false;
+
+Future<void> showInfoDialog(BuildContext context, InfoTopic t, Pal p,
+    {bool glossaryLink = true}) {
+  return showDialog(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: p.card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(color: p.line),
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 440),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: p.accent.withOpacity(p.dark ? 0.16 : 0.22),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(t.icon,
+                        size: 22, color: p.dark ? p.accent : p.ink),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(t.title,
+                        style: _ts(p.ink, 19,
+                            w: FontWeight.w800, ls: -0.3, h: 1.2)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: p.chip,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('In simple words',
+                        style: _ts(p.sub, 12, w: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    Text(t.simple,
+                        style: _ts(p.ink, 15, w: FontWeight.w600, h: 1.45)),
+                  ],
+                ),
+              ),
+              for (final para in t.more) ...[
+                const SizedBox(height: 14),
+                Text(para, style: _ts(p.sub, 14, h: 1.55)),
+              ],
+              if (t.example != null) ...[
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: p.line),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Icon(Icons.lightbulb_outline_rounded,
+                            size: 16, color: p.amber),
+                        const SizedBox(width: 6),
+                        Text('Example (illustrative numbers)',
+                            style: _ts(p.ink, 12.5, w: FontWeight.w700)),
+                      ]),
+                      const SizedBox(height: 8),
+                      Text(t.example!, style: _ts(p.sub, 13.5, h: 1.5)),
+                    ],
+                  ),
+                ),
+              ],
+              if (t.tip != null) ...[
+                const SizedBox(height: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.tips_and_updates_outlined,
+                        size: 16, color: p.sub),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(t.tip!,
+                          style: _ts(p.ink, 13, w: FontWeight.w600, h: 1.45)),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: p.accent,
+                    foregroundColor: p.onAccent,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14)),
+                  ),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: Text('Got it',
+                      style: _ts(p.onAccent, 15, w: FontWeight.w800)),
+                ),
+              ),
+              if (glossaryLink)
+                Center(
+                  child: TextButton(
+                    onPressed: () {
+                      Navigator.of(ctx).pop();
+                      showGlossary(context, p);
+                    },
+                    child: Text('Browse all terms',
+                        style: _ts(p.sub, 13, w: FontWeight.w600)),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> showGlossary(BuildContext context, Pal p) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => DraggableScrollableSheet(
+      initialChildSize: 0.82,
+      minChildSize: 0.5,
+      maxChildSize: 0.95,
+      expand: false,
+      builder: (_, scroll) => Container(
+        decoration: BoxDecoration(
+          color: p.bg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        ),
+        child: ListView(
+          controller: scroll,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: p.line,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text('Learn the basics',
+                style: _ts(p.ink, 24, w: FontWeight.w800, ls: -0.5)),
+            const SizedBox(height: 6),
+            Text(
+              'New to this? Tap any topic for a plain-language explanation.',
+              style: _ts(p.sub, 14, h: 1.45),
+            ),
+            const SizedBox(height: 20),
+            for (final t in Topics.all)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Material(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(18),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => showInfoDialog(ctx, t, p, glossaryLink: false),
+                    child: Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: p.line),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: p.chip,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(t.icon, size: 20, color: p.ink),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(t.title,
+                                    style:
+                                        _ts(p.ink, 14.5, w: FontWeight.w700)),
+                                const SizedBox(height: 2),
+                                Text(t.simple,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: _ts(p.sub, 12.5, h: 1.4)),
+                              ],
+                            ),
+                          ),
+                          Icon(Icons.chevron_right_rounded, color: p.muted),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+Future<void> showWelcomeDialog(BuildContext context, Pal p) {
+  Widget row(IconData icon, String title, String body) => Padding(
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: p.chip,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 19, color: p.ink),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: _ts(p.ink, 14.5, w: FontWeight.w700)),
+                  const SizedBox(height: 2),
+                  Text(body, style: _ts(p.sub, 13, h: 1.45)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+
+  return showDialog(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: p.card,
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+        side: BorderSide(color: p.line),
+      ),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 26, 24, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Welcome. Here\'s the 30-second version.',
+                style: _ts(p.ink, 21, w: FontWeight.w800, ls: -0.4, h: 1.25)),
+            const SizedBox(height: 8),
+            Text(
+              'This page shows the moments when the market moved past its own high or low of the day.',
+              style: _ts(p.sub, 14, h: 1.5),
+            ),
+            const SizedBox(height: 22),
+            row(Icons.trending_up_rounded, 'A breakout is a signal to notice',
+                'It happens when a price goes above its high or below its low for the day.'),
+            row(Icons.balance_rounded, 'Each card tells you who is winning',
+                'Buyers, sellers, or neither, plus a chart of what happened.'),
+            row(Icons.info_outline_rounded, 'Tap any info icon',
+                'You\'ll get a short explanation in everyday language.'),
+            row(Icons.school_rounded, 'For learning, not advice',
+                'Nothing here tells you to buy or sell.'),
+            const SizedBox(height: 4),
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: p.accent,
+                  foregroundColor: p.onAccent,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: Text('Start exploring',
+                    style: _ts(p.onAccent, 15, w: FontWeight.w800)),
+              ),
+            ),
+            Center(
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  showGlossary(context, p);
+                },
+                child: Text('Learn the terms first',
+                    style: _ts(p.sub, 13, w: FontWeight.w600)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PAGE
+// ═════════════════════════════════════════════════════════════════════════════
 
 class AIPickedIndexPage extends StatefulWidget {
   const AIPickedIndexPage({super.key});
@@ -254,20 +931,27 @@ class _AIPickedIndexPageState extends State<AIPickedIndexPage> {
   void initState() {
     super.initState();
     _fetchData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _welcomeShown) return;
+      _welcomeShown = true;
+      final isDark = Theme.of(context).brightness == Brightness.dark;
+      showWelcomeDialog(context, Pal.of(isDark));
+    });
   }
 
-  Future<void> _fetchData() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  Future<void> _fetchData({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       final y = _selectedDate.year;
       final m = _selectedDate.month;
       final d = _selectedDate.day;
 
-      // Full market day fetch always (filter applied client-side for chart zoom)
       final start = DateTime.utc(y, m, d, 3, 45).toIso8601String();
       final end = DateTime.utc(y, m, d, 10, 0).toIso8601String();
 
@@ -287,16 +971,16 @@ class _AIPickedIndexPageState extends State<AIPickedIndexPage> {
 
       final picks =
           (picksRes as List).map((e) => IndexEntry.fromMap(e)).toList();
-
-      final rawOhlcv = ohlcvRes as List;
-      final allOhlcv = rawOhlcv.map((e) => OhlcvEntry.fromMap(e)).toList();
+      final allOhlcv =
+          (ohlcvRes as List).map((e) => OhlcvEntry.fromMap(e)).toList();
 
       final groupedMap = <String, GroupedIndex>{};
 
       for (final pick in picks) {
         final mapped = mapSymbol(pick.symbol);
-        if (!groupedMap.containsKey(mapped)) {
-          groupedMap[mapped] = GroupedIndex(
+        groupedMap.putIfAbsent(
+          mapped,
+          () => GroupedIndex(
             symbol: pick.symbol,
             mappedSymbol: mapped,
             sentiment: pick.sentiment ?? 'Neutral',
@@ -304,8 +988,8 @@ class _AIPickedIndexPageState extends State<AIPickedIndexPage> {
             startPrice: pick.close,
             picks: [],
             ohlcvData: [],
-          );
-        }
+          ),
+        );
         groupedMap[mapped]!.picks.add(pick);
       }
 
@@ -320,18 +1004,28 @@ class _AIPickedIndexPageState extends State<AIPickedIndexPage> {
           }
         }
 
-        // Find first high and first low breakout times
         final highs = group.picks.where((p) => p.isUpBreakout).toList();
         final lows = group.picks.where((p) => !p.isUpBreakout).toList();
         if (highs.isNotEmpty) group.firstHighIso = highs.first.snapshotTime;
         if (lows.isNotEmpty) group.firstLowIso = lows.first.snapshotTime;
       });
 
+      const order = ['NIFTY', 'BANKNIFTY'];
+      final list = groupedMap.values.toList()
+        ..sort((a, b) {
+          final ia = order.indexOf(a.mappedSymbol);
+          final ib = order.indexOf(b.mappedSymbol);
+          return (ia < 0 ? 99 : ia).compareTo(ib < 0 ? 99 : ib);
+        });
+
+      if (!mounted) return;
       setState(() {
-        _groups = groupedMap.values.toList();
+        _groups = list;
         _loading = false;
+        _error = null;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _loading = false;
@@ -354,426 +1048,343 @@ class _AIPickedIndexPageState extends State<AIPickedIndexPage> {
     _fetchData();
   }
 
+  Future<void> _pickDate() async {
+    final today = getTodayIST();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2023, 1, 1),
+      lastDate: DateTime(today.year, today.month, today.day),
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+      _fetchData();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    final bgColor = isDark ? AppColors.darkBg : AppColors.lightBg;
-    final surfaceColor =
-        isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final cardColor = isDark ? AppColors.darkCard : AppColors.lightCard;
-    final borderColor = isDark ? AppColors.darkBorder : AppColors.lightBorder;
-    final subBg = isDark ? AppColors.darkSubBg : AppColors.lightSubBg;
-    final textPrimary =
-        isDark ? AppColors.darkTextPrimary : AppColors.lightTextPrimary;
-    final textSub = isDark ? AppColors.darkTextSub : AppColors.lightTextSub;
-    final textMuted =
-        isDark ? AppColors.darkTextMuted : AppColors.lightTextMuted;
+    final p = Pal.of(isDark);
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: bgColor,
+        backgroundColor: p.bg,
         body: SafeArea(
           child: Column(
             children: [
-              // ── Top Navigation Bar ──
-              _TopBar(
-                isDark: isDark,
-                selectedDate: _selectedDate,
+              _Header(
+                p: p,
+                onHelp: () => showGlossary(context, p),
+                onAccuracy: () => Get.toNamed('/backtest/nifty'),
+                onAccuracyInfo: () =>
+                    showInfoDialog(context, Topics.accuracy, p),
+              ),
+              _DateBar(
+                p: p,
+                date: _selectedDate,
                 isToday: _isToday,
                 onPrev: _prevDay,
                 onNext: _nextDay,
-                surfaceColor: surfaceColor,
-                borderColor: borderColor,
-                textPrimary: textPrimary,
-                textSub: textSub,
-                onAnalysePressed: () {
-                  Get.toNamed('/backtest/nifty');
-                },
+                onPick: _pickDate,
               ),
-              // ── Time Range Filter Bar ──
-              _TimeFilterBar(
-                isDark: isDark,
-                selected: _timeFilter,
-                onSelect: (f) => setState(() => _timeFilter = f),
-                surfaceColor: surfaceColor,
-                borderColor: borderColor,
-                textPrimary: textPrimary,
-                textSub: textSub,
-              ),
-              // ── Content ──
-              Expanded(
-                child: _loading
-                    ? _ShimmerLoadingView(isDark: isDark)
-                    : _error != null
-                        ? _ErrorView(error: _error!, isDark: isDark)
-                        : _groups.isEmpty
-                            ? _EmptyView(
-                                date: formatDateHeader(_selectedDate),
-                                isDark: isDark,
-                                textSub: textSub,
-                                borderColor: borderColor,
-                              )
-                            : _GroupList(
-                                groups: _groups,
-                                isDark: isDark,
-                                cardColor: cardColor,
-                                borderColor: borderColor,
-                                subBg: subBg,
-                                textPrimary: textPrimary,
-                                textSub: textSub,
-                                textMuted: textMuted,
-                                timeFilter: _timeFilter,
-                                selectedDate: _selectedDate,
-                              ),
-              ),
+              Expanded(child: _body(p)),
             ],
           ),
         ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Top Bar
-// ─────────────────────────────────────────────────────────────────────────────
-class _TopBar extends StatelessWidget {
-  final bool isDark;
-  final DateTime selectedDate;
-  final bool isToday;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final VoidCallback onAnalysePressed;
-  final Color surfaceColor;
-  final Color borderColor;
-  final Color textPrimary;
-  final Color textSub;
+  Widget _body(Pal p) {
+    if (_loading) return _SkeletonView(p: p);
+    if (_error != null) {
+      return _ErrorView(p: p, error: _error!, onRetry: _fetchData);
+    }
 
-  const _TopBar({
-    required this.isDark,
-    required this.selectedDate,
-    required this.isToday,
-    required this.onPrev,
-    required this.onNext,
-    required this.onAnalysePressed,
-    required this.surfaceColor,
-    required this.borderColor,
-    required this.textPrimary,
-    required this.textSub,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: surfaceColor,
-      child: Column(
-        children: [
-          // Back + Title row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(4, 8, 16, 4),
-            child: Row(
+    return RefreshIndicator(
+      color: p.onAccent,
+      backgroundColor: p.accent,
+      onRefresh: () => _fetchData(silent: true),
+      child: _groups.isEmpty
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
               children: [
-                IconButton(
-                  onPressed: () => Navigator.maybePop(context),
-                  icon: Icon(Icons.arrow_back_ios_new_rounded,
-                      size: 17, color: textPrimary),
-                  splashRadius: 20,
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Index Breakouts',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: textPrimary,
-                          fontFamily: 'monospace',
-                          letterSpacing: -0.3,
-                        ),
-                      ),
-                      Text(
-                        'Breakout momentum & probabilities',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark
-                              ? const Color(0xFF52525B)
-                              : const Color(0xFF71717A),
-                          fontFamily: 'monospace',
-                          letterSpacing: 0.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                _HeaderIconBtn(
-                  icon: Icons.assessment_outlined,
-                  isDark: isDark,
-                  borderColor: borderColor,
-                  onTap: onAnalysePressed,
+                _EmptyView(
+                  p: p,
+                  date: _selectedDate,
+                  isToday: _isToday,
+                  onPrev: _prevDay,
                 ),
               ],
-            ),
-          ),
-
-          // Date Navigator + Analyse button
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Row(
+            )
+          : ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
               children: [
-                Expanded(
-                  child: _DateNav(
-                    isDark: isDark,
-                    selectedDate: selectedDate,
-                    isToday: isToday,
-                    onPrev: onPrev,
-                    onNext: onNext,
-                    borderColor: borderColor,
-                    textPrimary: textPrimary,
-                  ),
+                _HeroSummary(p: p, groups: _groups, isToday: _isToday),
+                const SizedBox(height: 20),
+                _SessionBar(
+                  p: p,
+                  selected: _timeFilter,
+                  onSelect: (f) => setState(() => _timeFilter = f),
                 ),
+                const SizedBox(height: 16),
+                for (final g in _groups)
+                  _IndexCard(
+                    key: ValueKey('${g.mappedSymbol}-${_selectedDate.day}'),
+                    p: p,
+                    group: g,
+                    timeFilter: _timeFilter,
+                    selectedDate: _selectedDate,
+                  ),
+                _DisclaimerCard(p: p),
               ],
             ),
-          ),
-
-          // Upgrade chip
-          // GestureDetector(
-          //   onTap: () => Navigator.push(
-          //     context,
-          //     MaterialPageRoute(builder: (_) => SubscriptionScreenModern()),
-          //   ),
-          //   child: Container(
-          //     padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          //     decoration: BoxDecoration(
-          //       color: AppColors.accent,
-          //       borderRadius: BorderRadius.circular(10),
-          //     ),
-          //     child: Row(
-          //       mainAxisSize: MainAxisSize.min,
-          //       children: const [
-          //         Icon(Icons.bolt_rounded, size: 13, color: Colors.black),
-          //         SizedBox(width: 4),
-          //         Text(
-          //           'PRO',
-          //           style: TextStyle(
-          //             color: Colors.black,
-          //             fontSize: 12,
-          //             fontWeight: FontWeight.w800,
-          //             fontFamily: 'monospace',
-          //             letterSpacing: 0.5,
-          //           ),
-          //         ),
-          //       ],
-          //     ),
-          //   ),
-          // ),
-        ],
-      ),
     );
   }
 }
 
-class _HeaderIconBtn extends StatelessWidget {
-  final IconData icon;
-  final bool isDark;
-  final Color borderColor;
-  final VoidCallback onTap;
+// ═════════════════════════════════════════════════════════════════════════════
+// HEADER + DATE BAR
+// ═════════════════════════════════════════════════════════════════════════════
+class _Header extends StatelessWidget {
+  final Pal p;
+  final VoidCallback onHelp;
+  final VoidCallback onAccuracy;
+  final VoidCallback onAccuracyInfo;
 
-  const _HeaderIconBtn({
-    required this.icon,
-    required this.isDark,
-    required this.borderColor,
-    required this.onTap,
+  const _Header({
+    required this.p,
+    required this.onHelp,
+    required this.onAccuracy,
+    required this.onAccuracyInfo,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1a1a1a) : const Color(0xFFf2f2f2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
-      ),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          child: Icon(
-            icon,
-            size: 20,
-            color: isDark ? AppColors.darkTextSub : AppColors.lightTextSub,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DateNav extends StatelessWidget {
-  final bool isDark;
-  final DateTime selectedDate;
-  final bool isToday;
-  final VoidCallback onPrev;
-  final VoidCallback onNext;
-  final Color borderColor;
-  final Color textPrimary;
-
-  const _DateNav({
-    required this.isDark,
-    required this.selectedDate,
-    required this.isToday,
-    required this.onPrev,
-    required this.onNext,
-    required this.borderColor,
-    required this.textPrimary,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1a1a1a) : const Color(0xFFf2f2f2),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: borderColor),
-      ),
-      child: Row(
-        children: [
-          _NavIconBtn(
-            icon: Icons.chevron_left_rounded,
-            onTap: onPrev,
-            isDark: isDark,
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                formatDateHeader(selectedDate),
-                style: TextStyle(
-                  color: textPrimary,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'monospace',
-                ),
-              ),
-            ),
-          ),
-          _NavIconBtn(
-            icon: Icons.chevron_right_rounded,
-            onTap: isToday ? null : onNext,
-            isDark: isDark,
-            disabled: isToday,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NavIconBtn extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback? onTap;
-  final bool isDark;
-  final bool disabled;
-
-  const _NavIconBtn({
-    required this.icon,
-    required this.onTap,
-    required this.isDark,
-    this.disabled = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: disabled ? null : onTap,
-      child: Opacity(
-        opacity: disabled ? 0.25 : 1,
-        child: Padding(
-          padding: const EdgeInsets.all(6),
-          child: Icon(
-            icon,
-            size: 18,
-            color: isDark ? AppColors.darkTextSub : AppColors.lightTextSub,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Time Filter Bar
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _TimeFilterBar extends StatelessWidget {
-  final bool isDark;
-  final TimeRangeFilter selected;
-  final ValueChanged<TimeRangeFilter> onSelect;
-  final Color surfaceColor;
-  final Color borderColor;
-  final Color textPrimary;
-  final Color textSub;
-
-  const _TimeFilterBar({
-    required this.isDark,
-    required this.selected,
-    required this.onSelect,
-    required this.surfaceColor,
-    required this.borderColor,
-    required this.textPrimary,
-    required this.textSub,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      color: surfaceColor,
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+    final canPop = Navigator.canPop(context);
+    return Padding(
+      padding: EdgeInsets.fromLTRB(canPop ? 4 : 20, 8, 12, 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Label row
+          // Row 1: back button + title
           Row(
             children: [
-              Icon(
-                Icons.access_time_rounded,
-                size: 11,
-                color: textSub,
-              ),
-              const SizedBox(width: 5),
-              Text(
-                'ZOOM TO SESSION',
-                style: TextStyle(
-                  color: textSub,
-                  fontSize: 10,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.8,
+              if (canPop)
+                IconButton(
+                  onPressed: () => Navigator.maybePop(context),
+                  icon: Icon(Icons.arrow_back_ios_new_rounded,
+                      size: 18, color: p.ink),
                 ),
+              Expanded(
+                child: Text('Index breakouts',
+                    style: _ts(p.ink, 22, w: FontWeight.w800, ls: -0.6)),
+              ),
+              const SizedBox(width: 4),
+              IconButton(
+                tooltip: 'Learn the basics',
+                onPressed: onHelp,
+                icon: Icon(Icons.help_outline_rounded, size: 24, color: p.ink),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          // Filter chips
-          SizedBox(
-            height: 32,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: TimeRangeFilter.values.map((f) {
-                final isActive = selected == f;
-                return _FilterChip(
-                  label: timeRangeLabel(f),
-                  isActive: isActive,
-                  isDark: isDark,
-                  onTap: () => onSelect(f),
-                  borderColor: borderColor,
-                );
-              }).toList(),
+          // Row 2: subtitle + accuracy chip + help button
+          Row(
+            children: [
+              const SizedBox(width: 28),
+              Expanded(
+                child: Text('When the market breaks its high or low',
+                    style: _ts(p.sub, 12.5)),
+              ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: onAccuracy,
+                onLongPress: onAccuracyInfo,
+                child: Container(
+                  height: 36,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: p.card,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: p.line),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.insights_rounded, size: 16, color: p.ink),
+                      const SizedBox(width: 6),
+                      Text('Past accuracy',
+                          style: _ts(p.ink, 12.5, w: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              // IconButton(
+              //   tooltip: 'Learn the basics',
+              //   onPressed: onHelp,
+              //   icon: Icon(Icons.help_outline_rounded, size: 24, color: p.ink),
+              // ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateBar extends StatelessWidget {
+  final Pal p;
+  final DateTime date;
+  final bool isToday;
+  final VoidCallback onPrev;
+  final VoidCallback onNext;
+  final VoidCallback onPick;
+
+  const _DateBar({
+    required this.p,
+    required this.date,
+    required this.isToday,
+    required this.onPrev,
+    required this.onNext,
+    required this.onPick,
+  });
+
+  Widget _btn(IconData icon, VoidCallback? onTap) => Opacity(
+        opacity: onTap == null ? 0.3 : 1,
+        child: Material(
+          color: p.card,
+          borderRadius: BorderRadius.circular(14),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: onTap,
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: p.line),
+              ),
+              child: Icon(icon, size: 22, color: p.ink),
+            ),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          _btn(Icons.chevron_left_rounded, onPrev),
+          Expanded(
+            child: GestureDetector(
+              onTap: onPick,
+              child: Container(
+                height: 44,
+                margin: const EdgeInsets.symmetric(horizontal: 8),
+                decoration: BoxDecoration(
+                  color: p.card,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: p.line),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.calendar_today_rounded, size: 15, color: p.sub),
+                    const SizedBox(width: 8),
+                    Text(DateFormat('EEE, d MMM yyyy').format(date),
+                        style: _ts(p.ink, 14, w: FontWeight.w700)),
+                    if (isToday) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: p.accent,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text('Today',
+                            style: _ts(p.onAccent, 11, w: FontWeight.w800)),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          _btn(Icons.chevron_right_rounded, isToday ? null : onNext),
+        ],
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// HERO SUMMARY — one sentence that answers "what's going on?"
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _HeroSummary extends StatelessWidget {
+  final Pal p;
+  final List<GroupedIndex> groups;
+  final bool isToday;
+
+  const _HeroSummary(
+      {required this.p, required this.groups, required this.isToday});
+
+  @override
+  Widget build(BuildContext context) {
+    final total = groups.fold<int>(0, (s, g) => s + g.picks.length);
+    final highs = groups.fold<int>(0, (s, g) => s + g.upCount);
+    final lows = total - highs;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(22, 22, 22, 18),
+      decoration: BoxDecoration(
+        color: p.hero,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(isToday ? 'The short version for today' : 'The short version',
+              style: _ts(p.onHeroSub, 13, w: FontWeight.w600)),
+          const SizedBox(height: 10),
+          Text(
+            heroHeadline(groups),
+            style: _ts(p.onHero, 26, w: FontWeight.w800, ls: -0.8, h: 1.18),
+          ),
+          const SizedBox(height: 14),
+          Text(
+            '$total breakout ${total == 1 ? 'alert' : 'alerts'} so far: '
+            '$highs new ${highs == 1 ? 'high' : 'highs'} and '
+            '$lows new ${lows == 1 ? 'low' : 'lows'}.',
+            style: _ts(p.onHeroSub, 14, h: 1.45),
+          ),
+          const SizedBox(height: 16),
+          GestureDetector(
+            onTap: () => showInfoDialog(context, Topics.breakout, p),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+              decoration: BoxDecoration(
+                color: p.accent,
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.help_outline_rounded, size: 16, color: p.onAccent),
+                  const SizedBox(width: 6),
+                  Text('What is a breakout?',
+                      style: _ts(p.onAccent, 13, w: FontWeight.w800)),
+                ],
+              ),
             ),
           ),
         ],
@@ -782,133 +1393,116 @@ class _TimeFilterBar extends StatelessWidget {
   }
 }
 
-class _FilterChip extends StatelessWidget {
-  final String label;
-  final bool isActive;
-  final bool isDark;
-  final VoidCallback onTap;
-  final Color borderColor;
+// ═════════════════════════════════════════════════════════════════════════════
+// SESSION FILTER
+// ═════════════════════════════════════════════════════════════════════════════
 
-  const _FilterChip({
-    required this.label,
-    required this.isActive,
-    required this.isDark,
+class _SessionBar extends StatelessWidget {
+  final Pal p;
+  final TimeRangeFilter selected;
+  final ValueChanged<TimeRangeFilter> onSelect;
+
+  const _SessionBar(
+      {required this.p, required this.selected, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text('Zoom into part of the day',
+                style: _ts(p.ink, 15, w: FontWeight.w800)),
+            _InfoDot(p: p, topic: Topics.session),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 54,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            children: [
+              for (final f in TimeRangeFilter.values)
+                _SessionChip(
+                  p: p,
+                  filter: f,
+                  active: f == selected,
+                  onTap: () => onSelect(f),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: Text(
+            sessionHint(selected),
+            key: ValueKey(selected),
+            style: _ts(p.sub, 12.5, h: 1.45),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SessionChip extends StatelessWidget {
+  final Pal p;
+  final TimeRangeFilter filter;
+  final bool active;
+  final VoidCallback onTap;
+
+  const _SessionChip({
+    required this.p,
+    required this.filter,
+    required this.active,
     required this.onTap,
-    required this.borderColor,
   });
 
   @override
   Widget build(BuildContext context) {
+    final fg = active ? p.onAccent : p.ink;
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+        duration: const Duration(milliseconds: 180),
         margin: const EdgeInsets.only(right: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive
-              ? AppColors.accent
-              : (isDark ? const Color(0xFF1a1a1a) : const Color(0xFFf0f0f0)),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isActive ? AppColors.accent : borderColor,
-          ),
+          color: active ? p.accent : p.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: active ? p.accent : p.line),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isActive
-                ? Colors.black
-                : (isDark ? AppColors.darkTextSub : AppColors.lightTextSub),
-            fontSize: 11,
-            fontWeight: isActive ? FontWeight.w800 : FontWeight.w600,
-            fontFamily: 'monospace',
-            letterSpacing: 0.2,
-          ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(sessionName(filter), style: _ts(fg, 13, w: FontWeight.w800)),
+            const SizedBox(height: 1),
+            Text(timeRangeLabel(filter),
+                style: _ts(active ? p.onAccent.withOpacity(0.75) : p.sub, 11)),
+          ],
         ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Group List
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _GroupList extends StatelessWidget {
-  final List<GroupedIndex> groups;
-  final bool isDark;
-  final Color cardColor;
-  final Color borderColor;
-  final Color subBg;
-  final Color textPrimary;
-  final Color textSub;
-  final Color textMuted;
-  final TimeRangeFilter timeFilter;
-  final DateTime selectedDate;
-
-  const _GroupList({
-    required this.groups,
-    required this.isDark,
-    required this.cardColor,
-    required this.borderColor,
-    required this.subBg,
-    required this.textPrimary,
-    required this.textSub,
-    required this.textMuted,
-    required this.timeFilter,
-    required this.selectedDate,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-      itemCount: groups.length + 1,
-      itemBuilder: (ctx, i) {
-        if (i == groups.length) {
-          return _Disclaimer(textMuted: textMuted);
-        }
-        return _IndexCard(
-          group: groups[i],
-          isDark: isDark,
-          cardColor: cardColor,
-          borderColor: borderColor,
-          subBg: subBg,
-          textPrimary: textPrimary,
-          textSub: textSub,
-          timeFilter: timeFilter,
-          selectedDate: selectedDate,
-        );
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Index Card
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// INDEX CARD
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _IndexCard extends StatefulWidget {
+  final Pal p;
   final GroupedIndex group;
-  final bool isDark;
-  final Color cardColor;
-  final Color borderColor;
-  final Color subBg;
-  final Color textPrimary;
-  final Color textSub;
   final TimeRangeFilter timeFilter;
   final DateTime selectedDate;
 
   const _IndexCard({
+    super.key,
+    required this.p,
     required this.group,
-    required this.isDark,
-    required this.cardColor,
-    required this.borderColor,
-    required this.subBg,
-    required this.textPrimary,
-    required this.textSub,
     required this.timeFilter,
     required this.selectedDate,
   });
@@ -917,632 +1511,568 @@ class _IndexCard extends StatefulWidget {
   State<_IndexCard> createState() => _IndexCardState();
 }
 
-class _IndexCardState extends State<_IndexCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fadeAnim;
-  late final Animation<Offset> _slideAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    );
-    _fadeAnim = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.04),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-
-    Future.delayed(const Duration(milliseconds: 80), () {
-      if (mounted) _controller.forward();
-    });
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+class _IndexCardState extends State<_IndexCard> {
+  bool _showAll = false;
+  static const _previewCount = 4;
 
   @override
   Widget build(BuildContext context) {
+    final p = widget.p;
     final g = widget.group;
-    final isDark = widget.isDark;
-    final themeColor = dominantColor(g.picks, isDark: isDark);
-    final upCount = g.picks.where((p) => p.isUpBreakout).length;
-    final downCount = g.picks.length - upCount;
-    final isPositive = (g.priceChange ?? 0) >= 0;
+    final mood = moodFor(g);
+    final mColor = moodColor(mood.kind, p);
+    final positive = (g.priceChange ?? 0) >= 0;
+    final changeColor = positive ? p.bull : p.bear;
+    final pct = g.changePct;
 
-    final bullColor = isDark ? AppColors.bullDark : AppColors.bullLight;
-    final bearColor = isDark ? AppColors.bearDark : AppColors.bearLight;
-    final changeColor = isPositive ? bullColor : bearColor;
+    final sessionPicks =
+        picksInRange(g, widget.timeFilter, widget.selectedDate);
+    final visiblePicks =
+        _showAll ? sessionPicks : sessionPicks.take(_previewCount).toList();
+    final firstHighId = g.picks.where((x) => x.isUpBreakout).firstOrNull?.id;
+    final firstLowId = g.picks.where((x) => !x.isUpBreakout).firstOrNull?.id;
 
-    return FadeTransition(
-      opacity: _fadeAnim,
-      child: SlideTransition(
-        position: _slideAnim,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 20),
-          decoration: BoxDecoration(
-            color: widget.cardColor,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: widget.borderColor),
-            boxShadow: isDark
-                ? null
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 12,
-                      offset: const Offset(0, 3),
-                    )
-                  ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(20),
-            child: Column(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: p.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Title + price ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Card Header ──
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
-                  child: Row(
+                Expanded(
+                  child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Symbol + badges
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(friendlyName(g.mappedSymbol),
+                                overflow: TextOverflow.ellipsis,
+                                style: _ts(p.ink, 24,
+                                    w: FontWeight.w800, ls: -0.6)),
+                          ),
+                          _InfoDot(p: p, topic: Topics.indices),
+                        ],
+                      ),
+                      Text(g.mappedSymbol, style: _ts(p.sub, 12.5)),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(fmtPrice(g.latestPrice),
+                        style: _ts(p.ink, 22, w: FontWeight.w800, ls: -0.4)),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: changeColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                              positive
+                                  ? Icons.arrow_drop_up_rounded
+                                  : Icons.arrow_drop_down_rounded,
+                              size: 20,
+                              color: changeColor),
+                          Text(
+                            g.priceChange == null
+                                ? '—'
+                                : '${positive ? '+' : ''}${g.priceChange!.toStringAsFixed(2)}'
+                                    '${pct != null ? ' (${pct.toStringAsFixed(2)}%)' : ''}',
+                            style: _ts(changeColor, 12.5, w: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text('since first alert', style: _ts(p.muted, 11)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // ── Mood banner ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: Material(
+              color: mColor.withOpacity(p.dark ? 0.14 : 0.09),
+              borderRadius: BorderRadius.circular(18),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => showInfoDialog(context, Topics.mood, p),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: mColor.withOpacity(0.18),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(mood.icon, size: 20, color: mColor),
+                      ),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              g.mappedSymbol,
-                              style: TextStyle(
-                                color: widget.textPrimary,
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.8,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                            const SizedBox(height: 10),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                if (upCount > 0)
-                                  _SignalBadge(
-                                    label: '↑ $upCount',
-                                    sublabel: 'Highs',
-                                    color: bullColor,
-                                    isDark: isDark,
-                                  ),
-                                if (downCount > 0)
-                                  _SignalBadge(
-                                    label: '↓ $downCount',
-                                    sublabel: 'Lows',
-                                    color: bearColor,
-                                    isDark: isDark,
-                                  ),
-                              ],
-                            ),
+                            Text(mood.label,
+                                style: _ts(p.ink, 15, w: FontWeight.w800)),
+                            const SizedBox(height: 2),
+                            Text(mood.line, style: _ts(p.sub, 12.5, h: 1.4)),
                           ],
                         ),
                       ),
-                      // Price + change
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            g.latestPrice?.toStringAsFixed(2) ?? '—',
-                            style: TextStyle(
-                              color: widget.textPrimary,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              fontFamily: 'monospace',
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: changeColor.withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              g.priceChange != null
-                                  ? '${isPositive ? '+' : ''}${g.priceChange!.toStringAsFixed(2)}'
-                                  : '—',
-                              style: TextStyle(
-                                color: changeColor,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w700,
-                                fontFamily: 'monospace',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                      Icon(Icons.info_outline_rounded, size: 18, color: p.sub),
                     ],
                   ),
                 ),
-
-                // ── First Breakout Info Row ──
-                _BreakoutInfoRow(
-                  group: g,
-                  isDark: isDark,
-                  subBg: widget.subBg,
-                  borderColor: widget.borderColor,
-                  textSub: widget.textSub,
-                  bullColor: bullColor,
-                  bearColor: bearColor,
-                ),
-
-                // ── Chart ──
-                Container(
-                  height: 280,
-                  color: widget.subBg,
-                  child: g.ohlcvData.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.bar_chart_rounded,
-                                  size: 32, color: widget.textSub),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No OHLCV data',
-                                style: TextStyle(
-                                  color: widget.textSub,
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      : _ChartArea(
-                          group: g,
-                          themeColor: themeColor,
-                          isDark: isDark,
-                          borderColor: widget.borderColor,
-                          timeFilter: widget.timeFilter,
-                          selectedDate: widget.selectedDate,
-                        ),
-                ),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Breakout Info Row
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _BreakoutInfoRow extends StatelessWidget {
-  final GroupedIndex group;
-  final bool isDark;
-  final Color subBg;
-  final Color borderColor;
-  final Color textSub;
-  final Color bullColor;
-  final Color bearColor;
-
-  const _BreakoutInfoRow({
-    required this.group,
-    required this.isDark,
-    required this.subBg,
-    required this.borderColor,
-    required this.textSub,
-    required this.bullColor,
-    required this.bearColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final hasHigh = group.firstHighIso != null;
-    final hasLow = group.firstLowIso != null;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: subBg,
-        border: Border(
-          top: BorderSide(color: borderColor),
-          bottom: BorderSide(color: borderColor),
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-      child: Row(
-        children: [
-          if (hasHigh) ...[
-            _BreakoutChip(
-              icon: Icons.arrow_upward_rounded,
-              label: '1ST HIGH',
-              time: formatTimeIST(group.firstHighIso!),
-              color: bullColor,
-              isDark: isDark,
-            ),
-            if (hasLow) const SizedBox(width: 12),
-          ],
-          if (hasLow)
-            _BreakoutChip(
-              icon: Icons.arrow_downward_rounded,
-              label: '1ST LOW',
-              time: formatTimeIST(group.firstLowIso!),
-              color: bearColor,
-              isDark: isDark,
-            ),
-          if (!hasHigh && !hasLow)
-            Row(
+          // ── Stat tiles ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
               children: [
-                Icon(Icons.access_time_rounded, size: 13, color: textSub),
-                const SizedBox(width: 6),
-                Text(
-                  '1ST BROKE: ${formatTimeIST(group.firstSeenIso)}',
-                  style: TextStyle(
-                    color: textSub,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.4,
+                Expanded(
+                  child: _StatTile(
+                    p: p,
+                    icon: Icons.arrow_upward_rounded,
+                    color: p.bull,
+                    label: 'New highs',
+                    value: '${g.upCount}',
+                    caption: 'price went up past its high',
+                    topic: Topics.newHigh,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _StatTile(
+                    p: p,
+                    icon: Icons.arrow_downward_rounded,
+                    color: p.bear,
+                    label: 'New lows',
+                    value: '${g.downCount}',
+                    caption: 'price went down past its low',
+                    topic: Topics.newLow,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _StatTile(
+                    p: p,
+                    icon: Icons.schedule_rounded,
+                    color: p.sub,
+                    label: 'First alert',
+                    value: formatTimeIST(g.firstSeenIso),
+                    caption: 'first signal of the day',
+                    topic: Topics.firstAlert,
                   ),
                 ),
               ],
             ),
-        ],
-      ),
-    );
-  }
-}
+          ),
 
-class _BreakoutChip extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String time;
-  final Color color;
-  final bool isDark;
+          // ── Chart ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 22, 12, 0),
+            child: Row(
+              children: [
+                Text('Price chart', style: _ts(p.ink, 15, w: FontWeight.w800)),
+                _InfoDot(p: p, topic: Topics.candles),
+                const Spacer(),
+                Text(sessionName(widget.timeFilter),
+                    style: _ts(p.sub, 12, w: FontWeight.w600)),
+                const SizedBox(width: 8),
+              ],
+            ),
+          ),
+          Container(
+            height: 270,
+            margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+            decoration: BoxDecoration(
+              color: p.dark ? p.bg.withOpacity(0.5) : p.bg.withOpacity(0.55),
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: g.ohlcvData.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.candlestick_chart_outlined,
+                            size: 30, color: p.muted),
+                        const SizedBox(height: 8),
+                        Text('No price data for this day',
+                            style: _ts(p.sub, 12.5)),
+                      ],
+                    ),
+                  )
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: _ChartArea(
+                      p: p,
+                      group: g,
+                      mood: mColor,
+                      timeFilter: widget.timeFilter,
+                      selectedDate: widget.selectedDate,
+                    ),
+                  ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+            child: Wrap(
+              spacing: 16,
+              runSpacing: 8,
+              children: [
+                _LegendItem(
+                  p: p,
+                  leading: Icon(Icons.arrow_drop_up_rounded,
+                      size: 20, color: p.bull),
+                  text: 'First new high',
+                ),
+                _LegendItem(
+                  p: p,
+                  leading: Icon(Icons.arrow_drop_down_rounded,
+                      size: 20, color: p.bear),
+                  text: 'First new low',
+                ),
+                _LegendItem(
+                  p: p,
+                  leading: Container(width: 16, height: 2, color: p.sub),
+                  text: 'First alert line',
+                ),
+                _LegendItem(
+                  p: p,
+                  leading: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Container(width: 5, height: 2, color: p.sub),
+                    const SizedBox(width: 3),
+                    Container(width: 5, height: 2, color: p.sub),
+                  ]),
+                  text: 'Later alerts',
+                ),
+              ],
+            ),
+          ),
 
-  const _BreakoutChip({
-    required this.icon,
-    required this.label,
-    required this.time,
-    required this.color,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 11, color: color),
-          const SizedBox(width: 5),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  color: color.withOpacity(0.7),
-                  fontSize: 9,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.6,
+          // ── Timeline ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+            child: Row(
+              children: [
+                Text('Alerts in this session',
+                    style: _ts(p.ink, 15, w: FontWeight.w800)),
+                const Spacer(),
+                Text(
+                  '${sessionPicks.length} of ${g.picks.length}',
+                  style: _ts(p.sub, 12.5, w: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+          if (sessionPicks.isEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+              child: Text(
+                'No breakouts happened during this part of the day. Try another session above.',
+                style: _ts(p.sub, 13, h: 1.5),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+              child: Column(
+                children: [
+                  for (var i = 0; i < visiblePicks.length; i++)
+                    _AlertRow(
+                      p: p,
+                      pick: visiblePicks[i],
+                      isFirst: visiblePicks[i].id == firstHighId ||
+                          visiblePicks[i].id == firstLowId,
+                      showDivider: i != visiblePicks.length - 1,
+                    ),
+                ],
+              ),
+            ),
+          if (sessionPicks.length > _previewCount)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+              child: TextButton(
+                onPressed: () => setState(() => _showAll = !_showAll),
+                child: Text(
+                  _showAll
+                      ? 'Show fewer'
+                      : 'Show ${sessionPicks.length - _previewCount} more',
+                  style: _ts(p.ink, 13, w: FontWeight.w700),
                 ),
               ),
-              Text(
-                time,
-                style: TextStyle(
-                  color: color,
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w800,
-                ),
+            ),
+
+          // ── Plain-language takeaway ──
+          const SizedBox(height: 8),
+          Divider(height: 1, color: p.line),
+          Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 20),
+              childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
+              iconColor: p.ink,
+              collapsedIconColor: p.sub,
+              shape: const Border(),
+              collapsedShape: const Border(),
+              title: Row(
+                children: [
+                  Icon(Icons.lightbulb_outline_rounded,
+                      size: 18, color: p.amber),
+                  const SizedBox(width: 8),
+                  Text('What does this mean for me?',
+                      style: _ts(p.ink, 14, w: FontWeight.w700)),
+                ],
               ),
-            ],
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(_takeaway(mood.kind),
+                      style: _ts(p.sub, 13.5, h: 1.55)),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
+
+  String _takeaway(MoodKind k) {
+    switch (k) {
+      case MoodKind.buyers:
+        return 'The price kept setting fresh highs, which usually means buyers were more eager than sellers. That can be a sign of strength, but breakouts do fail sometimes. A useful habit is to check whether the price stays above the level it just broke. If it slips straight back, the move may have been a false alarm.';
+      case MoodKind.sellers:
+        return 'The price kept falling to fresh lows, which usually means sellers were more eager than buyers. That can signal weakness, but prices can also bounce back quickly. Notice whether the price stays under the level it just broke, or recovers.';
+      case MoodKind.mixed:
+        return 'The price broke both its high and its low today. That usually means the market is unsure and swinging back and forth. Mixed signals are a reminder that a single alert doesn\'t tell the whole story.';
+    }
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Chart Area — Improved Candlestick with Clean Annotations
-// ─────────────────────────────────────────────────────────────────────────────
+class _StatTile extends StatelessWidget {
+  final Pal p;
+  final IconData icon;
+  final Color color;
+  final String label;
+  final String value;
+  final String caption;
+  final InfoTopic topic;
+
+  const _StatTile({
+    required this.p,
+    required this.icon,
+    required this.color,
+    required this.label,
+    required this.value,
+    required this.caption,
+    required this.topic,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: p.chip,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => showInfoDialog(context, topic, p),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(icon, size: 14, color: color),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(label,
+                        overflow: TextOverflow.ellipsis,
+                        style: _ts(p.sub, 11.5, w: FontWeight.w700)),
+                  ),
+                  Icon(Icons.info_outline_rounded, size: 13, color: p.muted),
+                ],
+              ),
+              const SizedBox(height: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value,
+                    style: _ts(p.ink, 20, w: FontWeight.w800, ls: -0.4)),
+              ),
+              const SizedBox(height: 2),
+              Text(caption,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: _ts(p.muted, 10.5, h: 1.3)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Pal p;
+  final Widget leading;
+  final String text;
+
+  const _LegendItem(
+      {required this.p, required this.leading, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        leading,
+        const SizedBox(width: 5),
+        Text(text, style: _ts(p.sub, 11.5)),
+      ],
+    );
+  }
+}
+
+class _AlertRow extends StatelessWidget {
+  final Pal p;
+  final IndexEntry pick;
+  final bool isFirst;
+  final bool showDivider;
+
+  const _AlertRow({
+    required this.p,
+    required this.pick,
+    required this.isFirst,
+    required this.showDivider,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final up = pick.isUpBreakout;
+    final color = up ? p.bull : p.bear;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        border: showDivider ? Border(bottom: BorderSide(color: p.line)) : null,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+              size: 17,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  up
+                      ? 'Went above the day\'s high'
+                      : 'Fell below the day\'s low',
+                  style: _ts(p.ink, 13.5, w: FontWeight.w700),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'at ${formatTimeIST(pick.snapshotTime)}'
+                  '${pick.close != null ? ', price ${fmtPrice(pick.close)}' : ''}',
+                  style: _ts(p.sub, 12),
+                ),
+              ],
+            ),
+          ),
+          if (isFirst)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                border: Border.all(color: p.line),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text('First of the day',
+                  style: _ts(p.sub, 10.5, w: FontWeight.w700)),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoDot extends StatelessWidget {
+  final Pal p;
+  final InfoTopic topic;
+
+  const _InfoDot({required this.p, required this.topic});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkResponse(
+      radius: 18,
+      onTap: () => showInfoDialog(context, topic, p),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Icon(Icons.info_outline_rounded, size: 17, color: p.sub),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// CHART
+// ═════════════════════════════════════════════════════════════════════════════
 
 class _ChartArea extends StatelessWidget {
+  final Pal p;
   final GroupedIndex group;
-  final Color themeColor;
-  final bool isDark;
-  final Color borderColor;
+  final Color mood;
   final TimeRangeFilter timeFilter;
   final DateTime selectedDate;
 
   const _ChartArea({
+    required this.p,
     required this.group,
-    required this.themeColor,
-    required this.isDark,
-    required this.borderColor,
+    required this.mood,
     required this.timeFilter,
     required this.selectedDate,
   });
 
-  List<ChartDataPoint> _buildChartData() {
-    return group.ohlcvData.map((ohlcv) {
-      final timestamp = getLocalIstTime(ohlcv.ts);
-      return ChartDataPoint(
-        timestamp: timestamp,
-        open: ohlcv.open,
-        high: ohlcv.high,
-        low: ohlcv.low,
-        close: ohlcv.close,
-      );
-    }).toList();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final chartData = _buildChartData();
-    final gridColor =
-        isDark ? const Color(0xFF1e1e1e) : const Color(0xFFeeeeee);
-    final bullColor = isDark ? AppColors.bullDark : AppColors.bullLight;
-    final bearColor = isDark ? AppColors.bearDark : AppColors.bearLight;
-
-    final y = selectedDate.year;
-    final mo = selectedDate.month;
-    final da = selectedDate.day;
-
-    // Apply time filter for X-axis zoom
-    final bounds = timeRangeBounds(timeFilter);
-    final xMin = DateTime(y, mo, da, bounds.sh, bounds.sm);
-    final xMax = DateTime(y, mo, da, bounds.eh, bounds.em);
-
-    // Build annotation lines only for picks within visible range
-    final visiblePicks = group.picks.where((pick) {
-      final t = getLocalIstTime(pick.snapshotTime);
-      return !t.isBefore(xMin) && !t.isAfter(xMax);
-    }).toList();
-
-    // For clean annotations: only show first high and first low as lines
-    // Mark all others as subtle dots via series
-    IndexEntry? firstHigh;
-    IndexEntry? firstLow;
-    for (final p in visiblePicks) {
-      if (p.isUpBreakout && firstHigh == null) firstHigh = p;
-      if (!p.isUpBreakout && firstLow == null) firstLow = p;
-    }
-
-    final plotBands = <PlotBand>[];
-
-    // Add clean vertical plot bands (no labels — labels are in the chip row above)
-    for (final pick in visiblePicks) {
-      final t = getLocalIstTime(pick.snapshotTime);
-      final isUp = pick.isUpBreakout;
-      final color = isUp ? bullColor : bearColor;
-      final isFirst = (isUp && firstHigh?.id == pick.id) ||
-          (!isUp && firstLow?.id == pick.id);
-
-      plotBands.add(PlotBand(
-        isVisible: true,
-        start: t,
-        end: t,
-        borderWidth: isFirst ? 2.0 : 1.0,
-        borderColor: isFirst ? color : color.withOpacity(0.4),
-        dashArray: isFirst ? [] : const <double>[3, 4],
-        // No text labels on chart — cleaner look
-      ));
-    }
-
-    // Annotation data for first-break markers (rendered as scatter overlay)
-    final List<ChartDataPoint> highAnnotations = [];
-    final List<ChartDataPoint> lowAnnotations = [];
-
-    if (firstHigh != null) {
-      final t = getLocalIstTime(firstHigh.snapshotTime);
-      // Find closest OHLCV candle for price
-      OhlcvEntry? closest;
-      int minDiff = 999999;
-      for (final o in group.ohlcvData) {
-        final ot = getLocalIstTime(o.ts);
-        final diff = (ot.difference(t).inMinutes).abs();
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = o;
-        }
-      }
-      if (closest != null) {
-        highAnnotations.add(ChartDataPoint(
-          timestamp: t,
-          open: closest.open,
-          high: closest.high + (closest.high * 0.001),
-          low: closest.low,
-          close: closest.close,
-        ));
-      }
-    }
-
-    if (firstLow != null) {
-      final t = getLocalIstTime(firstLow.snapshotTime);
-      OhlcvEntry? closest;
-      int minDiff = 999999;
-      for (final o in group.ohlcvData) {
-        final ot = getLocalIstTime(o.ts);
-        final diff = (ot.difference(t).inMinutes).abs();
-        if (diff < minDiff) {
-          minDiff = diff;
-          closest = o;
-        }
-      }
-      if (closest != null) {
-        lowAnnotations.add(ChartDataPoint(
-          timestamp: t,
-          open: closest.open,
-          high: closest.high,
-          low: closest.low - (closest.low * 0.001),
-          close: closest.close,
-        ));
-      }
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(0, 12, 8, 8),
-      child: SfCartesianChart(
-        backgroundColor: Colors.transparent,
-        plotAreaBorderWidth: 0,
-        margin: EdgeInsets.zero,
-        crosshairBehavior: CrosshairBehavior(
-          enable: true,
-          lineColor: themeColor.withOpacity(0.4),
-          lineWidth: 1,
-          lineDashArray: const [4, 4],
-          shouldAlwaysShow: false,
-          activationMode: ActivationMode.singleTap,
-        ),
-        zoomPanBehavior: ZoomPanBehavior(
-          enablePanning: true,
-          enablePinching: true,
-          zoomMode: ZoomMode.x,
-          enableDoubleTapZooming: true,
-        ),
-        trackballBehavior: TrackballBehavior(
-          enable: true,
-          activationMode: ActivationMode.singleTap,
-          tooltipSettings: InteractiveTooltip(
-            enable: true,
-            color: isDark ? const Color(0xFF1c1c1c) : Colors.white,
-            borderColor: themeColor.withOpacity(0.4),
-            borderWidth: 1,
-            format:
-                'point.x\nO: point.open  H: point.high\nL: point.low  C: point.close',
-            textStyle: TextStyle(
-              color: isDark
-                  ? AppColors.darkTextPrimary
-                  : AppColors.lightTextPrimary,
-              fontFamily: 'monospace',
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          markerSettings: TrackballMarkerSettings(
-            markerVisibility: TrackballVisibilityMode.visible,
-            color: themeColor,
-            borderColor: themeColor,
-            borderWidth: 2,
-            height: 7,
-            width: 7,
-          ),
-          lineColor: themeColor.withOpacity(0.25),
-          lineWidth: 1,
-          lineDashArray: const [4, 4],
-        ),
-        primaryXAxis: DateTimeAxis(
-          isVisible: true,
-          minimum: xMin,
-          maximum: xMax,
-          majorGridLines: MajorGridLines(
-              color: gridColor, width: 1, dashArray: const [2, 4]),
-          minorGridLines: const MinorGridLines(width: 0),
-          axisLine: const AxisLine(width: 0),
-          majorTickLines: const MajorTickLines(size: 0),
-          labelStyle: TextStyle(
-            color: isDark ? const Color(0xFF555555) : const Color(0xFFaaaaaa),
-            fontSize: 10,
-            fontFamily: 'monospace',
-          ),
-          dateFormat: DateFormat('h:mm'),
-          intervalType: DateTimeIntervalType.minutes,
-          interval: _xInterval(timeFilter),
-          edgeLabelPlacement: EdgeLabelPlacement.shift,
-          plotBands: plotBands,
-        ),
-        primaryYAxis: NumericAxis(
-          isVisible: true,
-          opposedPosition: true,
-          majorGridLines: MajorGridLines(
-              color: gridColor, width: 0.5, dashArray: const [2, 4]),
-          minorGridLines: const MinorGridLines(width: 0),
-          axisLine: const AxisLine(width: 0),
-          majorTickLines: const MajorTickLines(size: 0),
-          labelStyle: TextStyle(
-            color: isDark ? const Color(0xFF555555) : const Color(0xFFaaaaaa),
-            fontSize: 10,
-            fontFamily: 'monospace',
-          ),
-          numberFormat: NumberFormat.compact(),
-        ),
-        series: <CartesianSeries>[
-          // ── Candlestick ──
-          CandleSeries<ChartDataPoint, DateTime>(
-            dataSource: chartData,
-            xValueMapper: (d, _) => d.timestamp,
-            lowValueMapper: (d, _) => d.low,
-            highValueMapper: (d, _) => d.high,
-            openValueMapper: (d, _) => d.open,
-            closeValueMapper: (d, _) => d.close,
-            bullColor: bullColor,
-            bearColor: bearColor,
-            enableSolidCandles: true,
-            animationDuration: 800,
-            enableTooltip: true,
-            spacing: 0.15,
-            width: 0.65,
-          ),
-          // ── First High Marker ──
-          if (highAnnotations.isNotEmpty)
-            ScatterSeries<ChartDataPoint, DateTime>(
-              dataSource: highAnnotations,
-              xValueMapper: (d, _) => d.timestamp,
-              yValueMapper: (d, _) => d.high,
-              color: bullColor,
-              markerSettings: const MarkerSettings(
-                isVisible: true,
-                shape: DataMarkerType.triangle,
-                height: 10,
-                width: 10,
-              ),
-              enableTooltip: false,
-              animationDuration: 1000,
-            ),
-          // ── First Low Marker ──
-          if (lowAnnotations.isNotEmpty)
-            ScatterSeries<ChartDataPoint, DateTime>(
-              dataSource: lowAnnotations,
-              xValueMapper: (d, _) => d.timestamp,
-              yValueMapper: (d, _) => d.low,
-              color: bearColor,
-              markerSettings: const MarkerSettings(
-                isVisible: true,
-                shape: DataMarkerType.invertedTriangle,
-                height: 10,
-                width: 10,
-              ),
-              enableTooltip: false,
-              animationDuration: 1000,
-            ),
-        ],
-      ),
-    );
-  }
-
   double _xInterval(TimeRangeFilter f) {
     switch (f) {
       case TimeRangeFilter.firstHour:
-        return 15;
       case TimeRangeFilter.midMorning:
       case TimeRangeFilter.preNoon:
         return 15;
@@ -1552,320 +2082,278 @@ class _ChartArea extends StatelessWidget {
         return 60;
     }
   }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Shimmer Loading (no plugin)
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ShimmerLoadingView extends StatefulWidget {
-  final bool isDark;
-  const _ShimmerLoadingView({required this.isDark});
 
   @override
-  State<_ShimmerLoadingView> createState() => _ShimmerLoadingViewState();
-}
+  Widget build(BuildContext context) {
+    final chartData = group.ohlcvData
+        .map((o) => ChartDataPoint(
+              timestamp: getLocalIstTime(o.ts),
+              open: o.open,
+              high: o.high,
+              low: o.low,
+              close: o.close,
+            ))
+        .toList();
 
-class _ShimmerLoadingViewState extends State<_ShimmerLoadingView>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _anim;
+    final b = timeRangeBounds(timeFilter);
+    final y = selectedDate.year;
+    final mo = selectedDate.month;
+    final da = selectedDate.day;
+    final xMin = DateTime(y, mo, da, b.sh, b.sm);
+    final xMax = DateTime(y, mo, da, b.eh, b.em);
 
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
+    final inRange = chartData
+        .where((c) => !c.timestamp.isBefore(xMin) && !c.timestamp.isAfter(xMax))
+        .length;
+    if (inRange == 0) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            'There is no price data for this part of the day yet.',
+            textAlign: TextAlign.center,
+            style: _ts(p.sub, 12.5, h: 1.5),
+          ),
+        ),
+      );
+    }
+
+    final gridColor = p.line.withOpacity(0.8);
+    final visiblePicks = picksInRange(group, timeFilter, selectedDate);
+
+    IndexEntry? firstHigh;
+    IndexEntry? firstLow;
+    for (final pk in visiblePicks) {
+      if (pk.isUpBreakout && firstHigh == null) firstHigh = pk;
+      if (!pk.isUpBreakout && firstLow == null) firstLow = pk;
+    }
+
+    final plotBands = <PlotBand>[];
+    for (final pk in visiblePicks) {
+      final t = getLocalIstTime(pk.snapshotTime);
+      final isUp = pk.isUpBreakout;
+      final c = isUp ? p.bull : p.bear;
+      final first =
+          (isUp && firstHigh?.id == pk.id) || (!isUp && firstLow?.id == pk.id);
+      plotBands.add(PlotBand(
+        isVisible: true,
+        start: t,
+        end: t,
+        borderWidth: first ? 1.8 : 1.0,
+        borderColor: first ? c : c.withOpacity(0.4),
+        dashArray: first ? const <double>[] : const <double>[3, 4],
+      ));
+    }
+
+    final highMarks = <ChartDataPoint>[];
+    final lowMarks = <ChartDataPoint>[];
+    if (firstHigh != null) {
+      final t = getLocalIstTime(firstHigh.snapshotTime);
+      final c = closestCandle(group.ohlcvData, t);
+      if (c != null) {
+        highMarks.add(ChartDataPoint(
+          timestamp: t,
+          open: c.open,
+          high: c.high + c.high * 0.0008,
+          low: c.low,
+          close: c.close,
+        ));
+      }
+    }
+    if (firstLow != null) {
+      final t = getLocalIstTime(firstLow.snapshotTime);
+      final c = closestCandle(group.ohlcvData, t);
+      if (c != null) {
+        lowMarks.add(ChartDataPoint(
+          timestamp: t,
+          open: c.open,
+          high: c.high,
+          low: c.low - c.low * 0.0008,
+          close: c.close,
+        ));
+      }
+    }
+
+    final axisLabel = _ts(p.muted, 10.5);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 14, 10, 8),
+      child: SfCartesianChart(
+        backgroundColor: Colors.transparent,
+        plotAreaBorderWidth: 0,
+        margin: EdgeInsets.zero,
+        trackballBehavior: TrackballBehavior(
+          enable: true,
+          activationMode: ActivationMode.singleTap,
+          tooltipSettings: InteractiveTooltip(
+            enable: true,
+            color: p.card,
+            borderColor: p.line,
+            borderWidth: 1,
+            format:
+                'point.x\nO: point.open  H: point.high\nL: point.low  C: point.close',
+            textStyle: _ts(p.ink, 11.5, w: FontWeight.w600),
+          ),
+          markerSettings: TrackballMarkerSettings(
+            markerVisibility: TrackballVisibilityMode.visible,
+            color: p.ink,
+            borderColor: p.ink,
+            borderWidth: 2,
+            height: 6,
+            width: 6,
+          ),
+          lineColor: p.muted,
+          lineWidth: 1,
+          lineDashArray: const [4, 4],
+        ),
+        primaryXAxis: DateTimeAxis(
+          minimum: xMin,
+          maximum: xMax,
+          majorGridLines: MajorGridLines(
+              color: gridColor, width: 1, dashArray: const [2, 4]),
+          minorGridLines: const MinorGridLines(width: 0),
+          axisLine: const AxisLine(width: 0),
+          majorTickLines: const MajorTickLines(size: 0),
+          labelStyle: axisLabel,
+          dateFormat: DateFormat('h:mm'),
+          intervalType: DateTimeIntervalType.minutes,
+          interval: _xInterval(timeFilter),
+          edgeLabelPlacement: EdgeLabelPlacement.shift,
+          plotBands: plotBands,
+        ),
+        primaryYAxis: NumericAxis(
+          opposedPosition: true,
+          majorGridLines: MajorGridLines(
+              color: gridColor, width: 0.6, dashArray: const [2, 4]),
+          minorGridLines: const MinorGridLines(width: 0),
+          axisLine: const AxisLine(width: 0),
+          majorTickLines: const MajorTickLines(size: 0),
+          labelStyle: axisLabel,
+          numberFormat: NumberFormat('#,##0'),
+        ),
+        series: <CartesianSeries>[
+          CandleSeries<ChartDataPoint, DateTime>(
+            dataSource: chartData,
+            xValueMapper: (d, _) => d.timestamp,
+            lowValueMapper: (d, _) => d.low,
+            highValueMapper: (d, _) => d.high,
+            openValueMapper: (d, _) => d.open,
+            closeValueMapper: (d, _) => d.close,
+            bullColor: p.bull,
+            bearColor: p.bear,
+            enableSolidCandles: true,
+            animationDuration: 600,
+            enableTooltip: true,
+            spacing: 0.15,
+            width: 0.65,
+          ),
+          if (highMarks.isNotEmpty)
+            ScatterSeries<ChartDataPoint, DateTime>(
+              dataSource: highMarks,
+              xValueMapper: (d, _) => d.timestamp,
+              yValueMapper: (d, _) => d.high,
+              color: p.bull,
+              markerSettings: const MarkerSettings(
+                isVisible: true,
+                shape: DataMarkerType.triangle,
+                height: 10,
+                width: 10,
+              ),
+              enableTooltip: false,
+            ),
+          if (lowMarks.isNotEmpty)
+            ScatterSeries<ChartDataPoint, DateTime>(
+              dataSource: lowMarks,
+              xValueMapper: (d, _) => d.timestamp,
+              yValueMapper: (d, _) => d.low,
+              color: p.bear,
+              markerSettings: const MarkerSettings(
+                isVisible: true,
+                shape: DataMarkerType.invertedTriangle,
+                height: 10,
+                width: 10,
+              ),
+              enableTooltip: false,
+            ),
+        ],
+      ),
+    );
   }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// LOADING / ERROR / EMPTY / DISCLAIMER
+// ═════════════════════════════════════════════════════════════════════════════
+
+class _SkeletonView extends StatefulWidget {
+  final Pal p;
+  const _SkeletonView({required this.p});
+
+  @override
+  State<_SkeletonView> createState() => _SkeletonViewState();
+}
+
+class _SkeletonViewState extends State<_SkeletonView>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _c.dispose();
     super.dispose();
   }
+
+  Widget _block(double h, {double? w, double r = 16}) => Container(
+        height: h,
+        width: w,
+        decoration: BoxDecoration(
+          color: widget.p.line,
+          borderRadius: BorderRadius.circular(r),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: _anim,
-      builder: (ctx, _) {
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: 2,
-          itemBuilder: (_, i) => _ShimmerCard(
-            isDark: widget.isDark,
-            progress: _anim.value,
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _ShimmerCard extends StatelessWidget {
-  final bool isDark;
-  final double progress;
-
-  const _ShimmerCard({required this.isDark, required this.progress});
-
-  @override
-  Widget build(BuildContext context) {
-    final baseColor =
-        isDark ? const Color(0xFF181818) : const Color(0xFFe8e8e8);
-    final shineColor =
-        isDark ? const Color(0xFF272727) : const Color(0xFFf5f5f5);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF141414) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isDark ? const Color(0xFF222222) : const Color(0xFFe8e8e8),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      animation: _c,
+      builder: (_, __) => Opacity(
+        opacity: 0.45 + 0.55 * _c.value,
+        child: ListView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+          children: [
+            _block(170, r: 28),
+            const SizedBox(height: 20),
+            _block(18, w: 180, r: 8),
+            const SizedBox(height: 12),
+            Row(
               children: [
-                // Symbol skeleton
-                _ShimmerBox(
-                  width: 140,
-                  height: 28,
-                  base: baseColor,
-                  shine: shineColor,
-                  progress: progress,
-                  radius: 6,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _ShimmerBox(
-                      width: 72,
-                      height: 22,
-                      base: baseColor,
-                      shine: shineColor,
-                      progress: progress,
-                      radius: 6,
-                    ),
-                    const SizedBox(width: 8),
-                    _ShimmerBox(
-                      width: 72,
-                      height: 22,
-                      base: baseColor,
-                      shine: shineColor,
-                      progress: progress,
-                      radius: 6,
-                    ),
-                  ],
-                ),
+                Expanded(child: _block(50, r: 12)),
+                const SizedBox(width: 8),
+                Expanded(child: _block(50, r: 12)),
+                const SizedBox(width: 8),
+                Expanded(child: _block(50, r: 12)),
               ],
             ),
-          ),
-          // Breakout info row skeleton
-          Container(
-            color: isDark ? const Color(0xFF0c0c0c) : const Color(0xFFfafafa),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-            child: Row(
-              children: [
-                _ShimmerBox(
-                  width: 100,
-                  height: 38,
-                  base: baseColor,
-                  shine: shineColor,
-                  progress: progress,
-                  radius: 8,
-                ),
-                const SizedBox(width: 10),
-                _ShimmerBox(
-                  width: 100,
-                  height: 38,
-                  base: baseColor,
-                  shine: shineColor,
-                  progress: progress,
-                  radius: 8,
-                ),
-              ],
-            ),
-          ),
-          // Chart skeleton with fake candle bars
-          Container(
-            height: 240,
-            color: isDark ? const Color(0xFF0c0c0c) : const Color(0xFFfafafa),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-            child: _FakeCandleChart(
-              isDark: isDark,
-              progress: progress,
-              base: baseColor,
-              shine: shineColor,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _FakeCandleChart extends StatelessWidget {
-  final bool isDark;
-  final double progress;
-  final Color base;
-  final Color shine;
-
-  const _FakeCandleChart({
-    required this.isDark,
-    required this.progress,
-    required this.base,
-    required this.shine,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final rng = math.Random(42);
-    final candles = List.generate(22, (i) {
-      final h = 0.3 + rng.nextDouble() * 0.6;
-      final offset = rng.nextDouble() * (1 - h);
-      return (height: h, offset: offset);
-    });
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: candles.map((c) {
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1.5),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.bottomCenter,
-                    child: FractionallySizedBox(
-                      heightFactor: c.height,
-                      child: _ShimmerBox(
-                        width: double.infinity,
-                        height: double.infinity,
-                        base: base,
-                        shine: shine,
-                        progress: progress,
-                        radius: 2,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _ShimmerBox extends StatelessWidget {
-  final double width;
-  final double height;
-  final Color base;
-  final Color shine;
-  final double progress;
-  final double radius;
-
-  const _ShimmerBox({
-    required this.width,
-    required this.height,
-    required this.base,
-    required this.shine,
-    required this.progress,
-    required this.radius,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: width == double.infinity ? null : width,
-      height: height == double.infinity ? null : height,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(radius),
-        gradient: LinearGradient(
-          begin: Alignment(-1.5 + progress * 3, 0),
-          end: Alignment(-0.5 + progress * 3, 0),
-          colors: [base, shine, base],
-          stops: const [0.0, 0.5, 1.0],
+            const SizedBox(height: 20),
+            _block(320, r: 24),
+          ],
         ),
       ),
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Signal Badge
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SignalBadge extends StatelessWidget {
-  final String label;
-  final String sublabel;
-  final Color color;
-  final bool isDark;
-
-  const _SignalBadge({
-    required this.label,
-    required this.sublabel,
-    required this.color,
-    required this.isDark,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 13,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            sublabel,
-            style: TextStyle(
-              color: color.withOpacity(0.7),
-              fontSize: 11,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Error + Empty + Disclaimer
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _ErrorView extends StatelessWidget {
+  final Pal p;
   final String error;
-  final bool isDark;
-  const _ErrorView({required this.error, required this.isDark});
+  final VoidCallback onRetry;
+
+  const _ErrorView(
+      {required this.p, required this.error, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
@@ -1873,27 +2361,44 @@ class _ErrorView extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: AppColors.bearDark.withOpacity(0.08),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppColors.bearDark.withOpacity(0.2)),
+            color: p.card,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: p.line),
           ),
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline_rounded,
-                  color: AppColors.bearDark, size: 20),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  error,
-                  style: const TextStyle(
-                    color: AppColors.bearDark,
-                    fontSize: 12,
-                    fontFamily: 'monospace',
-                  ),
-                ),
+              Icon(Icons.wifi_off_rounded, size: 32, color: p.bear),
+              const SizedBox(height: 14),
+              Text('Couldn\'t load breakouts',
+                  style: _ts(p.ink, 18, w: FontWeight.w800)),
+              const SizedBox(height: 6),
+              Text(
+                'Check your internet connection and try again.',
+                textAlign: TextAlign.center,
+                style: _ts(p.sub, 13.5, h: 1.5),
               ),
+              const SizedBox(height: 18),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: p.accent,
+                  foregroundColor: p.onAccent,
+                  minimumSize: const Size(140, 46),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                ),
+                onPressed: onRetry,
+                child: Text('Try again',
+                    style: _ts(p.onAccent, 14, w: FontWeight.w800)),
+              ),
+              const SizedBox(height: 14),
+              Text(error,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: _ts(p.muted, 10.5, h: 1.4)),
             ],
           ),
         ),
@@ -1903,138 +2408,120 @@ class _ErrorView extends StatelessWidget {
 }
 
 class _EmptyView extends StatelessWidget {
-  final String date;
-  final bool isDark;
-  final Color textSub;
-  final Color borderColor;
+  final Pal p;
+  final DateTime date;
+  final bool isToday;
+  final VoidCallback onPrev;
+
   const _EmptyView({
+    required this.p,
     required this.date,
-    required this.isDark,
-    required this.textSub,
-    required this.borderColor,
+    required this.isToday,
+    required this.onPrev,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
-          decoration: BoxDecoration(
-            border: Border.all(color: borderColor),
-            borderRadius: BorderRadius.circular(20),
-            color: isDark ? AppColors.darkCard : AppColors.lightCard,
+    final weekend = date.weekday >= 6;
+    final title = weekend
+        ? 'The market is closed on weekends'
+        : isToday
+            ? 'No breakouts yet today'
+            : 'No breakouts on this day';
+    final body = weekend
+        ? 'Indian markets trade Monday to Friday, 9:15 AM to 3:30 PM. Pick a weekday to see alerts.'
+        : isToday
+            ? 'Nothing has moved past its high or low of the day so far. Alerts show up here as soon as they happen. Pull down to refresh.'
+            : 'The AI didn\'t flag any breakouts on this day. It may also have been a market holiday.';
+
+    return Container(
+      margin: const EdgeInsets.only(top: 24),
+      padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
+      decoration: BoxDecoration(
+        color: p.card,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: p.line),
+      ),
+      child: Column(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: p.chip,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(Icons.hourglass_empty_rounded, size: 28, color: p.sub),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1a1a1a)
-                      : const Color(0xFFf0f0f0),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: borderColor),
-                ),
-                child: Icon(
-                  Icons.bar_chart_rounded,
-                  size: 28,
-                  color: isDark
-                      ? AppColors.darkTextMuted
-                      : AppColors.lightTextMuted,
-                ),
+          const SizedBox(height: 20),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: _ts(p.ink, 19, w: FontWeight.w800, ls: -0.3)),
+          const SizedBox(height: 8),
+          Text(body,
+              textAlign: TextAlign.center, style: _ts(p.sub, 13.5, h: 1.55)),
+          const SizedBox(height: 22),
+          SizedBox(
+            width: double.infinity,
+            height: 46,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: p.accent,
+                foregroundColor: p.onAccent,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
               ),
-              const SizedBox(height: 20),
-              Text(
-                'NO BREAKOUTS',
-                style: TextStyle(
-                  color: textSub,
-                  fontSize: 11,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                date,
-                style: TextStyle(
-                  color: isDark
-                      ? AppColors.darkTextPrimary
-                      : AppColors.lightTextPrimary,
-                  fontSize: 18,
-                  fontFamily: 'monospace',
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.3,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'No index breakouts were detected\nby AI on this trading session.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: textSub,
-                  fontSize: 12,
-                  fontFamily: 'monospace',
-                  height: 1.7,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Container(height: 1, color: borderColor),
-              const SizedBox(height: 18),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.access_time_rounded,
-                      size: 12,
-                      color: isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted),
-                  const SizedBox(width: 6),
-                  Text(
-                    'MARKET HOURS  9:15 AM – 3:30 PM IST',
-                    style: TextStyle(
-                      color: isDark
-                          ? AppColors.darkTextMuted
-                          : AppColors.lightTextMuted,
-                      fontSize: 10,
-                      fontFamily: 'monospace',
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              onPressed: onPrev,
+              child: Text('Go to the previous day',
+                  style: _ts(p.onAccent, 14, w: FontWeight.w800)),
+            ),
           ),
-        ),
+          TextButton(
+            onPressed: () => showInfoDialog(context, Topics.breakout, p),
+            child: Text('What is a breakout?',
+                style: _ts(p.sub, 13, w: FontWeight.w600)),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _Disclaimer extends StatelessWidget {
-  final Color textMuted;
-  const _Disclaimer({required this.textMuted});
+class _DisclaimerCard extends StatelessWidget {
+  final Pal p;
+  const _DisclaimerCard({required this.p});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 4),
-      child: Text(
-        'DISCLAIMER: The AI breakout indices and related data are for informational '
-        'and educational purposes only. They do not constitute financial, investment, '
-        'or trading advice. Always conduct your own research.',
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: textMuted,
-          fontSize: 10,
-          fontFamily: 'monospace',
-          height: 1.7,
-          letterSpacing: 0.2,
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => showInfoDialog(context, Topics.disclaimer, p),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: p.line),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(Icons.school_outlined, size: 20, color: p.sub),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('For learning, not advice',
+                      style: _ts(p.ink, 13.5, w: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text(
+                    'These alerts help you understand market moves. They are not recommendations to buy or sell, and breakouts can fail. Always do your own research.',
+                    style: _ts(p.sub, 12, h: 1.5),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

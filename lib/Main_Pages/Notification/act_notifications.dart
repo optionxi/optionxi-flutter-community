@@ -16,11 +16,16 @@ class _Palette {
   static const violet = Color(0xFF7C3AED);
   static const indigoSoft = Color(0xFFEEEFFD);
 
+  // Premium accent
+  static const gold = Color(0xFFE8A93B);
+  static const goldSoft = Color(0xFFFCF1DD);
+
   // Dark surface hierarchy
   static const darkBg = Color(0xFF080C14);
   static const darkCard = Color(0xFF0F1520);
   static const darkCardHover = Color(0xFF141C2B);
   static const darkBorder = Color(0xFF1E2A3D);
+  static const darkPill = Color(0xFF10161F);
 
   // Light surface hierarchy
   static const lightBg = Color(0xFFF4F6FB);
@@ -54,11 +59,11 @@ class _TextStyles {
         letterSpacing: 0.1,
       );
 
-  static TextStyle chip(bool isDark) => TextStyle(
+  static TextStyle chip(bool isDark, {bool premium = false}) => TextStyle(
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 0.6,
-        color: isDark ? _Palette.indigo : _Palette.indigo,
+        color: premium ? _Palette.gold : _Palette.indigo,
       );
 
   static TextStyle timestamp(bool isDark) => TextStyle(
@@ -74,11 +79,38 @@ class _TextStyles {
         letterSpacing: 1.2,
         color: isDark ? const Color(0xFF4A6080) : _Palette.lightMuted,
       );
+
+  static TextStyle tab(bool isDark, bool active) => TextStyle(
+        fontSize: 13,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.1,
+        color: active
+            ? (isDark ? Colors.white : const Color(0xFF0D1117))
+            : (isDark ? const Color(0xFF6B7FA3) : _Palette.lightMuted),
+      );
+}
+
+// ─── Per-tab feed state ──────────────────────────────────────────────────────
+
+class _Feed {
+  final String table;
+  final bool isPrivate;
+  final ScrollController scrollController = ScrollController();
+
+  List<NotificationItem> items = [];
+  bool isLoading = true;
+  bool hasMore = true;
+  int page = 1;
+
+  _Feed({required this.table, this.isPrivate = false});
 }
 
 // ─── Page ────────────────────────────────────────────────────────────────────
 
 class NotificationPage extends StatefulWidget {
+  final int initialTabIndex;
+  const NotificationPage({super.key, this.initialTabIndex = 0});
+
   @override
   _NotificationPageState createState() => _NotificationPageState();
 }
@@ -86,20 +118,28 @@ class NotificationPage extends StatefulWidget {
 class _NotificationPageState extends State<NotificationPage>
     with TickerProviderStateMixin {
   final SupabaseClient supabase = Supabase.instance.client;
-  List<NotificationItem> notifications = [];
-  bool isLoading = true;
-  bool hasMore = true;
-  int currentPage = 1;
   final int pageSize = 10;
-  final ScrollController _scrollController = ScrollController();
+
+  late TabController _tabController;
+  late final _Feed _publicFeed = _Feed(table: 'notifications');
+  late final _Feed _privateFeed =
+      _Feed(table: 'private_notifications', isPrivate: true);
 
   late AnimationController _shimmerController;
-  late AnimationController _entryController;
   late Animation<double> _shimmerAnimation;
 
   @override
   void initState() {
     super.initState();
+
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.initialTabIndex,
+    );
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
 
     _shimmerController = AnimationController(
       duration: const Duration(milliseconds: 1600),
@@ -110,36 +150,38 @@ class _NotificationPageState extends State<NotificationPage>
       CurvedAnimation(parent: _shimmerController, curve: Curves.easeInOut),
     );
 
-    _entryController = AnimationController(
-      duration: const Duration(milliseconds: 600),
-      vsync: this,
-    );
-
     BadgeService.clearNotificationsBadge();
-    loadNotifications();
-    _scrollController.addListener(_onScroll);
+
+    loadFeed(_publicFeed);
+    loadFeed(_privateFeed);
+
+    _publicFeed.scrollController.addListener(() => _onScroll(_publicFeed));
+    _privateFeed.scrollController.addListener(() => _onScroll(_privateFeed));
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _tabController.dispose();
+    _publicFeed.scrollController.dispose();
+    _privateFeed.scrollController.dispose();
     _shimmerController.dispose();
-    _entryController.dispose();
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      if (hasMore && !isLoading) loadMoreNotifications();
+  void _onScroll(_Feed feed) {
+    if (feed.scrollController.position.pixels >=
+        feed.scrollController.position.maxScrollExtent - 200) {
+      if (feed.hasMore && !feed.isLoading) loadMore(feed);
     }
   }
 
-  Future<void> loadNotifications() async {
-    setState(() => isLoading = true);
+  // ── Data loading (shared by both feeds) ──────────────────────────────────
+
+  Future<void> loadFeed(_Feed feed) async {
+    setState(() => feed.isLoading = true);
     try {
       final response = await supabase
-          .from('notifications')
+          .from(feed.table)
           .select('*')
           .order('created_at', ascending: false)
           .range(0, pageSize - 1);
@@ -149,26 +191,27 @@ class _NotificationPageState extends State<NotificationPage>
           .toList();
 
       setState(() {
-        notifications = loaded;
-        isLoading = false;
-        hasMore = loaded.length == pageSize;
-        currentPage = 1;
+        feed.items = loaded;
+        feed.isLoading = false;
+        feed.hasMore = loaded.length == pageSize;
+        feed.page = 1;
       });
-      _entryController.forward(from: 0);
     } catch (_) {
-      setState(() => isLoading = false);
-      _showErrorSnackbar('Failed to load notifications');
+      setState(() => feed.isLoading = false);
+      _showErrorSnackbar(feed.isPrivate
+          ? 'Failed to load premium notifications'
+          : 'Failed to load notifications');
     }
   }
 
-  Future<void> loadMoreNotifications() async {
-    if (isLoading || !hasMore) return;
-    setState(() => isLoading = true);
+  Future<void> loadMore(_Feed feed) async {
+    if (feed.isLoading || !feed.hasMore) return;
+    setState(() => feed.isLoading = true);
     try {
-      final from = currentPage * pageSize;
+      final from = feed.page * pageSize;
       final to = from + pageSize - 1;
       final response = await supabase
-          .from('notifications')
+          .from(feed.table)
           .select('*')
           .order('created_at', ascending: false)
           .range(from, to);
@@ -178,13 +221,13 @@ class _NotificationPageState extends State<NotificationPage>
           .toList();
 
       setState(() {
-        notifications.addAll(more);
-        currentPage++;
-        hasMore = more.length == pageSize;
-        isLoading = false;
+        feed.items.addAll(more);
+        feed.page++;
+        feed.hasMore = more.length == pageSize;
+        feed.isLoading = false;
       });
     } catch (_) {
-      setState(() => isLoading = false);
+      setState(() => feed.isLoading = false);
       _showErrorSnackbar('Failed to load more notifications');
     }
   }
@@ -230,16 +273,15 @@ class _NotificationPageState extends State<NotificationPage>
           child: Column(
             children: [
               _buildHeader(isDark),
+              _buildTabBar(isDark),
+              const SizedBox(height: 8),
               Expanded(
-                child: RefreshIndicator(
-                  onRefresh: loadNotifications,
-                  color: _Palette.indigo,
-                  strokeWidth: 2,
-                  child: isLoading && notifications.isEmpty
-                      ? _buildShimmerList()
-                      : notifications.isEmpty
-                          ? _buildEmptyState(isDark)
-                          : _buildList(isDark),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildFeedTab(isDark, _publicFeed),
+                    _buildFeedTab(isDark, _privateFeed),
+                  ],
                 ),
               ),
             ],
@@ -252,6 +294,7 @@ class _NotificationPageState extends State<NotificationPage>
   // ── Header ─────────────────────────────────────────────────────────────────
 
   Widget _buildHeader(bool isDark) {
+    final activeFeed = _tabController.index == 0 ? _publicFeed : _privateFeed;
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
       child: Row(
@@ -263,11 +306,11 @@ class _NotificationPageState extends State<NotificationPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Notifications', style: _TextStyles.heading(isDark)),
-                if (notifications.isNotEmpty)
+                if (activeFeed.items.isNotEmpty)
                   Padding(
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
-                      '${notifications.length} updates',
+                      '${activeFeed.items.length} updates',
                       style: _TextStyles.label(isDark),
                     ),
                   ),
@@ -275,32 +318,85 @@ class _NotificationPageState extends State<NotificationPage>
             ),
           ),
           _HeaderBadge(
-            unreadCount: notifications
+            unreadCount: activeFeed.items
                 .where((n) => !n.isRead && _isToday(n.createdAt))
                 .length,
             isDark: isDark,
+            premium: activeFeed.isPrivate,
           ),
         ],
       ),
     );
   }
 
-  // ── List ───────────────────────────────────────────────────────────────────
+  // ── Tab bar (segmented control) ───────────────────────────────────────────
 
-  Widget _buildList(bool isDark) {
+  Widget _buildTabBar(bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Container(
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: isDark ? _Palette.darkPill : Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: isDark ? _Palette.darkBorder : _Palette.lightBorder,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            _TabSegment(
+              label: 'General',
+              icon: Icons.notifications_none_rounded,
+              isDark: isDark,
+              active: _tabController.index == 0,
+              onTap: () => setState(() => _tabController.animateTo(0)),
+            ),
+            _TabSegment(
+              label: 'Premium',
+              icon: Icons.workspace_premium_rounded,
+              isDark: isDark,
+              active: _tabController.index == 1,
+              premium: true,
+              onTap: () => setState(() => _tabController.animateTo(1)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Feed tab body ──────────────────────────────────────────────────────────
+
+  Widget _buildFeedTab(bool isDark, _Feed feed) {
+    return RefreshIndicator(
+      onRefresh: () => loadFeed(feed),
+      color: feed.isPrivate ? _Palette.gold : _Palette.indigo,
+      strokeWidth: 2,
+      child: feed.isLoading && feed.items.isEmpty
+          ? _buildShimmerList(isDark)
+          : feed.items.isEmpty
+              ? _buildEmptyState(isDark, feed.isPrivate)
+              : _buildList(isDark, feed),
+    );
+  }
+
+  Widget _buildList(bool isDark, _Feed feed) {
     return ListView.builder(
-      controller: _scrollController,
+      controller: feed.scrollController,
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: notifications.length + (hasMore ? 1 : 0),
+      itemCount: feed.items.length + (feed.hasMore ? 1 : 0),
       itemBuilder: (context, index) {
-        if (index == notifications.length) return _buildLoadMore();
+        if (index == feed.items.length) return _buildLoadMore(feed.isPrivate);
         return _AnimatedCard(
           index: index,
           child: _NotificationCard(
-            notification: notifications[index],
+            notification: feed.items[index],
             isDark: isDark,
-            isToday: _isToday(notifications[index].createdAt),
-            onTap: () => _handleTap(notifications[index]),
+            isToday: _isToday(feed.items[index].createdAt),
+            premium: feed.isPrivate,
+            onTap: () => _handleTap(feed.items[index]),
           ),
         );
       },
@@ -330,16 +426,17 @@ class _NotificationPageState extends State<NotificationPage>
     }
   }
 
-  Widget _buildLoadMore() {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 24),
+  Widget _buildLoadMore(bool premium) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24),
       child: Center(
         child: SizedBox(
           width: 22,
           height: 22,
           child: CircularProgressIndicator(
             strokeWidth: 2,
-            valueColor: AlwaysStoppedAnimation<Color>(_Palette.indigo),
+            valueColor: AlwaysStoppedAnimation<Color>(
+                premium ? _Palette.gold : _Palette.indigo),
           ),
         ),
       ),
@@ -348,8 +445,7 @@ class _NotificationPageState extends State<NotificationPage>
 
   // ── Shimmer ────────────────────────────────────────────────────────────────
 
-  Widget _buildShimmerList() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildShimmerList(bool isDark) {
     return ListView.builder(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
       itemCount: 6,
@@ -363,7 +459,7 @@ class _NotificationPageState extends State<NotificationPage>
 
   // ── Empty ──────────────────────────────────────────────────────────────────
 
-  Widget _buildEmptyState(bool isDark) {
+  Widget _buildEmptyState(bool isDark, bool premium) {
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -372,17 +468,27 @@ class _NotificationPageState extends State<NotificationPage>
             width: 96,
             height: 96,
             decoration: BoxDecoration(
-              color: isDark ? _Palette.darkCard : const Color(0xFFEEEFFD),
+              color: isDark
+                  ? _Palette.darkCard
+                  : (premium ? _Palette.goldSoft : const Color(0xFFEEEFFD)),
               shape: BoxShape.circle,
               border: Border.all(
-                color: isDark ? _Palette.darkBorder : _Palette.indigoSoft,
+                color: isDark
+                    ? _Palette.darkBorder
+                    : (premium
+                        ? _Palette.gold.withOpacity(0.3)
+                        : _Palette.indigoSoft),
                 width: 1.5,
               ),
             ),
             child: Icon(
-              Icons.notifications_none_rounded,
+              premium
+                  ? Icons.workspace_premium_rounded
+                  : Icons.notifications_none_rounded,
               size: 44,
-              color: isDark ? const Color(0xFF4A6080) : const Color(0xFF8B96C8),
+              color: isDark
+                  ? const Color(0xFF4A6080)
+                  : (premium ? _Palette.gold : const Color(0xFF8B96C8)),
             ),
           ),
           const SizedBox(height: 24),
@@ -397,7 +503,9 @@ class _NotificationPageState extends State<NotificationPage>
           ),
           const SizedBox(height: 8),
           Text(
-            'New alerts will appear here',
+            premium
+                ? 'New premium alerts will appear here'
+                : 'New alerts will appear here',
             style: TextStyle(
               fontSize: 14,
               color: isDark ? const Color(0xFF6B7FA3) : _Palette.lightMuted,
@@ -419,6 +527,63 @@ class _NotificationPageState extends State<NotificationPage>
       if (sn.contains(upperCase) || fn.contains(upperCase)) return true;
     }
     return false;
+  }
+}
+
+// ─── Tab Segment ──────────────────────────────────────────────────────────────
+
+class _TabSegment extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool isDark;
+  final bool active;
+  final bool premium;
+  final VoidCallback onTap;
+
+  const _TabSegment({
+    required this.label,
+    required this.icon,
+    required this.isDark,
+    required this.active,
+    required this.onTap,
+    this.premium = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final accent = premium ? _Palette.gold : _Palette.indigo;
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: active
+                ? (isDark ? accent.withOpacity(0.14) : accent.withOpacity(0.10))
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: active
+                ? Border.all(color: accent.withOpacity(0.35), width: 1)
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon,
+                  size: 16,
+                  color: active
+                      ? accent
+                      : (isDark
+                          ? const Color(0xFF6B7FA3)
+                          : _Palette.lightMuted)),
+              const SizedBox(width: 6),
+              Text(label, style: _TextStyles.tab(isDark, active)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -458,7 +623,9 @@ class _BackButton extends StatelessWidget {
 class _HeaderBadge extends StatelessWidget {
   final int unreadCount;
   final bool isDark;
-  const _HeaderBadge({required this.unreadCount, required this.isDark});
+  final bool premium;
+  const _HeaderBadge(
+      {required this.unreadCount, required this.isDark, this.premium = false});
 
   @override
   Widget build(BuildContext context) {
@@ -466,15 +633,18 @@ class _HeaderBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [_Palette.indigo, _Palette.violet],
+        gradient: LinearGradient(
+          colors: premium
+              ? [_Palette.gold, const Color(0xFFCB8A1F)]
+              : [_Palette.indigo, _Palette.violet],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: _Palette.indigo.withOpacity(0.35),
+            color:
+                (premium ? _Palette.gold : _Palette.indigo).withOpacity(0.35),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -550,6 +720,7 @@ class _NotificationCard extends StatefulWidget {
   final NotificationItem notification;
   final bool isDark;
   final bool isToday;
+  final bool premium;
   final VoidCallback onTap;
 
   const _NotificationCard({
@@ -557,6 +728,7 @@ class _NotificationCard extends StatefulWidget {
     required this.isDark,
     required this.isToday,
     required this.onTap,
+    this.premium = false,
   });
 
   @override
@@ -571,6 +743,7 @@ class _NotificationCardState extends State<_NotificationCard> {
     final n = widget.notification;
     final isDark = widget.isDark;
     final hasAction = n.stockData.isNotEmpty || n.stockName.isNotEmpty;
+    final accent = widget.premium ? _Palette.gold : _Palette.indigo;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -594,8 +767,10 @@ class _NotificationCardState extends State<_NotificationCard> {
                   : (_pressed ? const Color(0xFFF8F9FF) : _Palette.lightCard),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: isDark ? _Palette.darkBorder : _Palette.lightBorder,
-                width: 1,
+                color: widget.premium
+                    ? accent.withOpacity(isDark ? 0.28 : 0.22)
+                    : (isDark ? _Palette.darkBorder : _Palette.lightBorder),
+                width: widget.premium ? 1.2 : 1,
               ),
               boxShadow: isDark
                   ? [
@@ -624,10 +799,17 @@ class _NotificationCardState extends State<_NotificationCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Top row: title + unread dot
+                  // ── Top row: premium tag + title + unread dot
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      if (widget.premium) ...[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3, right: 8),
+                          child: Icon(Icons.workspace_premium_rounded,
+                              size: 15, color: accent),
+                        ),
+                      ],
                       Expanded(
                         child: Text(n.heading,
                             style: _TextStyles.cardTitle(isDark)),
@@ -636,7 +818,7 @@ class _NotificationCardState extends State<_NotificationCard> {
                         const SizedBox(width: 10),
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
-                          child: _UnreadDot(),
+                          child: _UnreadDot(color: accent),
                         ),
                       ],
                     ],
@@ -652,6 +834,7 @@ class _NotificationCardState extends State<_NotificationCard> {
                     _StockSection(
                       notification: n,
                       isDark: isDark,
+                      premium: widget.premium,
                     ),
                   ],
 
@@ -680,6 +863,9 @@ class _NotificationCardState extends State<_NotificationCard> {
 // ─── Unread Dot ───────────────────────────────────────────────────────────────
 
 class _UnreadDot extends StatefulWidget {
+  final Color color;
+  const _UnreadDot({this.color = _Palette.indigo});
+
   @override
   State<_UnreadDot> createState() => _UnreadDotState();
 }
@@ -714,10 +900,10 @@ class _UnreadDotState extends State<_UnreadDot>
         height: 9,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: _Palette.indigo,
+          color: widget.color,
           boxShadow: [
             BoxShadow(
-              color: _Palette.indigo.withOpacity(_pulse.value * 0.6),
+              color: widget.color.withOpacity(_pulse.value * 0.6),
               blurRadius: 8 * _pulse.value,
               spreadRadius: 1,
             ),
@@ -733,8 +919,10 @@ class _UnreadDotState extends State<_UnreadDot>
 class _StockSection extends StatelessWidget {
   final NotificationItem notification;
   final bool isDark;
+  final bool premium;
 
-  const _StockSection({required this.notification, required this.isDark});
+  const _StockSection(
+      {required this.notification, required this.isDark, this.premium = false});
 
   @override
   Widget build(BuildContext context) {
@@ -750,8 +938,10 @@ class _StockSection extends StatelessWidget {
           child: Wrap(
             spacing: 8,
             runSpacing: 6,
-            children:
-                chips.map((s) => _StockChip(text: s, isDark: isDark)).toList(),
+            children: chips
+                .map((s) =>
+                    _StockChip(text: s, isDark: isDark, premium: premium))
+                .toList(),
           ),
         ),
       ],
@@ -762,7 +952,9 @@ class _StockSection extends StatelessWidget {
 class _StockChip extends StatelessWidget {
   final String text;
   final bool isDark;
-  const _StockChip({required this.text, required this.isDark});
+  final bool premium;
+  const _StockChip(
+      {required this.text, required this.isDark, this.premium = false});
 
   String _extractSymbol(String input) {
     final parts = input.split(':');
@@ -772,21 +964,22 @@ class _StockChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = premium ? _Palette.gold : _Palette.indigo;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: isDark ? _Palette.indigo.withOpacity(0.12) : _Palette.indigoSoft,
+        color: isDark
+            ? accent.withOpacity(0.12)
+            : (premium ? _Palette.goldSoft : _Palette.indigoSoft),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isDark
-              ? _Palette.indigo.withOpacity(0.25)
-              : _Palette.indigo.withOpacity(0.18),
+          color: isDark ? accent.withOpacity(0.25) : accent.withOpacity(0.18),
           width: 1,
         ),
       ),
       child: Text(
         _extractSymbol(text),
-        style: _TextStyles.chip(isDark),
+        style: _TextStyles.chip(isDark, premium: premium),
       ),
     );
   }
@@ -994,6 +1187,9 @@ class NotificationItem {
     this.stockData = const [],
   });
 
+  // Works for both `notifications` and `private_notifications` rows:
+  // `is_read` / `stock_data` simply fall back to their defaults when the
+  // column doesn't exist on a given table.
   factory NotificationItem.fromJson(Map<String, dynamic> json) {
     return NotificationItem(
       id: json['id'],

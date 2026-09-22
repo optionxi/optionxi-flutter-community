@@ -516,7 +516,7 @@ class _LoadedContent extends StatelessWidget {
                     ? _SkeletonBar(colors: colors, width: 140, height: 11)
                     : Text(
                         traderCount > 0
-                            ? '₹300k virtual capital · ${formatIndianNumber(traderCount.toDouble(), decimals: 0)}+ traders'
+                            ? '${formatIndianNumber(traderCount.toDouble(), decimals: 0)}+ traders'
                             : '₹300k virtual capital',
                         style: TextStyle(color: colors.muted, fontSize: 12),
                         overflow: TextOverflow.ellipsis,
@@ -534,7 +534,7 @@ class _LoadedContent extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      'Start',
+                      'Start Virtual Trading',
                       style: TextStyle(
                         color: colors.bg,
                         fontWeight: FontWeight.w700,

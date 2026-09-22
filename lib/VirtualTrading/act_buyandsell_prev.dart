@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/conversions.dart';
 import 'package:optionxi/Helpers/lotsize_helper.dart';
+import 'package:optionxi/Main_Pages/Achivements/fastapi_achivement.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/order_placed_dialog.dart';
 import 'package:optionxi/VirtualTrading/VDialogs/subscription_required_dialog.dart';
 import 'package:optionxi/VirtualTrading/buyandsell_prev_loading.dart';
@@ -38,7 +39,7 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   // State Variables
   late String _orderType;
   String _priceType = 'MKT';
-  String _productType = 'INTRADAY';
+  // String _productType = 'INTRADAY';
   bool _isSubscribed = false;
   bool _isLoading = true;
   bool _datafound = true;
@@ -350,11 +351,11 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   Future<void> _placeOrder() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (!_isSubscribed && (_priceType != 'MKT' || _productType == 'NORMAL')) {
-      showSubscriptionRequiredDialog(context, 'Premium Feature',
-          'This feature is only available to subscribed users. Contact customer support');
-      return;
-    }
+    // if (!_isSubscribed && (_priceType != 'MKT' || _productType == 'NORMAL')) {
+    //   showSubscriptionRequiredDialog(context, 'Premium Feature',
+    //       'This feature is only available to subscribed users. Contact customer support');
+    //   return;
+    // }
 
     final ist = tz.getLocation('Asia/Kolkata');
     final now = tz.TZDateTime.now(ist);
@@ -412,6 +413,10 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
 
     try {
       await newOrderRef.set(orderData);
+
+      // Track achievement — fire and forget
+      AchievementEvents.tradePlaced(instrument: widget.stockname ?? '');
+
       showOrderConfiramationDialog(context, _orderType.toLowerCase());
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1357,7 +1362,8 @@ class _BuyandSellPagePrevState extends State<BuyandSellPagePrev> {
   }
 
   Widget _buildPriceTypeSelector(bool isDark) {
-    final types = ['MKT', 'LIMIT', 'SL', 'SLM'];
+    // final types = ['MKT', 'LIMIT', 'SL', 'SLM'];
+    final types = ['MKT'];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

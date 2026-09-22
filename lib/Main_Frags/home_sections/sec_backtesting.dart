@@ -1,23 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:optionxi/Components/cust_upgrade_to_pro.dart';
 
-/// A fixed-height, theme-aware "Backtesting" section for the homepage.
+/// Backtesting entry point for the homepage.
 ///
-/// This links out to three existing report screens:
-///   • Nifty    → "Atlas x Nifty" — direction-confidence calls (e.g. "70%
-///                bullish") checked against what actually happened in the
-///                next 5–15 minute window.
-///   • Scanner  → "Screener History" — stocks flagged by scanners (volume
-///                jump, 52-week breakout, weekly breakout, etc.), especially
-///                ones flagged by several scanners at once.
-///   • AI Picks → "AI Picks Portfolio" — stocks the AI shortlisted using
-///                scanner count + current-day high/low breakout strength,
-///                checked against what happened next.
+/// In plain words: "Did our calls actually work?"
 ///
-/// The homepage card and the option list below only show a one-line,
-/// plain-English summary of each. The fuller "how this works" explanation
-/// (the part that could feel like data overload) sits behind a small
-/// expandable toggle on each row, so nobody is forced to read it.
+/// Tapping the card opens a sheet with three track-record reports:
+///   • Nifty      → were our up/down calls on the market right?
+///   • Scanner    → did stocks our scanners flagged actually move?
+///   • AI Picks   → did the stocks our AI shortlisted do well afterwards?
+///
+/// Each report row shows a one-line summary. A small "Explain it simply"
+/// toggle opens a friendly explanation + example, so nobody is forced to
+/// read it, but it is always one tap away.
 ///
 /// ```dart
 /// BacktestingSection(
@@ -32,7 +27,7 @@ class BacktestingSection extends StatelessWidget {
     this.onNiftyTap,
     this.onAiPicksTap,
     this.onScreenerTap,
-    this.height = 128,
+    this.height = 136,
   });
 
   final VoidCallback? onNiftyTap;
@@ -43,133 +38,132 @@ class BacktestingSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final radius = BorderRadius.circular(26);
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(22),
-        onTap: () => _openBacktestSheet(
-          context,
-          onNiftyTap: onNiftyTap,
-          onAiPicksTap: onAiPicksTap,
-          onScreenerTap: onScreenerTap,
-        ),
-        child: Container(
-          height: height,
-          padding: const EdgeInsets.fromLTRB(18, 16, 16, 16),
+    return SizedBox(
+      height: height,
+      child: Material(
+        color: Colors.transparent,
+        child: Ink(
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
+            color: cs.surface,
+            borderRadius: radius,
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: isDark
-                  ? [cs.primary.withOpacity(0.22), cs.primary.withOpacity(0.06)]
-                  : [
-                      cs.primary.withOpacity(0.12),
-                      cs.primary.withOpacity(0.03)
-                    ],
+              colors: [
+                _a(cs.primary, isDark ? 0.20 : 0.10),
+                _a(cs.primary, isDark ? 0.04 : 0.02),
+              ],
             ),
             border: Border.all(
-              color: cs.primary.withOpacity(isDark ? 0.30 : 0.16),
-              width: 1,
+              color: _a(cs.primary, isDark ? 0.28 : 0.14),
             ),
+            boxShadow: isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: _a(cs.primary, 0.08),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
           ),
-          child: Stack(
-            children: [
-              Positioned(
-                right: -6,
-                bottom: -6,
-                child: Opacity(
-                  opacity: isDark ? 0.10 : 0.07,
-                  child: Icon(
-                    Icons.show_chart_rounded,
-                    size: 96,
-                    color: cs.primary,
-                  ),
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: InkWell(
+            borderRadius: radius,
+            onTap: () => _openBacktestSheet(
+              context,
+              onNiftyTap: onNiftyTap,
+              onAiPicksTap: onAiPicksTap,
+              onScreenerTap: onScreenerTap,
+            ),
+            child: ClipRRect(
+              borderRadius: radius,
+              child: Stack(
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 52,
-                        height: 52,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: cs.primary.withOpacity(isDark ? 0.24 : 0.12),
-                        ),
-                        child: Icon(Icons.query_stats_rounded,
-                            color: cs.primary, size: 26),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
+                  // Decorative sparkline, purely visual (not real data).
+                  Positioned(
+                    right: 0,
+                    bottom: 20,
+                    width: 170,
+                    height: 76,
+                    child: CustomPaint(
+                      painter: _SparklinePainter(color: cs.primary),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(
-                              'Backtesting',
-                              style: theme.textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'See our track record',
+                                    style: theme.textTheme.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.4,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'See how our past calls really turned out',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: _a(cs.onSurface, 0.62),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'Did our calls actually play out? Check the track record',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.onSurface
-                                    .withOpacity(0.6),
+                            const SizedBox(width: 8),
+                            Container(
+                              width: 36,
+                              height: 36,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: cs.primary,
+                              ),
+                              child: Icon(
+                                Icons.arrow_forward_rounded,
+                                size: 18,
+                                color: cs.onPrimary,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: cs.surface.withOpacity(isDark ? 0.35 : 0.7),
+                        Row(
+                          children: [
+                            const _IconStack(),
+                            const SizedBox(width: 10),
+                            Flexible(
+                              child: Text(
+                                'Nifty, Scanner and AI Picks',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: _a(cs.onSurface, 0.75),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: Icon(
-                          Icons.arrow_forward_ios_rounded,
-                          size: 14,
-                          color: theme.colorScheme.onSurface.withOpacity(0.5),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      _PreviewChip(
-                        icon: Icons.show_chart_rounded,
-                        color: const Color(0xFF3B82F6),
-                        label: 'Nifty',
-                      ),
-                      const SizedBox(width: 8),
-                      _PreviewChip(
-                        icon: Icons.filter_alt_rounded,
-                        color: const Color(0xFF10B981),
-                        label: 'Scanner',
-                      ),
-                      const SizedBox(width: 8),
-                      _PreviewChip(
-                        icon: Icons.auto_awesome_rounded,
-                        color: const Color(0xFF8B5CF6),
-                        label: 'AI Picks',
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -177,46 +171,122 @@ class BacktestingSection extends StatelessWidget {
   }
 }
 
-class _PreviewChip extends StatelessWidget {
-  const _PreviewChip({
-    required this.icon,
-    required this.color,
-    required this.label,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared bits
+// ─────────────────────────────────────────────────────────────────────────────
 
-  final IconData icon;
-  final Color color;
-  final String label;
+const Color _kNifty = Color(0xFF3B82F6);
+const Color _kScanner = Color(0xFF10B981);
+const Color _kAi = Color(0xFF8B5CF6);
+
+/// Opacity helper that works on every Flutter version.
+Color _a(Color c, double opacity) =>
+    c.withAlpha((opacity.clamp(0.0, 1.0) * 255).round());
+
+/// Three small overlapping icons, one per report.
+class _IconStack extends StatelessWidget {
+  const _IconStack();
+
+  static const _size = 28.0;
+  static const _step = 20.0;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    final items = <(IconData, Color)>[
+      (Icons.show_chart_rounded, _kNifty),
+      (Icons.radar_rounded, _kScanner),
+      (Icons.auto_awesome_rounded, _kAi),
+    ];
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface.withOpacity(isDark ? 0.35 : 0.75),
-        borderRadius: BorderRadius.circular(30),
-        border: Border.all(color: color.withOpacity(0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+    return SizedBox(
+      width: _size + _step * (items.length - 1),
+      height: _size,
+      child: Stack(
         children: [
-          Icon(icon, size: 13, color: color),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: theme.textTheme.labelSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: theme.colorScheme.onSurface.withOpacity(0.8),
+          for (var i = 0; i < items.length; i++)
+            Positioned(
+              left: i * _step,
+              child: Container(
+                width: _size,
+                height: _size,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Color.alphaBlend(_a(items[i].$2, 0.22), cs.surface),
+                  border: Border.all(color: cs.surface, width: 2),
+                ),
+                child: Icon(items[i].$1, size: 14, color: items[i].$2),
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 }
+
+/// Soft, smooth line with a faded fill, used as a background flourish.
+class _SparklinePainter extends CustomPainter {
+  _SparklinePainter({required this.color});
+
+  final Color color;
+
+  static const _points = [0.28, 0.40, 0.33, 0.52, 0.44, 0.62, 0.55, 0.78, 0.88];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    const padX = 8.0;
+    const padY = 10.0;
+    final dx = (size.width - padX) / (_points.length - 1);
+
+    Offset at(int i) => Offset(
+          i * dx,
+          padY + (size.height - padY * 2) * (1 - _points[i]),
+        );
+
+    final line = Path()..moveTo(at(0).dx, at(0).dy);
+    for (var i = 1; i < _points.length; i++) {
+      final a = at(i - 1);
+      final b = at(i);
+      final mx = (a.dx + b.dx) / 2;
+      line.cubicTo(mx, a.dy, mx, b.dy, b.dx, b.dy);
+    }
+
+    final fill = Path.from(line)
+      ..lineTo(at(_points.length - 1).dx, size.height)
+      ..lineTo(0, size.height)
+      ..close();
+
+    canvas.drawPath(
+      fill,
+      Paint()
+        ..shader = LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [_a(color, 0.22), _a(color, 0.0)],
+        ).createShader(Offset.zero & size),
+    );
+
+    canvas.drawPath(
+      line,
+      Paint()
+        ..color = _a(color, 0.55)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round,
+    );
+
+    final end = at(_points.length - 1);
+    canvas.drawCircle(end, 6, Paint()..color = _a(color, 0.18));
+    canvas.drawCircle(end, 3.2, Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_SparklinePainter old) => old.color != color;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom sheet
+// ─────────────────────────────────────────────────────────────────────────────
 
 void _openBacktestSheet(
   BuildContext context, {
@@ -228,7 +298,8 @@ void _openBacktestSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,
-    builder: (ctx) => _BacktestOptionsSheet(
+    useSafeArea: true,
+    builder: (_) => _BacktestOptionsSheet(
       onNiftyTap: onNiftyTap,
       onAiPicksTap: onAiPicksTap,
       onScreenerTap: onScreenerTap,
@@ -253,162 +324,259 @@ class _BacktestOptionsSheet extends StatelessWidget {
     final cs = theme.colorScheme;
     final bottomInset = MediaQuery.of(context).padding.bottom;
 
+    void go(VoidCallback? cb) {
+      Navigator.of(context).pop();
+      cb?.call();
+    }
+
     return Container(
       decoration: BoxDecoration(
         color: theme.scaffoldBackgroundColor,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
       ),
-      padding: EdgeInsets.fromLTRB(20, 12, 20, 16 + bottomInset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: cs.onSurface.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(10),
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + bottomInset),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: _a(cs.onSurface, 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
             ),
-          ),
-          Text(
-            'Backtest Performance',
-            style: theme.textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w700,
+            Text(
+              'Did our calls work?',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Every call we make gets checked against what actually '
-            'happened next. Pick a report to see the track record.',
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: cs.onSurface.withOpacity(0.6),
-              height: 1.35,
+            const SizedBox(height: 6),
+            Text(
+              'Every call we make is checked against what really happened '
+              'afterwards. Pick a report to see the score.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _a(cs.onSurface, 0.62),
+                height: 1.4,
+              ),
             ),
+            const SizedBox(height: 16),
+            const _ProcessStrip(),
+            const SizedBox(height: 16),
+            _ReportCard(
+              icon: Icons.show_chart_rounded,
+              color: _kNifty,
+              title: 'Nifty',
+              summary: 'When we said the market would go up or down, '
+                  'were we right?',
+              explainer: 'We tell you how sure we are about Nifty\'s next '
+                  'move, for example "70% sure it goes up". Then we wait '
+                  '5 to 15 minutes and see what really happened. This '
+                  'report shows how often we were right.',
+              example: 'Out of every time we were 70% or more sure of a '
+                  'rise, how many times did Nifty really rise?',
+              note: 'Result checked 5 to 15 minutes later',
+              onTap: () => go(onNiftyTap),
+            ),
+            const SizedBox(height: 12),
+            _ReportCard(
+              icon: Icons.radar_rounded,
+              color: _kScanner,
+              title: 'Scanner',
+              summary: 'Stocks we flagged as interesting. Did they really '
+                  'move?',
+              explainer: 'Our scanners watch the market and raise a flag '
+                  'when a stock does something unusual, like a sudden burst '
+                  'of trading or its highest price in a year. When many '
+                  'flags go off on the same stock, it deserves a closer '
+                  'look. This report shows what happened next.',
+              example: 'Stocks flagged by 3 or more scanners today: how '
+                  'did they do afterwards?',
+              note: 'Tracks each stock after it was flagged',
+              onTap: () => go(onScreenerTap),
+            ),
+            const SizedBox(height: 12),
+            _ReportCard(
+              icon: Icons.auto_awesome_rounded,
+              color: _kAi,
+              title: 'AI Picks',
+              summary: 'Our AI\'s shortlist of stocks. How did they do '
+                  'afterwards?',
+              explainer: 'The AI shortlists stocks that many scanners '
+                  'agree on and that are also pushing past today\'s highest '
+                  'or lowest price so far. Lots of signals pointing the '
+                  'same way is a good sign. This report checks whether '
+                  'those picks really moved as expected.',
+              example: '8 out of 10 picks moved the way we expected.',
+              note: 'Checked shortly after and again by end of day',
+              onTap: () => go(onAiPicksTap),
+            ),
+            const SizedBox(height: 18),
+            Center(
+              child: Text(
+                'Past results do not guarantee future returns.',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: _a(cs.onSurface, 0.45),
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            ProUpgradeButton(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "We make a call → time passes → we check" in three quick steps.
+class _ProcessStrip extends StatelessWidget {
+  const _ProcessStrip();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    Widget step(IconData icon, String label) => Expanded(
+          child: Column(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _a(cs.primary, isDark ? 0.22 : 0.12),
+                ),
+                child: Icon(icon, size: 18, color: cs.primary),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: _a(cs.onSurface, 0.75),
+                  height: 1.25,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
-          _OptionTile(
-            icon: Icons.show_chart_rounded,
-            iconColor: const Color(0xFF3B82F6), // blue
-            title: 'Nifty',
-            shortDescription: 'How accurate our bullish/bearish calls are',
-            howItWorks:
-                'Our algorithm scores Nifty\'s next move as a confidence % '
-                '— like "70% bullish". This report checks how often calls '
-                'at a given confidence actually moved that way within the '
-                'next 5–15 minutes.',
-            example: 'e.g. "Of all 70%+ bullish calls, how many went up?"',
-            onTap: () {
-              Navigator.of(context).pop();
-              onNiftyTap?.call();
-            },
+        );
+
+    Widget arrow() => Padding(
+          padding: const EdgeInsets.only(bottom: 22),
+          child: Icon(
+            Icons.chevron_right_rounded,
+            size: 18,
+            color: _a(cs.onSurface, 0.3),
           ),
-          const SizedBox(height: 10),
-          _OptionTile(
-            icon: Icons.filter_alt_rounded,
-            iconColor: const Color(0xFF10B981), // green
-            title: 'Scanner',
-            shortDescription: 'How often flagged stocks actually moved',
-            howItWorks: 'Scanners flag stocks for things like a volume jump, a '
-                '52-week high, or a breakout from the week\'s range. A '
-                'stock flagged by several scanners at once tends to have '
-                'a stronger chance of moving — this shows how that '
-                'played out.',
-            example: 'e.g. "Stocks flagged by 3+ scanners today"',
-            onTap: () {
-              Navigator.of(context).pop();
-              onScreenerTap?.call();
-            },
-          ),
-          const SizedBox(height: 10),
-          _OptionTile(
-            icon: Icons.auto_awesome_rounded,
-            iconColor: const Color(0xFF8B5CF6), // purple
-            title: 'AI Picks',
-            shortDescription: 'How our shortlisted stocks performed after',
-            howItWorks:
-                'A pick combines how many scanners a stock triggered with '
-                'the strength of its current-day high/low breakout — '
-                'together they signal a stronger move. This tracks '
-                'whether that combination paid off in the next window or '
-                'across the day.',
-            example: 'e.g. "8 of 10 AI picks hit their target"',
-            onTap: () {
-              Navigator.of(context).pop();
-              onAiPicksTap?.call();
-            },
-          ),
-          const SizedBox(height: 20),
-          ProUpgradeButton(),
+        );
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 14),
+      decoration: BoxDecoration(
+        color: _a(cs.onSurface, isDark ? 0.05 : 0.035),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          step(Icons.flag_rounded, 'We make a call'),
+          arrow(),
+          step(Icons.schedule_rounded, 'Time passes'),
+          arrow(),
+          step(Icons.fact_check_rounded, 'We check the result'),
         ],
       ),
     );
   }
 }
 
-/// A single backtest option row.
+// ─────────────────────────────────────────────────────────────────────────────
+// Report card
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One report row.
 ///
-/// Tapping the main body (icon, title, short description) navigates to the
-/// report, exactly like before. Tapping "How this works" instead expands an
-/// inline explanation in place — so the extra detail is one tap away but
-/// never forced on anyone by default.
-class _OptionTile extends StatefulWidget {
-  const _OptionTile({
+/// Tap the top part to open the report. Tap "Explain it simply" to expand
+/// the friendly explanation in place. The two are separate tap targets, so
+/// reading never accidentally navigates away.
+class _ReportCard extends StatefulWidget {
+  const _ReportCard({
     required this.icon,
-    required this.iconColor,
+    required this.color,
     required this.title,
-    required this.shortDescription,
-    required this.howItWorks,
+    required this.summary,
+    required this.explainer,
+    required this.example,
+    required this.note,
     required this.onTap,
-    this.example,
   });
 
   final IconData icon;
-  final Color iconColor;
+  final Color color;
   final String title;
-  final String shortDescription;
-  final String howItWorks;
-  final String? example;
+  final String summary;
+  final String explainer;
+  final String example;
+  final String note;
   final VoidCallback onTap;
 
   @override
-  State<_OptionTile> createState() => _OptionTileState();
+  State<_ReportCard> createState() => _ReportCardState();
 }
 
-class _OptionTileState extends State<_OptionTile> {
+class _ReportCardState extends State<_ReportCard> {
   bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final cs = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+    final color = widget.color;
 
     return Material(
-      color: isDark
-          ? Colors.white.withOpacity(0.04)
-          : Colors.black.withOpacity(0.03),
-      borderRadius: BorderRadius.circular(16),
+      color: _a(cs.onSurface, isDark ? 0.05 : 0.035),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(color: _a(cs.onSurface, 0.07)),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Column(
         children: [
+          // Main tap area → opens the report.
           InkWell(
             onTap: widget.onTap,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 10, 14),
+              padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
               child: Row(
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 50,
+                    height: 50,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: widget.iconColor.withOpacity(isDark ? 0.22 : 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          color,
+                          Color.lerp(color, Colors.black, 0.18)!,
+                        ],
+                      ),
                     ),
-                    child: Icon(widget.icon, color: widget.iconColor, size: 22),
+                    child: Icon(widget.icon, color: Colors.white, size: 24),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -417,96 +585,155 @@ class _OptionTileState extends State<_OptionTile> {
                       children: [
                         Text(
                           widget.title,
-                          style: theme.textTheme.titleSmall?.copyWith(
+                          style: theme.textTheme.titleMedium?.copyWith(
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          widget.shortDescription,
+                          widget.summary,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: cs.onSurface.withOpacity(0.65),
+                            color: _a(cs.onSurface, 0.65),
+                            height: 1.3,
                           ),
                         ),
                       ],
                     ),
                   ),
-                  Icon(
-                    Icons.chevron_right_rounded,
-                    color: cs.onSurface.withOpacity(0.35),
+                  const SizedBox(width: 8),
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _a(color, isDark ? 0.22 : 0.12),
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: color,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
-          // "How this works" toggle — separate tap target from the row
-          // above, so expanding detail never accidentally navigates away.
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Container(height: 1, color: _a(cs.onSurface, 0.06)),
+          ),
+          // Toggle → expands the plain-English explanation.
           InkWell(
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
               child: Row(
                 children: [
-                  const SizedBox(width: 58),
-                  Text(
-                    _expanded ? 'Hide details' : 'How this works',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: widget.iconColor,
+                  Icon(Icons.help_outline_rounded, size: 16, color: color),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _expanded ? 'Hide explanation' : 'Explain it simply',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    _expanded
-                        ? Icons.expand_less_rounded
-                        : Icons.expand_more_rounded,
-                    size: 16,
-                    color: widget.iconColor,
+                  AnimatedRotation(
+                    turns: _expanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 200),
+                    child: Icon(
+                      Icons.keyboard_arrow_down_rounded,
+                      size: 20,
+                      color: color,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           AnimatedSize(
-            duration: const Duration(milliseconds: 200),
+            duration: const Duration(milliseconds: 220),
             curve: Curves.easeInOut,
+            alignment: Alignment.topCenter,
             child: _expanded
                 ? Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 58),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.howItWorks,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: cs.onSurface.withOpacity(0.6),
-                              height: 1.4,
-                            ),
+                    padding: const EdgeInsets.fromLTRB(14, 2, 14, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.explainer,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: _a(cs.onSurface, 0.72),
+                            height: 1.5,
                           ),
-                          if (widget.example != null) ...[
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: widget.iconColor
-                                    .withOpacity(isDark ? 0.14 : 0.08),
-                                borderRadius: BorderRadius.circular(8),
+                        ),
+                        const SizedBox(height: 12),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: _a(color, isDark ? 0.14 : 0.08),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.lightbulb_outline_rounded,
+                                size: 16,
+                                color: color,
                               ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'For example',
+                                      style:
+                                          theme.textTheme.labelSmall?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        color: color,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      widget.example,
+                                      style:
+                                          theme.textTheme.bodySmall?.copyWith(
+                                        color: _a(cs.onSurface, 0.75),
+                                        height: 1.4,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.schedule_rounded,
+                              size: 13,
+                              color: _a(cs.onSurface, 0.45),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
                               child: Text(
-                                widget.example!,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 11,
-                                  fontStyle: FontStyle.italic,
-                                  color: cs.onSurface.withOpacity(0.55),
+                                widget.note,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: _a(cs.onSurface, 0.5),
                                 ),
                               ),
                             ),
                           ],
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   )
                 : const SizedBox(width: double.infinity),

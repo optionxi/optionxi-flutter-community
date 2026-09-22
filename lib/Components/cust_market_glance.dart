@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:optionxi/Main_Pages/Indices/act_full_index_page.dart';
 import 'package:optionxi/Main_Pages/StockPages/act_set_alert.dart';
@@ -28,6 +29,10 @@ class _IndicesGlanceState extends State<IndicesGlance>
   final Map<String, Color?> _lastColors = {};
   Map<String, double> _previousLtps = {};
 
+  // Rolling price history (kept for potential future use)
+  final Map<String, List<double>> _priceHistory = {};
+  static const int _maxHistory = 12;
+
   @override
   void initState() {
     super.initState();
@@ -54,7 +59,6 @@ class _IndicesGlanceState extends State<IndicesGlance>
     if (_scrollController.position.isScrollingNotifier.value) {
       _userInteracting = true;
       _autoScrollTimer?.cancel();
-      // Resume auto-scroll after 3 seconds of inactivity
       _autoScrollTimer = Timer(const Duration(seconds: 3), () {
         _userInteracting = false;
         _startAutoScroll();
@@ -90,6 +94,7 @@ class _IndicesGlanceState extends State<IndicesGlance>
         for (final item in newList) {
           final sym = item['symbol'] as String;
           final newLtp = (item['ltp'] as num).toDouble();
+
           if (_previousLtps.containsKey(sym)) {
             final oldLtp = _previousLtps[sym]!;
             if (newLtp != oldLtp) {
@@ -97,6 +102,17 @@ class _IndicesGlanceState extends State<IndicesGlance>
             }
           }
           _previousLtps[sym] = newLtp;
+
+          _priceHistory.putIfAbsent(sym, () => []);
+          final history = _priceHistory[sym]!;
+          if (history.isEmpty) {
+            final pc = (item['pc'] as num?)?.toDouble();
+            if (pc != null) history.add(pc);
+          }
+          if (history.isEmpty || history.last != newLtp) {
+            history.add(newLtp);
+            if (history.length > _maxHistory) history.removeAt(0);
+          }
         }
 
         setState(() {
@@ -178,13 +194,11 @@ class _IndicesGlanceState extends State<IndicesGlance>
   Widget _buildSentimentSliver(bool isDark) {
     if (indices.isEmpty) return const SizedBox.shrink();
 
-    // Calculate bullish vs bearish
     final total = indices.length;
     final bullish = indices.where((i) => (i['pcnt'] as num) >= 0).length;
     final bearish = total - bullish;
     final bullishRatio = total > 0 ? bullish / total : 0.5;
 
-    // Theme colors
     final upColor = isDark ? const Color(0xFF00D4AA) : const Color(0xFF00897B);
     final downColor =
         isDark ? const Color(0xFFFF5C5C) : const Color(0xFFD32F2F);
@@ -229,14 +243,12 @@ class _IndicesGlanceState extends State<IndicesGlance>
             ],
           ),
           const SizedBox(height: 6),
-          // Gradient segmented progress bar
           Container(
             height: 4,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(2),
               gradient: LinearGradient(
                 colors: [upColor, downColor],
-                // Hard stops create a crisp line between the two colors
                 stops: [bullishRatio, bullishRatio],
               ),
             ),
@@ -253,7 +265,6 @@ class _IndicesGlanceState extends State<IndicesGlance>
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Header row: "Indices" title + "View More" button
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
           child: Row(
@@ -340,7 +351,6 @@ class _IndicesGlanceState extends State<IndicesGlance>
             ],
           ),
         ),
-        // NEW: Sentiment Sliver (Only show when data is loaded)
         if (!loading && error == null)
           InkWell(
               onTap: () {
@@ -352,8 +362,6 @@ class _IndicesGlanceState extends State<IndicesGlance>
                 );
               },
               child: _buildSentimentSliver(isDark)),
-
-        // Scrollable indices strip
         _buildScrollStrip(isDark),
       ],
     );
@@ -420,16 +428,9 @@ class _IndicesGlanceState extends State<IndicesGlance>
             final symbol = index['symbol'] as String;
             final ltp = (index['ltp'] as num).toDouble();
             final pcnt = (index['pcnt'] as num).toDouble();
-            final low = (index['l'] as num?)?.toDouble() ?? ltp;
-            final high = (index['h'] as num?)?.toDouble() ?? ltp;
             final previousclose = (index['pc'] as num?)?.toDouble() ?? ltp;
             final isPositive = pcnt >= 0;
             final change = ltp - previousclose;
-
-            double progress = 0.5;
-            if (high > low) {
-              progress = ((ltp - low) / (high - low)).clamp(0.0, 1.0);
-            }
 
             final flashColor = _lastColors[symbol];
             final flashCtrl = _flashControllers[symbol];
@@ -441,9 +442,6 @@ class _IndicesGlanceState extends State<IndicesGlance>
               ltp: ltp,
               pcnt: pcnt,
               change: change,
-              low: low,
-              high: high,
-              progress: progress,
               isPositive: isPositive,
               isDark: isDark,
               flashColor: flashColor,
@@ -472,9 +470,6 @@ class _IndexCard extends StatelessWidget {
   final double ltp;
   final double pcnt;
   final double change;
-  final double low;
-  final double high;
-  final double progress;
   final bool isPositive;
   final bool isDark;
   final Color? flashColor;
@@ -488,9 +483,6 @@ class _IndexCard extends StatelessWidget {
     required this.ltp,
     required this.pcnt,
     required this.change,
-    required this.low,
-    required this.high,
-    required this.progress,
     required this.isPositive,
     required this.isDark,
     required this.flashColor,
@@ -512,8 +504,6 @@ class _IndexCard extends StatelessWidget {
         isDark ? const Color(0xFF5A6175) : const Color(0xFF9BA4B5);
     final valueColor =
         isDark ? const Color(0xFFEAEDF3) : const Color(0xFF131722);
-    final trackColor =
-        isDark ? const Color(0xFF1E2230) : const Color(0xFFE2E6ED);
 
     Color? overlayColor;
     double overlayOpacity = 0.0;
@@ -536,8 +526,6 @@ class _IndexCard extends StatelessWidget {
             builder: (context, _) {
               return Container(
                 width: 152,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                 decoration: BoxDecoration(
                   color: overlayColor != null
                       ? Color.lerp(bgColor, overlayColor, overlayOpacity)
@@ -545,128 +533,128 @@ class _IndexCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: borderColor, width: 1),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.center,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            displayName,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: labelColor,
-                              letterSpacing: 0.4,
-                              fontFamily: 'monospace',
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                            maxLines: 1,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Stack(
+                    children: [
+                      // === BACKGROUND LAYER: full-card sentiment curve ===
+                      Positioned.fill(
+                        child: CustomPaint(
+                          painter: _BackgroundCurvePainter(
+                            pcnt: pcnt,
+                            isPositive: isPositive,
+                            accentColor: accentColor,
                           ),
                         ),
-                        const SizedBox(width: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 4, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: accentColor.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: Text(
-                            '${isPositive ? '+' : ''}${pcnt.toStringAsFixed(2)}%',
-                            style: TextStyle(
-                              fontSize: 9,
-                              fontWeight: FontWeight.w700,
-                              color: accentColor,
-                              fontFamily: 'monospace',
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            _formatLtp(ltp),
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: valueColor,
-                              fontFamily: 'monospace',
-                              letterSpacing: -0.3,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 5),
-                        Text(
-                          '${isPositive ? '+' : ''}${change.toStringAsFixed(1)}',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: accentColor,
-                            fontFamily: 'monospace',
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 2),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(2),
-                          child: SizedBox(
-                            height: 3,
-                            child: LayoutBuilder(
-                              builder: (context, constraints) {
-                                final barWidth = constraints.maxWidth;
-                                return Stack(
-                                  clipBehavior: Clip.hardEdge,
-                                  children: [
-                                    Container(color: trackColor),
-                                    FractionallySizedBox(
-                                      widthFactor: progress,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          gradient: LinearGradient(
-                                            colors: [
-                                              accentColor.withOpacity(0.5),
-                                              accentColor,
-                                            ],
-                                          ),
-                                        ),
-                                      ),
+                      ),
+
+                      // === FOREGROUND LAYER: card content ===
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 7),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Row 1: Name + % badge
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    displayName,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w600,
+                                      color: labelColor,
+                                      letterSpacing: 0.4,
+                                      fontFamily: 'monospace',
                                     ),
-                                    Positioned(
-                                      left: (barWidth * progress - 2)
-                                          .clamp(0.0, barWidth - 4),
-                                      top: 0,
-                                      bottom: 0,
-                                      child: Container(
-                                        width: 3,
-                                        decoration: BoxDecoration(
-                                          color: accentColor,
-                                          borderRadius:
-                                              BorderRadius.circular(1.5),
-                                        ),
-                                      ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 4, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: accentColor.withOpacity(0.12),
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: Text(
+                                    '${isPositive ? '+' : ''}${pcnt.toStringAsFixed(2)}%',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      color: accentColor,
+                                      fontFamily: 'monospace',
+                                      letterSpacing: 0.2,
                                     ),
-                                  ],
-                                );
-                              },
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+
+                            // Row 2: LTP + change
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    _formatLtp(ltp),
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: valueColor,
+                                      fontFamily: 'monospace',
+                                      letterSpacing: -0.3,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  '${isPositive ? '+' : ''}${change.toStringAsFixed(1)}',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w600,
+                                    color: accentColor,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                              ],
+                            ),
+
+                            // Row 3: direction label
+                            Row(
+                              children: [
+                                Icon(
+                                  isPositive
+                                      ? Icons.trending_up_rounded
+                                      : Icons.trending_down_rounded,
+                                  size: 11,
+                                  color: accentColor.withOpacity(0.85),
+                                ),
+                                const SizedBox(width: 3),
+                                Text(
+                                  isPositive ? 'BULLISH' : 'BEARISH',
+                                  style: TextStyle(
+                                    fontSize: 8,
+                                    fontWeight: FontWeight.w700,
+                                    color: accentColor.withOpacity(0.85),
+                                    fontFamily: 'monospace',
+                                    letterSpacing: 0.6,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                  ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -680,5 +668,166 @@ class _IndexCard extends StatelessWidget {
     if (v >= 10000) return v.toStringAsFixed(1);
     if (v >= 1000) return v.toStringAsFixed(2);
     return v.toStringAsFixed(2);
+  }
+}
+
+/// Paints a full-card diagonal sentiment curve in the background.
+///
+/// - **Bullish** → curve starts at the **bottom-left** and rises to the
+///   **top-right** (like a rally).
+/// - **Bearish** → curve starts at the **top-left** and falls to the
+///   **bottom-right** (like a decline).
+///
+/// The curve severity scales with the percent move. A gradient fill
+/// sits beneath the curve to reinforce direction, and a soft glow dot
+/// marks the leading tip.
+class _BackgroundCurvePainter extends CustomPainter {
+  final double pcnt;
+  final bool isPositive;
+  final Color accentColor;
+
+  _BackgroundCurvePainter({
+    required this.pcnt,
+    required this.isPositive,
+    required this.accentColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+
+    // --- Severity from pcnt (0.15 calm → 1.0 steep) ---
+    final severity = (pcnt.abs() / 1.5).clamp(0.15, 1.0);
+
+    // --- Determine start/end points based on direction ---
+    // Bullish: start bottom-left, end top-right.
+    // Bearish: start top-left, end bottom-right.
+    final double startY;
+    final double endY;
+
+    if (isPositive) {
+      startY = h;
+      endY = h * (1 - 0.65 * severity) - h * 0.05;
+    } else {
+      startY = 0;
+      endY = h * 0.05 + h * 0.65 * severity;
+    }
+
+    final startX = 0.0;
+    final endX = w;
+
+    // Clamp endY so arrow stays inside the card.
+    final clampedEndY = endY.clamp(4.0, h - 4.0);
+
+    // --- Build the curved path ---
+    // For a nice "rally" or "decline" feel we use a cubic Bézier where
+    // the first control point hugs the start vertically, and the second
+    // control point eases into the end.
+    final cp1x = w * 0.35;
+    final cp1y = startY + (clampedEndY - startY) * 0.15;
+
+    final cp2x = w * 0.70;
+    final cp2y = startY + (clampedEndY - startY) * 0.85;
+
+    final path = Path()
+      ..moveTo(startX, startY)
+      ..cubicTo(cp1x, cp1y, cp2x, cp2y, endX, clampedEndY);
+
+    // --- Gradient fill under the curve ---
+    // Fills the space between the curve and the baseline edge opposite
+    // to the start point. This gives a strong directional "wash".
+    final fillPath = Path.from(path);
+    if (isPositive) {
+      // Bullish: fill from curve down to bottom edge
+      fillPath
+        ..lineTo(endX, h)
+        ..lineTo(startX, h)
+        ..close();
+    } else {
+      // Bearish: fill from curve up to top edge
+      fillPath
+        ..lineTo(endX, 0)
+        ..lineTo(startX, 0)
+        ..close();
+    }
+
+    final fillPaint = Paint()
+      ..shader = LinearGradient(
+        begin: isPositive ? Alignment.bottomCenter : Alignment.topCenter,
+        end: isPositive ? Alignment.topCenter : Alignment.bottomCenter,
+        colors: [
+          accentColor.withOpacity(0.16),
+          accentColor.withOpacity(0.01),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
+
+    canvas.drawPath(fillPath, fillPaint);
+
+    // --- Main stroke line ---
+    final linePaint = Paint()
+      ..color = accentColor.withOpacity(0.6)
+      ..strokeWidth = 1.6
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round;
+
+    canvas.drawPath(path, linePaint);
+
+    // --- Arrowhead at the leading tip ---
+    final tipX = endX;
+    final tipY = clampedEndY;
+
+    final dx = tipX - cp2x;
+    final dy = tipY - cp2y;
+    final len = math.sqrt(dx * dx + dy * dy);
+    if (len > 0.001) {
+      final ux = dx / len;
+      final uy = dy / len;
+
+      const arrowLen = 5.0;
+      const arrowWidth = 3.0;
+
+      final baseX = tipX - ux * arrowLen;
+      final baseY = tipY - uy * arrowLen;
+
+      final px = -uy;
+      final py = ux;
+
+      final arrowPath = Path()
+        ..moveTo(tipX, tipY)
+        ..lineTo(baseX + px * arrowWidth, baseY + py * arrowWidth)
+        ..lineTo(baseX - px * arrowWidth, baseY - py * arrowWidth)
+        ..close();
+
+      canvas.drawPath(
+        arrowPath,
+        Paint()
+          ..color = accentColor.withOpacity(0.75)
+          ..style = PaintingStyle.fill,
+      );
+    }
+
+    // --- Soft glow dot at the tip ---
+    final dotX = tipX.clamp(3.0, w - 3.0);
+    final dotY = tipY.clamp(3.0, h - 3.0);
+
+    canvas.drawCircle(
+      Offset(dotX, dotY),
+      5.0,
+      Paint()..color = accentColor.withOpacity(0.14),
+    );
+    canvas.drawCircle(
+      Offset(dotX, dotY),
+      2.0,
+      Paint()..color = accentColor.withOpacity(0.7),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BackgroundCurvePainter old) {
+    return old.pcnt != pcnt ||
+        old.isPositive != isPositive ||
+        old.accentColor != accentColor;
   }
 }

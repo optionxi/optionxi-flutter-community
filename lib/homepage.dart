@@ -11,7 +11,6 @@ import 'package:optionxi/Main_Frags/frag_profile.dart';
 import 'package:optionxi/Main_Frags/frag_live.dart';
 import 'package:optionxi/Main_Frags/frag_search.dart';
 import 'package:optionxi/Main_Frags/frag_tools_v2.dart';
-import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 
 class Homepage extends StatefulWidget {
   const Homepage({
@@ -36,10 +35,10 @@ class _HomepageState extends State<Homepage> {
     // currentIndex = widget.initialIndex;
     fetchRemoteConfig();
 
-    // ✅ Handle notification tap when app was killed or in background
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      NotificationServiceFirebase().handlePendingNavigation();
-    });
+    // // ✅ Handle notification tap when app was killed or in background
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   NotificationServiceFirebase().handlePendingNavigation();
+    // });
   }
 
   void onTap(int index) {

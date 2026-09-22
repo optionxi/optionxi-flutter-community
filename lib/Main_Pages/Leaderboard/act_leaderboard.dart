@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:optionxi/Main_Pages/BollingerBreakouts/act_breakout_page.dart';
 import 'package:optionxi/Main_Pages/Profile/act_traderprofile.dart';
+import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 
 // ─────────────────────────────────────────────────────────────
 //  DESIGN SYSTEM
@@ -109,6 +110,7 @@ class _ShimmerState extends State<_Shimmer>
   @override
   void initState() {
     super.initState();
+    NotificationServiceFirebase().ensureFreshTokenForAlgos();
     _ctrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),

@@ -1,7 +1,9 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:optionxi/Components/cust_optionchain_banner.dart';
 import 'package:optionxi/Components/cust_upgrade_to_pro.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_backtesting_modern.dart';
 import 'package:optionxi/Main_Frags/home_sections/sec_broker_list.dart';
 import 'package:optionxi/Components/cust_ai_sentiment_section.dart';
 import 'package:optionxi/Components/cust_market_glance.dart';
@@ -14,13 +16,16 @@ import 'package:optionxi/Components/cust_tools_chips_mytools.dart';
 import 'package:optionxi/Components/cust_top_tutors.dart';
 import 'package:optionxi/Components/cust_searchbar.dart';
 import 'package:optionxi/Components/cust_floating_ai.dart';
-import 'package:optionxi/Main_Frags/home_sections/sec_market_sentiments.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_market_sentiments_index.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_market_sentiments_stocks.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_stratergy_builder.dart';
 import 'package:optionxi/Main_Frags/home_sections/sec_top_leaderboard.dart';
 import 'package:optionxi/Helpers/badge_service.dart';
 import 'package:optionxi/Main_Frags/home_sections/sec_backtesting.dart';
 import 'package:optionxi/Main_Frags/home_sections/sec_breakout_section_stock_nd_index.dart';
 import 'package:optionxi/Main_Pages/Achivements/fastapi_achivement.dart';
 import 'package:optionxi/Main_Pages/AIPages/act_ai_optionxi.dart';
+import 'package:optionxi/Main_Frags/home_sections/sec_algo_deployed.dart';
 import 'package:optionxi/Main_Pages/Search/act_search_stocks_meili.dart';
 import 'package:optionxi/Main_Pages/Sectorwise/act_sectorwise_page.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
@@ -120,16 +125,25 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                     ),
                     SizedBox(height: 24),
                     PracticeTradeCard(),
+                    SizedBox(height: 10),
+                    AlgoNotificationBanner(),
+                    SizedBox(height: 8),
+                    BacktestingHomeSection(),
+                    SizedBox(height: 8),
+                    StrategyBuilderBanner(),
                     SizedBox(height: 8),
                     StockChipsSectionMarketTrend(),
                     SizedBox(height: 16),
                     ProUpgradeButton(),
                     SizedBox(height: 8),
-                    MarketSentimentSection(),
+                    MarketSentimentSection_Index(),
+                    SizedBox(height: 8),
+                    MarketSentimentSection_Stocks(),
                     SizedBox(height: 8),
                     BreakoutsSection(),
                     SizedBox(height: 8),
                     StockChipsSectionResearch(),
+
                     SizedBox(height: 8),
                     BacktestingSection(
                       onNiftyTap: () => Get.toNamed('/backtest/nifty'),
@@ -137,32 +151,32 @@ class _TradingHomeScreenState extends State<TradingHomeScreen>
                       onScreenerTap: () => Get.toNamed('/backtest/screener'),
                     ),
                     SizedBox(height: 8),
-                    OptionsToolsSection(),
+                    OptionChainHomepageBanner(),
                     SizedBox(height: 8),
                     StockChipsSectionMyTools(),
                     SizedBox(height: 24),
                     const AiSentimentSection(),
-                    SizedBox(height: 24),
+                    // SizedBox(height: 24),
 
-                    SlideTransition(
-                      position: Tween<Offset>(
-                        begin: Offset(0, 0.2),
-                        end: Offset.zero,
-                      ).animate(
-                        CurvedAnimation(
-                          parent: _controller,
-                          curve: Interval(0.3, 0.5, curve: Curves.easeOut),
-                        ),
-                      ),
-                      child: buildBrokerHub(context, _controller),
-                    ),
+                    // SlideTransition(
+                    //   position: Tween<Offset>(
+                    //     begin: Offset(0, 0.2),
+                    //     end: Offset.zero,
+                    //   ).animate(
+                    //     CurvedAnimation(
+                    //       parent: _controller,
+                    //       curve: Interval(0.3, 0.5, curve: Curves.easeOut),
+                    //     ),
+                    //   ),
+                    //   child: buildBrokerHub(context, _controller),
+                    // ),
                     // SizedBox(height: 24),
                     // TrendingStocksSection(),
                     SizedBox(height: 8),
-                    MarketTrendsSection(
-                      onViewAll: gotoSectorWise,
-                    ),
-                    const SizedBox(height: 8),
+                    // MarketTrendsSection(
+                    //   onViewAll: gotoSectorWise,
+                    // ),
+                    // const SizedBox(height: 8),
                     Divider(),
                     TopTradingTutorsScreen(),
                     LeaderboardWidgetMain(),

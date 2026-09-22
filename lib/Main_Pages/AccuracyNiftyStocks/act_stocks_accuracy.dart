@@ -88,9 +88,6 @@ DateTime sessionOpenDt(String day) {
 
 DateTime sessionCloseDt(String day) {
   final d = _parseDay(day);
-  // Streamlit reference uses a slightly later session-close (15:30) than the
-  // Nifty index's own 15:15 candle close, to allow the final 5-min candle to
-  // fully print. Kept as its own constant so it's easy to retune.
   return DateTime.utc(d.year, d.month, d.day, 15, 30);
 }
 
@@ -111,6 +108,16 @@ String toTicker(String raw) {
   final suffix = raw.startsWith('BSE:') ? '.BO' : '.NS';
   return extractSymbol(raw) + suffix;
 }
+
+// -----------------------------------------------------------------------------
+// "NOW" helpers — same IST-wall-clock trick as everything else in this file.
+// -----------------------------------------------------------------------------
+DateTime nowIstWall() {
+  final n = DateTime.now().toUtc().add(kIstOffset);
+  return DateTime.utc(n.year, n.month, n.day, n.hour, n.minute, n.second);
+}
+
+String todayIst() => fmtDay(nowIstWall());
 
 // -----------------------------------------------------------------------------
 // PREDICTION WINDOW — one small sum type instead of a loose dynamic, so the
@@ -255,6 +262,26 @@ class HoldingPoint {
   final double avgMaxProfit, avgMaxLoss;
   final int n;
   HoldingPoint(this.dayOffset, this.avgMaxProfit, this.avgMaxLoss, this.n);
+}
+
+// -----------------------------------------------------------------------------
+// PENDING / MISSING wrapper — sits alongside StockOutcome instead of
+// replacing it, so existing outcome-only code (daily summary, exit lab,
+// holding curve) doesn't need to change at all.
+// -----------------------------------------------------------------------------
+enum PickStatus { resolved, pending, missingData }
+
+class StockPickResult {
+  final StockPick pick;
+  final PickStatus status;
+  final StockOutcome? outcome; // non-null only when status == resolved
+
+  const StockPickResult._(this.pick, this.status, this.outcome);
+  StockPickResult.resolved(StockOutcome o)
+      : this._(o.pick, PickStatus.resolved, o);
+  StockPickResult.pending(StockPick p) : this._(p, PickStatus.pending, null);
+  StockPickResult.missingData(StockPick p)
+      : this._(p, PickStatus.missingData, null);
 }
 
 // -----------------------------------------------------------------------------
@@ -445,6 +472,10 @@ class StockEngine {
 
   /// Core outcome computation — mirrors `compute_outcomes` in the Streamlit
   /// app, including multi-day carry-over and the "ever touched" success rule.
+  ///
+  /// **UPDATED**: For today's picks where the window hasn't finished yet,
+  /// only resolves early if the direction was already hit. Otherwise skips
+  /// them so `buildPickResults` can tag them as `pending`.
   static List<StockOutcome> computeOutcomes(
     List<StockPick> picks,
     Map<String, List<Candle>?> store,
@@ -453,6 +484,9 @@ class StockEngine {
     bool carryEnabled,
   ) {
     final out = <StockOutcome>[];
+    final today = todayIst();
+    final now = nowIstWall();
+
     for (final pick in picks) {
       final key = pick.storeKey;
       final dfToday = store[key];
@@ -479,7 +513,7 @@ class StockEngine {
           carried = true;
           carryDays = useChain;
         } else {
-          windowEnd = todayClose; // no carry data fetched yet — fall back
+          windowEnd = todayClose;
         }
       } else {
         final naiveEnd = pickDt.add(Duration(minutes: window.value));
@@ -507,6 +541,21 @@ class StockEngine {
           .where((c) => !c.ts.isBefore(pickDt) && !c.ts.isAfter(windowEnd))
           .toList();
       if (w.isEmpty) continue;
+
+      // NEW: if this is today's pick and the window hasn't actually
+      // finished yet (windowEnd is still in the future), only let it
+      // through as a resolved outcome if the direction was already hit —
+      // "ever touched" is permanent, so an early hit can resolve early.
+      // Otherwise it's not a fail yet, it's just not over — skip it here
+      // and let buildPickResults() pick it up as `pending`.
+      if (pick.date == today && windowEnd.isAfter(now)) {
+        final bearishCheck = pick.sentiment == 'BEARISH';
+        final entryOpen = w.first.open;
+        final postEntry = w.length > 1 ? w.sublist(1) : const <Candle>[];
+        final alreadyHit = postEntry
+            .any((c) => bearishCheck ? c.low < entryOpen : c.high > entryOpen);
+        if (!alreadyHit) continue; // -> pending, not a resolved miss
+      }
 
       final startPrice = w.first.open;
       final exitPrice = w.last.close;
@@ -575,6 +624,43 @@ class StockEngine {
     }
     out.sort((a, b) => b.pick.date.compareTo(a.pick.date));
     return out;
+  }
+
+  /// Same picks list `computeOutcomes` was given, but nothing disappears —
+  /// every pick comes back as resolved / pending / missingData.
+  static List<StockPickResult> buildPickResults(
+    List<StockPick> picks,
+    List<StockOutcome> outcomes,
+    Map<String, List<Candle>?> store,
+    PredictionWindow window,
+  ) {
+    final today = todayIst();
+    final byKey = {for (final o in outcomes) o.pick.storeKey: o};
+
+    return picks.map((p) {
+      final resolved = byKey[p.storeKey];
+      if (resolved != null) return StockPickResult.resolved(resolved);
+
+      final isToday = p.date == today;
+      final df = store[p.storeKey];
+      final hasCandles = df != null && df.isNotEmpty;
+
+      if (!hasCandles) {
+        // No candles at all: today -> just hasn't been fetched yet.
+        // Past day -> a real backfill gap.
+        return isToday
+            ? StockPickResult.pending(p)
+            : StockPickResult.missingData(p);
+      }
+
+      // Candles exist but computeOutcomes still dropped it — window bounds
+      // fell entirely outside available data, or it's today's partial window
+      // that hasn't hit yet. On a past day that's a real gap; today it almost
+      // always means the window simply hasn't finished printing candles yet.
+      return isToday
+          ? StockPickResult.pending(p)
+          : StockPickResult.missingData(p);
+    }).toList();
   }
 
   static List<StockDailySummary> computeDailySummary(
@@ -835,6 +921,7 @@ class _StockDashboardShellState extends State<StockDashboardShell> {
   final Set<String> noDataPairs = {};
 
   List<StockOutcome> outcomes = [];
+  List<StockPickResult> pickResults = [];
   List<StockDailySummary> dailySummary = [];
   List<HoldingPoint> holdingCurve = [];
   List<StockStrategyRow> exitSummary = [];
@@ -919,6 +1006,8 @@ class _StockDashboardShellState extends State<StockDashboardShell> {
                   settings.sectors.contains(o.pick.sector)))
           .toList();
       outcomes = allOutcomes;
+      pickResults = StockEngine.buildPickResults(
+          filtered, outcomes, candleStore, settings.window);
       dailySummary = StockEngine.computeDailySummary(outcomes);
       if (settings.carryEnabled) {
         holdingCurve =
@@ -940,6 +1029,7 @@ class _StockDashboardShellState extends State<StockDashboardShell> {
   void _resetComputed() {
     filteredPicks = [];
     outcomes = [];
+    pickResults = [];
     dailySummary = [];
     holdingCurve = [];
     exitSummary = [];
@@ -1023,7 +1113,7 @@ class _StockDashboardShellState extends State<StockDashboardShell> {
         top: false,
         child: error != null
             ? StockErrorView(error: error!, onRetry: () => _refresh())
-            : (outcomes.isEmpty && !loading)
+            : (outcomes.isEmpty && pickResults.isEmpty && !loading)
                 ? AtlasEmptyState(
                     icon: Icons.filter_alt_off_rounded,
                     title: 'No picks found',
@@ -1046,9 +1136,11 @@ class _StockDashboardShellState extends State<StockDashboardShell> {
                         skippedRows: skippedRows,
                         noDataPairs: noDataPairs,
                         onJumpToDay: _jumpToDay,
+                        loading: loading,
                       ),
                       StockDateWiseScreen(
                         outcomes: outcomes,
+                        pickResults: pickResults,
                         candleStore: candleStore,
                         chainMap: chainMap,
                         carryEnabled: settings.carryEnabled,
@@ -1058,6 +1150,7 @@ class _StockDashboardShellState extends State<StockDashboardShell> {
                       ),
                       StockChartScreen(
                         outcomes: outcomes,
+                        pickResults: pickResults,
                         candleStore: candleStore,
                         chainMap: chainMap,
                         carryEnabled: settings.carryEnabled,
@@ -1517,6 +1610,7 @@ class StockOverviewScreen extends StatelessWidget {
   final int skippedRows;
   final Set<String> noDataPairs;
   final void Function(String date) onJumpToDay;
+  final bool loading;
   const StockOverviewScreen({
     super.key,
     required this.dailySummary,
@@ -1528,10 +1622,30 @@ class StockOverviewScreen extends StatelessWidget {
     required this.skippedRows,
     required this.noDataPairs,
     required this.onJumpToDay,
+    required this.loading,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isInitialLoad = loading && outcomes.isEmpty;
+
+    if (isInitialLoad) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.xxl),
+        children: const [
+          HeroStatSkeleton(),
+          SizedBox(height: Sp.md),
+          AtlasCardSkeleton(height: 48),
+          SizedBox(height: Sp.lg),
+          AtlasCardSkeleton(height: 220),
+          SizedBox(height: Sp.sm),
+          AtlasCardSkeleton(height: 64),
+          AtlasCardSkeleton(height: 64),
+          AtlasCardSkeleton(height: 64),
+        ],
+      );
+    }
+
     final c = atlasColors(context);
     final t = atlasText(context);
     final total = outcomes.length;
@@ -1678,8 +1792,7 @@ class DailyPerformanceChart extends StatelessWidget {
             child: SfCartesianChart(
               margin: EdgeInsets.zero,
               plotAreaBorderWidth: 0,
-              enableSideBySideSeriesPlacement:
-                  false, // <-- key change, overlaps series instead of clustering
+              enableSideBySideSeriesPlacement: false,
               primaryXAxis: CategoryAxis(
                 majorGridLines: const MajorGridLines(width: 0),
                 labelStyle: TextStyle(color: c.textFaint, fontSize: 8),
@@ -1702,7 +1815,7 @@ class DailyPerformanceChart extends StatelessWidget {
                   xValueMapper: (d, _) => fmtDayShort(_parseDay(d.date)),
                   yValueMapper: (d, _) => d.avgMaxProfit,
                   color: c.bull,
-                  width: 0.6, // same width on both -> they line up exactly
+                  width: 0.6,
                   borderRadius:
                       const BorderRadius.vertical(top: Radius.circular(3)),
                   onPointTap: (args) => onTapDay(daily[args.pointIndex!].date),
@@ -1839,10 +1952,53 @@ class DailySummaryCard extends StatelessWidget {
 }
 
 // =============================================================================
+// PENDING / MISSING DATA CARD
+// =============================================================================
+class PendingPickCard extends StatelessWidget {
+  final StockPickResult r;
+  const PendingPickCard({super.key, required this.r});
+  @override
+  Widget build(BuildContext context) {
+    final c = atlasColors(context);
+    final t = atlasText(context);
+    final missing = r.status == PickStatus.missingData;
+    return AtlasCard(
+      padding: const EdgeInsets.symmetric(horizontal: Sp.lg, vertical: Sp.md),
+      child: Row(children: [
+        Icon(
+          missing ? Icons.error_outline_rounded : Icons.hourglass_top_rounded,
+          size: 16,
+          color: missing ? c.bear : c.warn,
+        ),
+        const SizedBox(width: Sp.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${r.pick.symbol} · ${r.pick.pickTimeIst} IST',
+                  style: t.body),
+              Text(
+                missing
+                    ? 'No candle data — backfill gap'
+                    : 'Pending — not resolved yet',
+                style: t.caption.copyWith(color: missing ? c.bear : c.warn),
+              ),
+            ],
+          ),
+        ),
+        DirectionPill(r.pick.sentiment == 'BULLISH' ? 'Bull' : 'Bear',
+            compact: true),
+      ]),
+    );
+  }
+}
+
+// =============================================================================
 // DATE-WISE SCREEN
 // =============================================================================
 class StockDateWiseScreen extends StatefulWidget {
   final List<StockOutcome> outcomes;
+  final List<StockPickResult> pickResults;
   final Map<String, List<Candle>?> candleStore;
   final Map<String, List<String>> chainMap;
   final bool carryEnabled;
@@ -1852,6 +2008,7 @@ class StockDateWiseScreen extends StatefulWidget {
   const StockDateWiseScreen({
     super.key,
     required this.outcomes,
+    required this.pickResults,
     required this.candleStore,
     required this.chainMap,
     required this.carryEnabled,
@@ -1867,9 +2024,16 @@ class _StockDateWiseScreenState extends State<StockDateWiseScreen> {
   int page = 0;
 
   List<String> get _dates {
-    final s = widget.outcomes.map((o) => o.pick.date).toSet().toList()
-      ..sort((a, b) => b.compareTo(a));
-    return s;
+    // Collect all dates from both outcomes and pickResults
+    final s = <String>{};
+    for (final o in widget.outcomes) {
+      s.add(o.pick.date);
+    }
+    for (final r in widget.pickResults) {
+      s.add(r.pick.date);
+    }
+    final list = s.toList()..sort((a, b) => b.compareTo(a));
+    return list;
   }
 
   @override
@@ -1896,6 +2060,11 @@ class _StockDateWiseScreenState extends State<StockDateWiseScreen> {
     final currentDate = dates[page];
     final dayOutcomes = widget.outcomes
         .where((o) => o.pick.date == currentDate)
+        .toList()
+      ..sort((a, b) => a.pick.pickTimeIst.compareTo(b.pick.pickTimeIst));
+    final dayPending = widget.pickResults
+        .where((r) =>
+            r.pick.date == currentDate && r.status != PickStatus.resolved)
         .toList()
       ..sort((a, b) => a.pick.pickTimeIst.compareTo(b.pick.pickTimeIst));
     final dayAcc = dayOutcomes.isEmpty
@@ -1943,9 +2112,12 @@ class _StockDateWiseScreenState extends State<StockDateWiseScreen> {
             children: [
               AtlasSectionHeader(
                 title:
-                    '$currentDate — ${dayOutcomes.length} picks — ${dayAcc.toStringAsFixed(0)}% success',
+                    '$currentDate — ${dayOutcomes.length} resolved + ${dayPending.length} pending · ${dayAcc.toStringAsFixed(0)}% success',
                 icon: Icons.event_note_rounded,
               ),
+              // Show pending/missing first
+              ...dayPending.map((r) => PendingPickCard(r: r)),
+              // Then resolved outcomes
               ...dayOutcomes.map((o) => StockPickCard(
                     outcome: o,
                     candleStore: widget.candleStore,
@@ -1953,6 +2125,12 @@ class _StockDateWiseScreenState extends State<StockDateWiseScreen> {
                     carryEnabled: widget.carryEnabled,
                     window: widget.window,
                   )),
+              if (dayOutcomes.isEmpty && dayPending.isEmpty)
+                const AtlasEmptyState(
+                  icon: Icons.inbox_rounded,
+                  title: 'No picks for this day',
+                  message: 'Try another date or adjust your filters.',
+                ),
             ],
           ),
         ),
@@ -1966,6 +2144,7 @@ class _StockDateWiseScreenState extends State<StockDateWiseScreen> {
 // =============================================================================
 class StockChartScreen extends StatefulWidget {
   final List<StockOutcome> outcomes;
+  final List<StockPickResult> pickResults;
   final Map<String, List<Candle>?> candleStore;
   final Map<String, List<String>> chainMap;
   final bool carryEnabled;
@@ -1973,6 +2152,7 @@ class StockChartScreen extends StatefulWidget {
   const StockChartScreen({
     super.key,
     required this.outcomes,
+    required this.pickResults,
     required this.candleStore,
     required this.chainMap,
     required this.carryEnabled,
@@ -1988,8 +2168,15 @@ class _StockChartScreenState extends State<StockChartScreen> {
   @override
   Widget build(BuildContext context) {
     final c = atlasColors(context);
-    final symbols = widget.outcomes.map((o) => o.pick.symbol).toSet().toList()
-      ..sort();
+    // Collect all symbols from both outcomes and pickResults
+    final symbols = <String>{};
+    for (final o in widget.outcomes) {
+      symbols.add(o.pick.symbol);
+    }
+    for (final r in widget.pickResults) {
+      symbols.add(r.pick.symbol);
+    }
+    final sorted = symbols.toList()..sort();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2000,24 +2187,20 @@ class _StockChartScreenState extends State<StockChartScreen> {
             width: MediaQuery.of(context).size.width - Sp.lg * 2,
             hintText: 'Search / select a symbol…',
             leadingIcon: Icon(Icons.search_rounded, color: c.textFaint),
-            enableFilter: true, // <-- ADD: type-to-filter
-            enableSearch:
-                true, // <-- keep search on (default true, explicit for clarity)
-            requestFocusOnTap:
-                true, // <-- ADD: tapping opens keyboard + list immediately
+            enableFilter: true,
+            enableSearch: true,
+            requestFocusOnTap: true,
             filterCallback: (entries, filter) {
-              // <-- ADD: case-insensitive substring match
               if (filter.isEmpty) return entries;
               final q = filter.toUpperCase();
               return entries
                   .where((e) => e.label.toUpperCase().contains(q))
                   .toList();
             },
-            menuHeight:
-                320, // <-- ADD: caps the suggestion list so it scrolls instead of pushing content
+            menuHeight: 320,
             initialSelection: selectedSymbol,
             onSelected: (v) => setState(() => selectedSymbol = v),
-            dropdownMenuEntries: symbols
+            dropdownMenuEntries: sorted
                 .map((s) => DropdownMenuEntry(value: s, label: s))
                 .toList(),
           ),
@@ -2035,7 +2218,13 @@ class _StockChartScreenState extends State<StockChartScreen> {
                       .where((o) => o.pick.symbol == selectedSymbol)
                       .toList()
                     ..sort((a, b) => b.pick.date.compareTo(a.pick.date));
-                  if (rows.isEmpty) {
+                  final pending = widget.pickResults
+                      .where((r) =>
+                          r.pick.symbol == selectedSymbol &&
+                          r.status != PickStatus.resolved)
+                      .toList()
+                    ..sort((a, b) => b.pick.date.compareTo(a.pick.date));
+                  if (rows.isEmpty && pending.isEmpty) {
                     return const AtlasEmptyState(
                       icon: Icons.inbox_rounded,
                       title: 'No picks',
@@ -2048,9 +2237,12 @@ class _StockChartScreenState extends State<StockChartScreen> {
                     children: [
                       AtlasSectionHeader(
                         title:
-                            '$selectedSymbol — ${rows.length} pick${rows.length != 1 ? 's' : ''}',
+                            '$selectedSymbol — ${rows.length} resolved${pending.isNotEmpty ? ' + ${pending.length} pending' : ''}',
                         icon: Icons.candlestick_chart_rounded,
                       ),
+                      // Show pending/missing first
+                      ...pending.map((r) => PendingPickCard(r: r)),
+                      // Then resolved outcomes
                       ...rows.map((o) => StockPickCard(
                             outcome: o,
                             candleStore: widget.candleStore,
@@ -2168,9 +2360,7 @@ class StockPickCard extends StatelessWidget {
 
 /// Stitched, gap-free candlestick chart for one pick — entry, window-end, and
 /// the first moment the call was proven right (★) are all marked, plus an EOD
-/// diamond for every day shown. Mirrors `render_pick_chart` in the Streamlit
-/// reference, minus the "extra lookahead days" slider (kept to what the
-/// current window/carry settings already fetched, to avoid surprise reads).
+/// diamond for every day shown.
 class StockPickChart extends StatelessWidget {
   final StockOutcome outcome;
   final Map<String, List<Candle>?> candleStore;

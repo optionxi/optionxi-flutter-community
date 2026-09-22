@@ -95,13 +95,20 @@ class AlertsService {
       final from = (page - 1) * pageSize;
       final to = from + pageSize - 1;
 
+      // final response = await _supabase
+      //     .from('live_scanner')
+      //     .select('*')
+      //     .eq('symbol', symbol.toUpperCase().split('-')[0].split(':')[1])
+      //     .order('created_at', ascending: false)
+      //     .range(from, to);
+
       final response = await _supabase
-          .from('live_scanner')
+          .from('live_scanner_v2')
           .select('*')
-          .eq('symbol', symbol.toUpperCase().split('-')[0].split(':')[1])
+          .eq('symbol', symbol.toUpperCase())
           .order('created_at', ascending: false)
           .range(from, to);
-
+      // print("Response for $symbol: $response");
       final List<AlertModel> alerts = (response as List)
           .map((item) => AlertModel.fromJson(item as Map<String, dynamic>))
           .toList();

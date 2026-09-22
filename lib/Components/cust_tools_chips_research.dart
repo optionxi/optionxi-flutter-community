@@ -58,6 +58,14 @@ class _StockChipsSectionResearchState extends State<StockChipsSectionResearch>
           _fadeRoute(const TopRecommendedStockPage()),
         ),
       ),
+      // ChipItem(
+      //   label: 'Backtest Nifty',
+      //   sublabel: 'Test your strategy',
+      //   icon: Icons.auto_graph_rounded,
+      //   lightColor: const Color(0xFF059669), // emerald
+      //   darkColor: const Color(0xFF34D399),
+      //   onTap: () => Navigator.push(context, _fadeRoute(SavedBacktestsPage())),
+      // ),
     ];
   }
 

@@ -249,6 +249,7 @@ class _NiftyDashboardShellState extends State<NiftyDashboardShell> {
                         outcomes: outcomes,
                         onJumpToDay: _jumpToDay,
                         onJumpToSignal: _jumpToSignal, // NEW
+                        loading: loading, // <-- add
                       ),
                       DaysScreen(
                         outcomes: outcomes,
@@ -641,16 +642,37 @@ class OverviewScreen extends StatelessWidget {
   final List<Outcome> outcomes;
   final void Function(String date) onJumpToDay;
   final void Function(Outcome) onJumpToSignal; // NEW
+  final bool loading; // <-- add
+
   const OverviewScreen({
     super.key,
     required this.dailySummary,
     required this.outcomes,
     required this.onJumpToDay,
     required this.onJumpToSignal, // NEW
+    required this.loading, // <-- add
   });
 
   @override
   Widget build(BuildContext context) {
+    final isInitialLoad = loading && outcomes.isEmpty; // <-- add
+
+    if (isInitialLoad) {
+      return ListView(
+        padding: const EdgeInsets.fromLTRB(Sp.lg, Sp.md, Sp.lg, Sp.xxl),
+        children: const [
+          HeroStatSkeleton(),
+          SizedBox(height: Sp.md),
+          AtlasCardSkeleton(height: 48),
+          SizedBox(height: Sp.lg),
+          AtlasCardSkeleton(height: 140),
+          SizedBox(height: Sp.lg),
+          AtlasCardSkeleton(height: 64),
+          AtlasCardSkeleton(height: 64),
+          AtlasCardSkeleton(height: 64),
+        ],
+      );
+    }
     final c = atlasColors(context);
     final total = outcomes.length;
     final succ = outcomes.where((o) => o.success).length;
@@ -1035,7 +1057,13 @@ class DailySummaryCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(fmtDateShort(date), style: t.body),
+                Row(
+                  children: [
+                    Text(fmtDateShort(date), style: t.body),
+                    const SizedBox(width: 8),
+                    TimeAgoChip(date, exactLabel: fmtDateShort(date)),
+                  ],
+                ),
                 const SizedBox(height: 2),
                 Row(children: [
                   Icon(Icons.query_stats_rounded, size: 12, color: c.textFaint),
@@ -1044,7 +1072,6 @@ class DailySummaryCard extends StatelessWidget {
                       style: t.bodyMuted),
                 ]),
                 const SizedBox(height: 2),
-                TimeAgoChip(date, exactLabel: fmtDateShort(date)),
               ],
             ),
           ),
@@ -1271,10 +1298,44 @@ class _DayDetailViewState extends State<DayDetailView> {
   late final TrackballBehavior _trackball = TrackballBehavior(
     enable: true,
     activationMode: ActivationMode.singleTap,
-    tooltipSettings: const InteractiveTooltip(enable: true),
     lineType: TrackballLineType.vertical,
-  );
+    tooltipDisplayMode: TrackballDisplayMode.floatAllPoints,
+    builder: (context, TrackballDetails details) {
+      final point = details.point;
+      if (point == null) return const SizedBox.shrink();
 
+      final time = point.x is DateTime
+          ? DateFormat('MMM dd, HH:mm a').format(point.x as DateTime)
+          : '';
+      final t = atlasText(context);
+
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.black.withOpacity(0.85),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(time,
+                style: t.caption.copyWith(
+                    color: Colors.white70, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Text('High: ${point.high?.toStringAsFixed(2)}',
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
+            Text('Low: ${point.low?.toStringAsFixed(2)}',
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
+            Text('Open: ${point.open?.toStringAsFixed(2)}',
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
+            Text('Close: ${point.close?.toStringAsFixed(2)}',
+                style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ],
+        ),
+      );
+    },
+  );
   @override
   void initState() {
     super.initState();
@@ -1376,6 +1437,7 @@ class _DayDetailViewState extends State<DayDetailView> {
                       closeValueMapper: (candle, _) => candle.close,
                       bearColor: c.bear,
                       bullColor: c.bull,
+                      enableSolidCandles: true, // <-- add this
                       enableTooltip: true,
                     ),
                   ],

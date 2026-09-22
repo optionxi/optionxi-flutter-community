@@ -199,7 +199,7 @@ class _Header extends StatelessWidget {
               Text(
                 'Top Leaderboard',
                 style: TextStyle(
-                  fontSize: 20,
+                  fontSize: 18,
                   fontWeight: FontWeight.w700,
                   color: textColor,
                   letterSpacing: -0.3,

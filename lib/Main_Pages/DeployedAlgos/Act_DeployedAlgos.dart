@@ -2,7 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:get/get.dart';
 import 'package:optionxi/Components/cust_contact_us.dart';
+import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
@@ -21,6 +23,7 @@ class _DeployedAlgosScreenState extends State<DeployedAlgosScreen> {
   final AlgoService _service = AlgoService();
   late Stream<List<AlgoModel>> _algosStream;
   late Future<int?> _limitFuture;
+  String? _pendingAlgoId; // set from push notification args
 
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
@@ -29,11 +32,44 @@ class _DeployedAlgosScreenState extends State<DeployedAlgosScreen> {
   @override
   void initState() {
     super.initState();
+    NotificationServiceFirebase().ensureFreshTokenForAlgos();
     _algosStream = _service.watchAlgos();
     _limitFuture = _service.getAlgoLimit();
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.trim().toLowerCase());
     });
+
+    _pendingAlgoId = _extractAlgoId(Get.arguments);
+    if (_pendingAlgoId != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _openPendingAlgo());
+    }
+  }
+
+  String? _extractAlgoId(dynamic args) {
+    if (args is Map) {
+      final id = args['algoId'];
+      if (id != null && id.toString().isNotEmpty) return id.toString();
+    }
+    return null;
+  }
+
+  Future<void> _openPendingAlgo() async {
+    final algoId = _pendingAlgoId;
+    if (algoId == null || !mounted) return;
+    _pendingAlgoId = null; // consume once, avoid re-triggering on rebuild
+
+    try {
+      final algo = await _service.getAlgoById(algoId);
+      if (algo == null || !mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) =>
+              AlgoNotificationsScreen(algo: algo, service: _service),
+        ),
+      );
+    } catch (e) {
+      debugPrint('Failed to open algo $algoId from notification: $e');
+    }
   }
 
   @override
@@ -972,14 +1008,34 @@ class _AlgoNotificationsScreenState extends State<AlgoNotificationsScreen> {
                           StatusPill(status: widget.algo.status),
                           const SizedBox(width: 8),
                           _TimeframeChip(timeframe: widget.algo.timeframe),
-                          const Spacer(),
-                          Text(
-                            'Deployed ${timeago.format(DateTime.fromMillisecondsSinceEpoch(widget.algo.createdAt))}',
-                            style: theme.textTheme.labelSmall
-                                ?.copyWith(color: cs.onSurfaceVariant),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.schedule_rounded,
+                                  size: 12,
+                                  color: cs.onSurfaceVariant,
+                                ),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    timeago.format(
+                                      DateTime.fromMillisecondsSinceEpoch(
+                                          widget.algo.createdAt),
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1,
+                                    style: theme.textTheme.labelSmall
+                                        ?.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ],
-                      ),
+                      )
                     ],
                   ),
                 ),
@@ -1657,6 +1713,15 @@ class AlgoService {
     });
   }
 
+  Future<AlgoModel?> getAlgoById(String algoId) async {
+    final snap = await _root.child('algo_deployed/$_uid/$algoId').get();
+    if (!snap.exists || snap.value == null) return null;
+    return AlgoModel.fromMap(
+      algoId,
+      Map<dynamic, dynamic>.from(snap.value as Map),
+    );
+  }
+
   /// Paginated fetch for notifications.
   Future<List<AlgoNotificationModel>> fetchNotificationsPage({
     required String algoId,
@@ -1680,14 +1745,30 @@ class AlgoService {
 
   /// Returns the algo limit for the current user, or `null` if no subscription
   /// record exists (meaning the user is not subscribed at all).
+  /// Returns the algo limit for the current user, or `null` if the user
+  /// isn't on a plan that grants algo deployment access.
   Future<int?> getAlgoLimit() async {
-    final snap = await _root.child('subscribed_algo_users/$_uid').get();
-    if (!snap.exists || snap.value == null) return null; // not subscribed
-    final map = Map<dynamic, dynamic>.from(snap.value as Map);
-    final value = map['limit'];
-    if (value is int) return value;
-    if (value is num) return value.toInt();
-    return int.tryParse(value?.toString() ?? '');
+    final row = await _supabase
+        .from('subscribed_users')
+        .select('active_plan_key, expires_at')
+        .eq('suid', _uid)
+        .maybeSingle();
+
+    if (row == null) return null; // no subscription record at all
+
+    final planKey = (row['active_plan_key'] as String?)?.toLowerCase();
+    if (planKey != 'max') return null; // only the "max" plan unlocks algo slots
+
+    // Optional: treat an expired plan as unsubscribed.
+    final expiresAtRaw = row['expires_at'] as String?;
+    if (expiresAtRaw != null) {
+      final expiresAt = DateTime.tryParse(expiresAtRaw);
+      if (expiresAt != null && expiresAt.isBefore(DateTime.now())) {
+        return null;
+      }
+    }
+
+    return 3; // "max" plan → 3 deployment slots
   }
 
   /// Checks the current algo count against the allowed limit.

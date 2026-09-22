@@ -85,19 +85,31 @@ class _ChatScreenState extends State<ChatScreen> {
 
     try {
       final response = await supabase
-          .from('subscriptions')
-          .select()
-          .eq('user_id', userId)
-          .eq('is_active', true)
+          .from('subscribed_users')
+          .select('active_plan_key, expires_at')
+          .eq('suid', userId)
           .maybeSingle();
 
+      final planKey = response?['active_plan_key'] as String?;
+      final expiresAtRaw = response?['expires_at'] as String?;
+
+      bool isPremium = false;
+
+      if (planKey != null && ['basic', 'pro', 'max'].contains(planKey)) {
+        if (expiresAtRaw != null) {
+          final expiresAt = DateTime.parse(expiresAtRaw);
+          isPremium = expiresAt.isAfter(DateTime.now().toUtc());
+        } else {
+          // No expiry set — treat as active (e.g. lifetime plan)
+          isPremium = true;
+        }
+      }
+
       if (mounted) {
-        setState(() {
-          _isPremium = response != null;
-        });
+        setState(() => _isPremium = isPremium);
       }
     } catch (e) {
-      debugPrint('Error checking premium status: $e');
+      debugPrint('Premium check error: $e');
       if (mounted) {
         setState(() => _isPremium = false);
       }

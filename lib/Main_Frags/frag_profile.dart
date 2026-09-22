@@ -8,6 +8,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:optionxi/Auth_Service/auth_service.dart';
 import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_tools_chips_mytools.dart';
+import 'package:optionxi/Components/cust_upgrade_to_pro.dart';
 import 'package:optionxi/Helpers/open_url.dart';
 import 'package:optionxi/Main_Frags/home_sections/sec_broker_list.dart';
 import 'package:optionxi/Main_Pages/Achivements/act_achievement_page.dart';
@@ -16,7 +17,9 @@ import 'package:optionxi/Main_Pages/DeployedAlgos/Act_DeployedAlgos.dart';
 import 'package:optionxi/Main_Pages/HealthPage/act_health_monitors.dart';
 import 'package:optionxi/Main_Pages/Leaderboard/act_leaderboard.dart';
 import 'package:optionxi/Main_Pages/Organisation/act_org_onboarding.dart';
+import 'package:optionxi/Main_Pages/SubscriptionsRazorpay/act_subscription_razorpay.dart';
 import 'package:optionxi/MobileLink/link_phone_screen.dart';
+import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -72,6 +75,8 @@ class _TradingProfilePageState extends State<TradingProfilePage>
   @override
   void initState() {
     super.initState();
+
+    NotificationServiceFirebase().ensureFreshTokenForAlgos();
 
     // Master page entrance — 700 ms
     _pageCtrl = AnimationController(
@@ -196,6 +201,10 @@ class _TradingProfilePageState extends State<TradingProfilePage>
               Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: StockChipsSectionMyTools(),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: ProUpgradeButton(),
               ),
               const SizedBox(height: 12),
               _animSection(3, _buildPreferences(isDark)),
@@ -840,6 +849,41 @@ class _TradingProfilePageState extends State<TradingProfilePage>
                     ],
                   ),
                   onTap: () => _push(const DeployedAlgosScreen()),
+                  divider: true,
+                ),
+
+                _prefTile(
+                  isDark: isDark,
+                  emoji: '💳',
+                  iconBg: const Color(0xFF3B82F6).withOpacity(0.12),
+                  title: 'Subscription',
+                  subtitle: 'Manage your subscription plans',
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3B82F6).withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          'Manage',
+                          style: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF3B82F6),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      _chevron(),
+                    ],
+                  ),
+                  onTap: () => _push(const SubscriptionScreenRazorPay()),
                   divider: true,
                 ),
               ],

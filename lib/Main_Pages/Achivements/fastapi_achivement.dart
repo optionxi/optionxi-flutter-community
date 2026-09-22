@@ -403,17 +403,9 @@ class AchievementEvents {
       AchievementToastService.trackAndShow('opened_live');
 
   // ── Trades ────────────────────────────────────────────────────────────────
-  static void tradePlaced({
-    required String instrument,
-    required String transactionType,
-    required bool isShortSell,
-    required String segment,
-  }) =>
+  static void tradePlaced({required String instrument}) =>
       AchievementToastService.trackAndShow('trade_placed', meta: {
         'instrument': instrument,
-        'transaction_type': transactionType,
-        'is_short_sell': isShortSell,
-        'segment': segment,
       });
 
   static void optionTradePlaced({required String type}) =>

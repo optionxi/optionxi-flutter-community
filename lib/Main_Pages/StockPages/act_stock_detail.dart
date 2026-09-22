@@ -8,7 +8,7 @@ import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/volume_formater.dart';
 import 'package:optionxi/Main_Pages/StockPages/act_set_alert.dart';
 import 'package:optionxi/Main_Pages/AISummary/act_stock_ai_summary.dart';
-import 'package:optionxi/Main_Pages/StockPages/sec_stock_aler.dart';
+import 'package:optionxi/Main_Pages/StockPages/sec_stock_alert.dart';
 import 'package:optionxi/Main_Pages/StockPages/sec_stock_screener.dart';
 import 'package:optionxi/VirtualTradeJournal/add_basket_page.dart';
 import 'package:optionxi/Helpers/browser_lite.dart';

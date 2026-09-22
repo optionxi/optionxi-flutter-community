@@ -2,7 +2,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_floating_ai.dart';
 
 // ─────────────────────────────────────────────
@@ -334,8 +333,8 @@ class _PremiumDialog extends StatelessWidget {
               const SizedBox(height: 22),
               _PlanCard(
                 dark: dark,
-                title: 'Starter',
-                price: '₹399',
+                title: 'Basic',
+                price: '₹400',
                 period: '/month',
                 color: _T.accent,
                 features: const [
@@ -363,7 +362,8 @@ class _PremiumDialog extends StatelessWidget {
                   child: ElevatedButton(
                     onPressed: () {
                       Navigator.pop(context);
-                      showContactOptions(context);
+
+                      Get.toNamed("/subscription-razorpay");
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,

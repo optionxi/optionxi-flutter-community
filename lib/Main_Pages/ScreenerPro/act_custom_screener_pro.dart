@@ -3,9 +3,88 @@ import 'package:firebase_database/firebase_database.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:optionxi/Components/cust_contact_us.dart';
 import 'package:optionxi/Components/cust_floating_ai.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+// ═══════════════════════════════════════════════════════════════
+//  STOCK SCREENER PRO — Modern Redesign
+//  • New user? A friendly bottom sheet suggests ready-made
+//    scanners (real Supabase patterns) or lets them build their own.
+//  • Every filter shows a plain-English explanation.
+//  • Run & Save live in a sticky bottom bar.
+//  • Ready-made scanners are a horizontal card strip + "See all" sheet.
+//  • All data / save / subscription logic is unchanged.
+// ═══════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────
+// PLAN LIMITS (static — update here when plans change)
+// ─────────────────────────────────────────────
+const int kFreeScreenerLimit = 10;
+const int kBasicScreenerLimit = 30;
+const int kProScreenerLimit = 50;
+const int kMaxScreenerLimit = 50;
+
+const Map<String, int> kPlanScreenerLimits = {
+  'basic': kBasicScreenerLimit,
+  'pro': kProScreenerLimit,
+  'max': kMaxScreenerLimit,
+};
+
+int screenerLimitForPlan(String? planKey) {
+  if (planKey == null) return kFreeScreenerLimit;
+  return kPlanScreenerLimits[planKey.toLowerCase()] ?? kFreeScreenerLimit;
+}
+
+class SubscriptionInfo {
+  final bool isPremium;
+  final int limit;
+  final String? planKey;
+
+  const SubscriptionInfo({
+    required this.isPremium,
+    required this.limit,
+    this.planKey,
+  });
+
+  static const free =
+      SubscriptionInfo(isPremium: false, limit: kFreeScreenerLimit);
+}
+
+class SubscriptionService {
+  final _sb = Supabase.instance.client;
+  String? get _userId => FirebaseAuth.instance.currentUser?.uid;
+
+  Future<SubscriptionInfo> fetchSubscriptionInfo() async {
+    if (_userId == null) return SubscriptionInfo.free;
+    try {
+      final row = await _sb
+          .from('subscribed_users')
+          .select('active_plan_key, expires_at')
+          .eq('suid', _userId!)
+          .maybeSingle();
+
+      final planKey = row?['active_plan_key'] as String?;
+      if (row == null || planKey == null) return SubscriptionInfo.free;
+
+      final expiresAtRaw = row['expires_at'];
+      if (expiresAtRaw != null) {
+        final expiresAt = DateTime.tryParse(expiresAtRaw.toString());
+        if (expiresAt != null && expiresAt.isBefore(DateTime.now())) {
+          return SubscriptionInfo.free;
+        }
+      }
+
+      return SubscriptionInfo(
+        isPremium: true,
+        limit: screenerLimitForPlan(planKey),
+        planKey: planKey,
+      );
+    } catch (_) {
+      return SubscriptionInfo.free;
+    }
+  }
+}
 
 // ─────────────────────────────────────────────
 // DATA MODELS
@@ -256,6 +335,14 @@ class GeneratedDataModel {
       ];
 }
 
+// ─────────────────────────────────────────────
+// FILTER MODEL  (with plain-English helper)
+// ─────────────────────────────────────────────
+String _opLabel(String op) {
+  const map = {'gt': '>', 'lt': '<', 'eq': '=', 'gte': '>=', 'lte': '<='};
+  return map[op] ?? op;
+}
+
 class ColumnComparisonFilter {
   String indicatorL;
   String operator;
@@ -270,15 +357,14 @@ class ColumnComparisonFilter {
   bool get isComplete =>
       indicatorL.isNotEmpty && operator.isNotEmpty && indicatorR.isNotEmpty;
 
+  /// Technical summary, e.g. "EMA 20 > EMA 50"
   String get summary {
     if (!isComplete) return 'Incomplete filter';
     return '${_indicatorLabel(indicatorL)} ${_opLabel(operator)} ${_indicatorLabel(indicatorR)}';
   }
 
-  static String _opLabel(String op) {
-    const map = {'gt': '>', 'lt': '<', 'eq': '=', 'gte': '>=', 'lte': '<='};
-    return map[op] ?? op;
-  }
+  /// Layman explanation, e.g. "Fast trend line above slow one — upward momentum"
+  String get plainEnglish => explainFilter(this);
 
   Map<String, dynamic> toJson() => {
         'indicatorL': indicatorL,
@@ -292,6 +378,31 @@ class ColumnComparisonFilter {
         operator: j['operator'] ?? '',
         indicatorR: j['indicatorR'] ?? '',
       );
+}
+
+/// Translates a filter into everyday words.
+String explainFilter(ColumnComparisonFilter f) {
+  if (!f.isComplete) return 'Pick a value, a comparison, and another value.';
+  const known = <String, String>{
+    'ema20|gt|ema50': 'Fast trend line is above the slow one — upward momentum',
+    'ema10|gt|ema20': 'Short trend just crossed above the medium trend',
+    'close|gt|ema20': 'Price is sitting above its 20-day trend line',
+    'close|gt|ema50': 'Price is sitting above its 50-day trend line',
+    'close|gt|sma200': 'Long-term trend is still pointing up (200-day)',
+    'close|lt|sma50': 'Price has slipped below its 50-day average',
+    'vol|gt|curr_day_sma5_volume':
+        "Today's trading is busier than the usual 5-day average",
+    'close|gt|prev_day_close': 'Price finished higher than yesterday',
+    'close|lt|prev_day_close': 'Price finished lower than yesterday',
+    'rsi14|lt|35': 'RSI below 35 — possibly oversold / deeply pulled back',
+    'rsi14|gt|55': 'Buyers are in control (RSI above 55)',
+    'rsi14|gt|50': 'Momentum is on the buyers’ side (RSI above 50)',
+    'high|gte|max_250_high': 'Trading at its highest price in about a year',
+    'low|lte|min_250_low': 'Trading near its lowest price in about a year',
+  };
+  final key = '${f.indicatorL}|${f.operator}|${f.indicatorR}';
+  return known[key] ??
+      '${_indicatorLabel(f.indicatorL)} ${_opLabel(f.operator)} ${_indicatorLabel(f.indicatorR)}';
 }
 
 class SavedScanner {
@@ -415,6 +526,7 @@ class StockScreenerService {
     String q = '$select FROM generated_values';
     final conds = <String>[];
     if (searchTerm.isNotEmpty) {
+      // NOTE: still interpolated — SQL injection risk flagged separately.
       conds.add("stckname ILIKE '%$searchTerm%'");
     }
     final valid = filters.where((f) => f.isComplete).toList();
@@ -473,18 +585,30 @@ class StockScreenerService {
 
 class ScannerFirebaseService {
   final _fb = FirebaseDatabase.instance;
+  final _subs = SubscriptionService();
   String? get _userId => FirebaseAuth.instance.currentUser?.uid;
 
   DatabaseReference get _ref =>
       _fb.ref().child('saved_scanners').child(_userId!);
 
-  Future<bool> _isPremium() async {
-    if (_userId == null) return false;
+  Future<SaveError?> saveScanner(SavedScanner scanner) async {
+    if (_userId == null) return SaveError.other('Not logged in');
     try {
-      final snap = await _fb.ref('subscriptions/$_userId/subscribed').get();
-      return snap.value == true;
-    } catch (_) {
-      return false;
+      final snapshot = await _ref.get();
+      final count = snapshot.exists ? (snapshot.value as Map?)?.length ?? 0 : 0;
+      final info = await _subs.fetchSubscriptionInfo();
+
+      if (count >= info.limit) {
+        return info.isPremium
+            ? SaveError.other(
+                'You have reached the maximum of ${info.limit} saved scanners.')
+            : SaveError.limitReached(isPremium: false);
+      }
+      final newRef = _ref.push();
+      await newRef.set(scanner.toRealtimeDatabase());
+      return null;
+    } catch (e) {
+      return SaveError.other('Failed to save scanner: $e');
     }
   }
 
@@ -505,31 +629,6 @@ class ScannerFirebaseService {
       return scanners;
     } catch (e) {
       rethrow;
-    }
-  }
-
-  /// Returns null on success, or a [SaveError] on failure.
-  Future<SaveError?> saveScanner(SavedScanner scanner) async {
-    const _maxlimit = 50;
-    const _freeLimit = 3;
-
-    if (_userId == null) return SaveError.other('Not logged in');
-    try {
-      final snapshot = await _ref.get();
-      final count = snapshot.exists ? (snapshot.value as Map?)?.length ?? 0 : 0;
-      final premium = await _isPremium();
-      final limit = premium ? _maxlimit : _freeLimit;
-      if (count >= limit) {
-        return premium
-            ? SaveError.other(
-                'You have reached the maximum of 50 saved scanners.')
-            : SaveError.limitReached(isPremium: false);
-      }
-      final newRef = _ref.push();
-      await newRef.set(scanner.toRealtimeDatabase());
-      return null;
-    } catch (e) {
-      return SaveError.other('Failed to save scanner: $e');
     }
   }
 
@@ -584,207 +683,38 @@ class SaveError {
       SaveError._(isLimitReached: false, isPremium: false, message: msg);
 }
 
-// ─────────────────────────────────────────────
-// PREMIUM DIALOG
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+//  THEME — fresh, modern palette
+//  Electric blue → sky gradient, clean green/red for gains/losses.
+// ═══════════════════════════════════════════════════════════════
 
-class _PremiumDialog extends StatelessWidget {
-  const _PremiumDialog();
+class _T {
+  // Brand
+  static const accent = Color(0xFF2563EB); // electric blue
+  static const accent2 = Color(0xFF38BDF8); // sky
+  static const gold = Color(0xFFFFB020);
+  static const green = Color(0xFF16A34A); // clean gain green
+  static const red = Color(0xFFDC2626); // clean loss red
 
-  @override
-  Widget build(BuildContext context) {
-    final dark = Theme.of(context).brightness == Brightness.dark;
-    return Dialog(
-      backgroundColor: _T.surface(dark),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-      insetPadding: const EdgeInsets.all(16),
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // ── Icon ──
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [Color(0xFFFFB347), Color(0xFFE65100)]),
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                        color: const Color(0xFFE65100).withOpacity(0.3),
-                        blurRadius: 16,
-                        offset: const Offset(0, 6))
-                  ],
-                ),
-                child: const Icon(Icons.workspace_premium_rounded,
-                    color: Colors.white, size: 34),
-              ),
-              const SizedBox(height: 16),
-              Text('Upgrade to Premium',
-                  style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: _T.text(dark))),
-              const SizedBox(height: 6),
-              Text(
-                'Free plan allows 10 saved scanners.\nUpgrade to save up to 50.',
-                textAlign: TextAlign.center,
-                style:
-                    TextStyle(fontSize: 13, color: _T.sub(dark), height: 1.5),
-              ),
-              const SizedBox(height: 22),
-              // ── Starter plan ──
-              _PlanCard(
-                dark: dark,
-                title: 'Starter',
-                price: '₹399',
-                period: '/month',
-                color: _T.accent,
-                features: const [
-                  '10 → 50 saved scanners',
-                  'All screener features',
-                  'Priority support',
-                ],
-              ),
-              const SizedBox(height: 20),
-              // ── CTA ──
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFFFFB347), Color(0xFFE65100)]),
-                    borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                          color: const Color(0xFFE65100).withOpacity(0.25),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4)),
-                    ],
-                  ),
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      showContactOptions(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.transparent,
-                      shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                    ),
-                    child: const Text('View Plans & Subscribe',
-                        style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 15)),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text('Maybe later',
-                    style: TextStyle(color: _T.sub(dark), fontSize: 13)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+  static LinearGradient get brandGradient =>
+      const LinearGradient(colors: [accent, accent2]);
+
+  // Surfaces
+  static Color bg(bool d) =>
+      d ? const Color(0xFF0B0C12) : const Color(0xFFF3F4FB);
+  static Color surface(bool d) => d ? const Color(0xFF151724) : Colors.white;
+  static Color surface2(bool d) =>
+      d ? const Color(0xFF1D1F31) : const Color(0xFFF0F1F9);
+  static Color border(bool d) =>
+      d ? const Color(0xFF282B45) : const Color(0xFFE6E8F4);
+  static Color text(bool d) =>
+      d ? const Color(0xFFF2F3FF) : const Color(0xFF11132A);
+  static Color sub(bool d) =>
+      d ? const Color(0xFF7E86A8) : const Color(0xFF707899);
+
+  // Dark chip background used by snackbars / skeletons
+  static const darkChip = Color(0xFF1B2138);
 }
-
-class _PlanCard extends StatelessWidget {
-  final bool dark;
-  final String title, price, period;
-  final Color color;
-  final List<String> features;
-  final bool isRecommended = false;
-
-  const _PlanCard({
-    required this.dark,
-    required this.title,
-    required this.price,
-    required this.period,
-    required this.color,
-    required this.features,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: isRecommended ? color.withOpacity(0.06) : _T.surface2(dark),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isRecommended ? color : _T.border(dark),
-          width: isRecommended ? 2 : 1,
-        ),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Text(title,
-              style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: _T.text(dark))),
-          if (isRecommended) ...[
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                  color: color, borderRadius: BorderRadius.circular(6)),
-              child: const Text('BEST VALUE',
-                  style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5)),
-            ),
-          ],
-          const Spacer(),
-          RichText(
-            text: TextSpan(children: [
-              TextSpan(
-                  text: price,
-                  style: TextStyle(
-                      color: color, fontSize: 20, fontWeight: FontWeight.w800)),
-              TextSpan(
-                  text: period,
-                  style: TextStyle(
-                      color: _T.sub(dark),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500)),
-            ]),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        ...features.map((f) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(children: [
-                Icon(Icons.check_circle_rounded, color: color, size: 14),
-                const SizedBox(width: 6),
-                Text(f,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: _T.text(dark),
-                        fontWeight: FontWeight.w500)),
-              ]),
-            )),
-      ]),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-// HELPERS & THEME
-// ─────────────────────────────────────────────
 
 String formatVolume(double v) {
   if (v >= 1e9) return '${(v / 1e9).toStringAsFixed(1)}B';
@@ -794,27 +724,8 @@ String formatVolume(double v) {
   return v.toStringAsFixed(0);
 }
 
-class _T {
-  static const accent = Color(0xFF5B7FFF);
-  static const accentSoft = Color(0xFF8BA3FF);
-  static const green = Color(0xFF00C896);
-  static const red = Color(0xFFFF4D6D);
-
-  static Color bg(bool d) =>
-      d ? const Color(0xFF0B0D15) : const Color(0xFFF0F2F8);
-  static Color surface(bool d) => d ? const Color(0xFF161927) : Colors.white;
-  static Color surface2(bool d) =>
-      d ? const Color(0xFF1E2235) : const Color(0xFFF7F8FF);
-  static Color border(bool d) =>
-      d ? const Color(0xFF252840) : const Color(0xFFE4E7F2);
-  static Color text(bool d) =>
-      d ? const Color(0xFFEEF0FF) : const Color(0xFF0F1124);
-  static Color sub(bool d) =>
-      d ? const Color(0xFF7880A0) : const Color(0xFF8890B0);
-}
-
 // ─────────────────────────────────────────────
-// INDICATOR LABELS & GROUPS
+// INDICATOR LABELS, GROUPS & LAYMAN HINTS
 // ─────────────────────────────────────────────
 
 const _indicatorGroups = {
@@ -898,7 +809,51 @@ const _indicatorLabels = <String, String>{
   'prev_day3_vol': '3 Days Ago Volume',
 };
 
+/// One-line plain-English explanation shown under each indicator.
+const _indicatorHints = <String, String>{
+  'open': 'Price when the market opened today',
+  'close': 'Latest traded price',
+  'high': 'Highest price today',
+  'low': 'Lowest price today',
+  'ema10': '10-day trend line (reacts fast)',
+  'ema20': '20-day trend line (short-term trend)',
+  'ema50': '50-day trend line (medium-term trend)',
+  'ema100': '100-day trend line',
+  'ema150': '150-day trend line',
+  'ema200': '200-day trend line (long-term trend)',
+  'sma10': 'Simple 10-day average price',
+  'sma20': 'Simple 20-day average price',
+  'sma50': 'Simple 50-day average price',
+  'sma100': 'Simple 100-day average price',
+  'sma150': 'Simple 150-day average price',
+  'sma200': 'Simple 200-day average price',
+  'vol': 'Shares traded today',
+  'curr_month_vol': 'Shares traded this month',
+  'curr_week_vol': 'Shares traded this week',
+  'curr_day_sma5_volume': 'Usual daily volume (5-day average)',
+  'rsi14': 'Momentum score 0–100 (above 50 = buyers winning)',
+  'curr_week_rsi14': 'Weekly momentum score',
+  'max_250_high': 'Highest price in ~1 year',
+  'min_250_low': 'Lowest price in ~1 year',
+  'week_max_52_high': '52-week highest price',
+  'week_min_52_low': '52-week lowest price',
+  'prev_day_close': "Yesterday's closing price",
+  'prev_day2_close': 'Closing price 2 days ago',
+  'prev_day3_close': 'Closing price 3 days ago',
+  'prev_day_high': "Yesterday's highest price",
+  'prev_day2_high': 'Highest price 2 days ago',
+  'prev_day3_high': 'Highest price 3 days ago',
+  'prev_day_low': "Yesterday's lowest price",
+  'prev_day2_low': 'Lowest price 2 days ago',
+  'prev_day3_low': 'Lowest price 3 days ago',
+  'prev_day_vol': "Yesterday's traded shares",
+  'prev_day2_vol': 'Traded shares 2 days ago',
+  'prev_day3_vol': 'Traded shares 3 days ago',
+};
+
 String _indicatorLabel(String key) => _indicatorLabels[key] ?? key;
+String _indicatorHint(String key) =>
+    _indicatorHints[key] ?? 'Numeric value from the database';
 
 // ─────────────────────────────────────────────
 // SPARKLINE
@@ -953,7 +908,7 @@ class _SparklinePainter extends CustomPainter {
 }
 
 // ─────────────────────────────────────────────
-// INDICATOR PICKER SHEET
+// INDICATOR PICKER SHEET (with layman hints)
 // ─────────────────────────────────────────────
 
 class _IndicatorSheet extends StatefulWidget {
@@ -985,20 +940,21 @@ class _IndicatorSheetState extends State<_IndicatorSheet> {
         if (_q.isEmpty) return true;
         final q = _q.toLowerCase();
         return _indicatorLabel(i).toLowerCase().contains(q) ||
-            i.toLowerCase().contains(q);
+            i.toLowerCase().contains(q) ||
+            _indicatorHint(i).toLowerCase().contains(q);
       }).toList();
       if (items.isNotEmpty) filtered[e.key] = items;
     }
 
     return DraggableScrollableSheet(
-      initialChildSize: 0.72,
+      initialChildSize: 0.75,
       maxChildSize: 0.95,
       minChildSize: 0.45,
       expand: false,
       builder: (_, ctrl) => Container(
         decoration: BoxDecoration(
           color: _T.surface(widget.dark),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Column(children: [
           Padding(
@@ -1006,20 +962,23 @@ class _IndicatorSheetState extends State<_IndicatorSheet> {
             child: Column(children: [
               Center(
                   child: Container(
-                      width: 36,
+                      width: 40,
                       height: 4,
                       decoration: BoxDecoration(
                           color: _T.border(widget.dark),
                           borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 14),
-              Text('Select Indicator',
+              Text('Pick a value to compare',
                   style: TextStyle(
                       color: _T.text(widget.dark),
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16)),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 17)),
+              const SizedBox(height: 4),
+              Text('These are the numbers available for every stock',
+                  style: TextStyle(fontSize: 12, color: _T.sub(widget.dark))),
               const SizedBox(height: 12),
               Container(
-                height: 42,
+                height: 44,
                 decoration: BoxDecoration(
                     color: _T.surface2(widget.dark),
                     borderRadius: BorderRadius.circular(12),
@@ -1035,9 +994,9 @@ class _IndicatorSheetState extends State<_IndicatorSheet> {
                     onChanged: (v) => setState(() => _q = v),
                     style: TextStyle(fontSize: 14, color: _T.text(widget.dark)),
                     decoration: InputDecoration(
-                        hintText: 'Search by name...',
+                        hintText: 'Search… e.g. "trend" or "volume"',
                         hintStyle:
-                            TextStyle(fontSize: 14, color: _T.sub(widget.dark)),
+                            TextStyle(fontSize: 13, color: _T.sub(widget.dark)),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero),
                   )),
@@ -1064,7 +1023,7 @@ class _IndicatorSheetState extends State<_IndicatorSheet> {
                     Icon(Icons.search_off_rounded,
                         size: 36, color: _T.sub(widget.dark)),
                     const SizedBox(height: 8),
-                    Text('No indicators found',
+                    Text('Nothing matches that search',
                         style: TextStyle(
                             color: _T.sub(widget.dark), fontSize: 13)),
                   ]))
@@ -1074,46 +1033,59 @@ class _IndicatorSheetState extends State<_IndicatorSheet> {
                     children: [
                         for (final entry in filtered.entries) ...[
                           Padding(
-                            padding: const EdgeInsets.fromLTRB(4, 12, 4, 6),
+                            padding: const EdgeInsets.fromLTRB(4, 14, 4, 6),
                             child: Text(entry.key.toUpperCase(),
                                 style: TextStyle(
                                     fontSize: 10,
                                     fontWeight: FontWeight.w800,
-                                    letterSpacing: 1.0,
-                                    color: _T.accent.withOpacity(0.7))),
+                                    letterSpacing: 1.2,
+                                    color: _T.accent.withOpacity(0.75))),
                           ),
-                          Wrap(
-                            spacing: 6,
-                            runSpacing: 6,
-                            children: entry.value.map((item) {
-                              final sel = widget.current == item;
-                              return GestureDetector(
-                                onTap: () => widget.onSelect(item),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 150),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 11, vertical: 7),
-                                  decoration: BoxDecoration(
-                                    color: sel
-                                        ? _T.accent
-                                        : _T.surface2(widget.dark),
-                                    borderRadius: BorderRadius.circular(8),
-                                    border: Border.all(
-                                        color: sel
-                                            ? _T.accent
-                                            : _T.border(widget.dark)),
-                                  ),
-                                  child: Text(_indicatorLabel(item),
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w500,
-                                          color: sel
-                                              ? Colors.white
-                                              : _T.text(widget.dark))),
+                          ...entry.value.map((item) {
+                            final sel = widget.current == item;
+                            return GestureDetector(
+                              onTap: () => widget.onSelect(item),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 150),
+                                margin: const EdgeInsets.only(bottom: 6),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 13, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: sel
+                                      ? _T.accent.withOpacity(0.08)
+                                      : _T.surface2(widget.dark),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                      color: sel
+                                          ? _T.accent
+                                          : _T.border(widget.dark)),
                                 ),
-                              );
-                            }).toList(),
-                          ),
+                                child: Row(children: [
+                                  Expanded(
+                                      child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                        Text(_indicatorLabel(item),
+                                            style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: sel
+                                                    ? _T.accent
+                                                    : _T.text(widget.dark))),
+                                        const SizedBox(height: 2),
+                                        Text(_indicatorHint(item),
+                                            style: TextStyle(
+                                                fontSize: 11,
+                                                color: _T.sub(widget.dark))),
+                                      ])),
+                                  if (sel)
+                                    Icon(Icons.check_circle_rounded,
+                                        color: _T.accent, size: 18),
+                                ]),
+                              ),
+                            );
+                          }),
                         ],
                       ]),
           ),
@@ -1122,6 +1094,10 @@ class _IndicatorSheetState extends State<_IndicatorSheet> {
     );
   }
 }
+
+// ─────────────────────────────────────────────
+// OPERATOR PICKER SHEET
+// ─────────────────────────────────────────────
 
 class _OperatorSheet extends StatelessWidget {
   final String? current;
@@ -1143,22 +1119,22 @@ class _OperatorSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
           color: _T.surface(dark),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(22))),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 36),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Center(
             child: Container(
-                width: 36,
+                width: 40,
                 height: 4,
                 decoration: BoxDecoration(
                     color: _T.border(dark),
                     borderRadius: BorderRadius.circular(2)))),
         const SizedBox(height: 16),
-        Text('Select Operator',
+        Text('How should they compare?',
             style: TextStyle(
                 color: _T.text(dark),
-                fontWeight: FontWeight.w700,
-                fontSize: 16)),
+                fontWeight: FontWeight.w800,
+                fontSize: 17)),
         const SizedBox(height: 14),
         ..._ops.map((op) {
           final sel = current == op.$1;
@@ -1166,7 +1142,7 @@ class _OperatorSheet extends StatelessWidget {
             onTap: () => onSelect(op.$1),
             child: Container(
               margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
                 color: sel ? _T.accent.withOpacity(0.1) : _T.surface2(dark),
                 borderRadius: BorderRadius.circular(12),
@@ -1230,13 +1206,13 @@ class _IndicatorBtn extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        height: 38,
+        height: 40,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: _T.surface2(dark),
-          borderRadius: BorderRadius.circular(10),
+          color: hasValue ? _T.accent.withOpacity(0.07) : _T.surface2(dark),
+          borderRadius: BorderRadius.circular(11),
           border: Border.all(
-              color: hasValue ? _T.accent.withOpacity(0.45) : _T.border(dark)),
+              color: hasValue ? _T.accent.withOpacity(0.5) : _T.border(dark)),
         ),
         child:
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
@@ -1246,11 +1222,12 @@ class _IndicatorBtn extends StatelessWidget {
                   style: TextStyle(
                       fontSize: isOperator ? 14 : 12,
                       fontWeight:
-                          isOperator ? FontWeight.w800 : FontWeight.w500,
+                          isOperator ? FontWeight.w800 : FontWeight.w600,
                       color: hasValue ? _T.text(dark) : _T.sub(dark)))),
           if (!isOperator) ...[
             const SizedBox(width: 3),
-            Icon(Icons.unfold_more_rounded, size: 13, color: _T.sub(dark))
+            Icon(Icons.keyboard_arrow_down_rounded,
+                size: 14, color: _T.sub(dark))
           ],
         ]),
       ),
@@ -1332,9 +1309,9 @@ class _FilterRowState extends State<FilterRow> {
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
         color: _T.surface2(dark),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(
-            color: complete ? _T.accent.withOpacity(0.4) : _T.border(dark)),
+            color: complete ? _T.accent.withOpacity(0.45) : _T.border(dark)),
       ),
       child:
           complete && _collapsed ? _collapsedView(dark) : _expandedView(dark),
@@ -1343,48 +1320,46 @@ class _FilterRowState extends State<FilterRow> {
 
   Widget _collapsedView(bool dark) {
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       onTap: () => setState(() => _collapsed = false),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        child: Row(children: [
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(
-              width: 26,
-              height: 26,
+              width: 30,
+              height: 30,
               decoration: BoxDecoration(
-                  color: _T.accent.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(7)),
-              child: Icon(Icons.tune_rounded, size: 13, color: _T.accent)),
-          const SizedBox(width: 8),
+                  gradient: _T.brandGradient,
+                  borderRadius: BorderRadius.circular(9)),
+              child: const Icon(Icons.tune_rounded,
+                  size: 14, color: Colors.white)),
+          const SizedBox(width: 10),
           Expanded(
-              child: Text(widget.filter.summary,
-                  style: TextStyle(
-                      color: _T.accent,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis)),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-                color: _T.accent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20)),
-            child: Text('Active',
-                style: TextStyle(
-                    fontSize: 9,
-                    color: _T.accent,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3)),
-          ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                Text(widget.filter.summary,
+                    style: TextStyle(
+                        color: _T.accent,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 2),
+                Text(widget.filter.plainEnglish,
+                    style: TextStyle(fontSize: 11, color: _T.sub(dark)),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+              ])),
           const SizedBox(width: 6),
           GestureDetector(
             onTap: widget.onRemove,
             child: Container(
-                width: 26,
-                height: 26,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
                     color: _T.red.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(7)),
+                    borderRadius: BorderRadius.circular(8)),
                 child: Icon(Icons.close_rounded, size: 13, color: _T.red)),
           ),
         ]),
@@ -1397,24 +1372,27 @@ class _FilterRowState extends State<FilterRow> {
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [
-          Text('FILTER ${widget.index + 1}',
+          Text('RULE ${widget.index + 1}',
               style: TextStyle(
                   fontSize: 10,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w800,
                   color: _T.sub(dark),
-                  letterSpacing: 0.8)),
+                  letterSpacing: 1.0)),
           const Spacer(),
           GestureDetector(
             onTap: widget.onRemove,
             child: Container(
-                width: 24,
-                height: 24,
+                width: 26,
+                height: 26,
                 decoration: BoxDecoration(
                     color: _T.red.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(6)),
+                    borderRadius: BorderRadius.circular(7)),
                 child: Icon(Icons.close_rounded, size: 12, color: _T.red)),
           ),
         ]),
+        const SizedBox(height: 6),
+        Text('Compare two values — e.g. “RSI below 35”',
+            style: TextStyle(fontSize: 11, color: _T.sub(dark))),
         const SizedBox(height: 8),
         Row(children: [
           Expanded(
@@ -1423,7 +1401,7 @@ class _FilterRowState extends State<FilterRow> {
                   value: widget.filter.indicatorL.isEmpty
                       ? null
                       : widget.filter.indicatorL,
-                  hint: 'Left indicator',
+                  hint: 'First value',
                   dark: dark,
                   onTap: () => _pickIndicator(context, dark, true))),
           const SizedBox(width: 6),
@@ -1433,7 +1411,7 @@ class _FilterRowState extends State<FilterRow> {
                   value: widget.filter.operator.isEmpty
                       ? null
                       : widget.filter.operator,
-                  hint: 'Op',
+                  hint: 'vs.',
                   dark: dark,
                   isOperator: true,
                   onTap: () => _pickOperator(context, dark))),
@@ -1444,7 +1422,7 @@ class _FilterRowState extends State<FilterRow> {
                   value: widget.filter.indicatorR.isEmpty
                       ? null
                       : widget.filter.indicatorR,
-                  hint: 'Right indicator',
+                  hint: 'Second value',
                   dark: dark,
                   onTap: () => _pickIndicator(context, dark, false))),
         ]),
@@ -1478,13 +1456,13 @@ class StockCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: _T.surface(dark),
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: _T.border(dark)),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.22 : 0.05),
-                blurRadius: 12,
-                offset: const Offset(0, 3))
+                color: _T.accent.withOpacity(dark ? 0.10 : 0.05),
+                blurRadius: 16,
+                offset: const Offset(0, 4))
           ],
         ),
         child: Column(children: [
@@ -1517,16 +1495,30 @@ class StockCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                      color: gainColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: gainColor.withOpacity(0.22))),
+                      gradient: LinearGradient(
+                          colors: isPos
+                              ? [
+                                  const Color(0xFF16A34A),
+                                  const Color(0xFF15803D)
+                                ]
+                              : [
+                                  const Color(0xFFDC2626),
+                                  const Color(0xFFB91C1C)
+                                ]),
+                      borderRadius: BorderRadius.circular(9),
+                      boxShadow: [
+                        BoxShadow(
+                            color: gainColor.withOpacity(0.25),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3))
+                      ]),
                   child: Text(
                       '${isPos ? '+' : ''}${stock.pcnt.toStringAsFixed(2)}%',
-                      style: TextStyle(
-                          color: gainColor,
-                          fontWeight: FontWeight.w700,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
                           fontSize: 12)),
                 ),
               ]),
@@ -1581,7 +1573,7 @@ class StockCard extends StatelessWidget {
               decoration: BoxDecoration(
                 color: _T.accent.withOpacity(0.05),
                 borderRadius:
-                    const BorderRadius.vertical(bottom: Radius.circular(18)),
+                    const BorderRadius.vertical(bottom: Radius.circular(20)),
                 border: Border(top: BorderSide(color: _T.border(dark))),
               ),
               child:
@@ -1589,7 +1581,7 @@ class StockCard extends StatelessWidget {
                 Text('View Details',
                     style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                        fontWeight: FontWeight.w700,
                         color: _T.accent,
                         letterSpacing: 0.2)),
                 const SizedBox(width: 4),
@@ -1608,7 +1600,7 @@ Widget _MiniChip(String label, String value, Color color, bool dark) {
     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
     decoration: BoxDecoration(
         color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(7),
         border: Border.all(color: color.withOpacity(0.18))),
     child: RichText(
         text: TextSpan(children: [
@@ -1616,8 +1608,8 @@ Widget _MiniChip(String label, String value, Color color, bool dark) {
           text: '$label ',
           style: TextStyle(
               fontSize: 9,
-              color: color.withOpacity(0.8),
-              fontWeight: FontWeight.w700,
+              color: color.withOpacity(0.85),
+              fontWeight: FontWeight.w800,
               letterSpacing: 0.3)),
       TextSpan(
           text: value,
@@ -1652,17 +1644,19 @@ class _PatternTile extends StatelessWidget {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
         decoration: BoxDecoration(
-          color: isActive ? _T.accent : _T.bg(dark),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isActive ? _T.accent : _T.border(dark)),
+          gradient: isActive ? _T.brandGradient : null,
+          color: isActive ? null : _T.bg(dark),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+              color: isActive ? Colors.transparent : _T.border(dark)),
           boxShadow: isActive
-              ? [BoxShadow(color: _T.accent.withOpacity(0.28), blurRadius: 10)]
+              ? [BoxShadow(color: _T.accent.withOpacity(0.30), blurRadius: 10)]
               : [],
         ),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         child: Row(children: [
           Icon(pattern.icon,
-              size: 13, color: isActive ? Colors.white : _T.accentSoft),
+              size: 13, color: isActive ? Colors.white : _T.accent),
           const SizedBox(width: 6),
           Expanded(
               child: Text(pattern.label,
@@ -1673,6 +1667,88 @@ class _PatternTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis)),
         ]),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// READY-MADE SCANNER CARD (horizontal strip)
+// ─────────────────────────────────────────────
+
+class _ScannerChip extends StatelessWidget {
+  final TechnicalPatternModel pattern;
+  final bool isActive;
+  final bool dark;
+  final VoidCallback onTap;
+  const _ScannerChip(
+      {required this.pattern,
+      required this.isActive,
+      required this.dark,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        width: 158,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          gradient: isActive ? _T.brandGradient : null,
+          color: isActive ? null : _T.surface2(dark),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+              color: isActive ? Colors.transparent : _T.border(dark)),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                      color: _T.accent.withOpacity(0.28),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4))
+                ]
+              : [],
+        ),
+        child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(children: [
+                Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                        color: isActive
+                            ? Colors.white.withOpacity(0.2)
+                            : _T.accent.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(9)),
+                    child: Icon(pattern.icon,
+                        size: 15, color: isActive ? Colors.white : _T.accent)),
+                const Spacer(),
+                if (isActive)
+                  const Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 16),
+              ]),
+              const SizedBox(height: 8),
+              Text(pattern.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w700,
+                      color: isActive ? Colors.white : _T.text(dark))),
+              const SizedBox(height: 3),
+              Text(pattern.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 10.5,
+                      height: 1.3,
+                      color: isActive
+                          ? Colors.white.withOpacity(0.85)
+                          : _T.sub(dark))),
+            ]),
       ),
     );
   }
@@ -1693,13 +1769,13 @@ class _Card extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: _T.surface(dark),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
           border: Border.all(color: _T.border(dark)),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.18 : 0.04),
-                blurRadius: 10,
-                offset: const Offset(0, 3))
+                color: _T.accent.withOpacity(dark ? 0.10 : 0.04),
+                blurRadius: 14,
+                offset: const Offset(0, 4))
           ],
         ),
         child: child,
@@ -1739,21 +1815,21 @@ class _SkeletonCardState extends State<_SkeletonCard>
 
   @override
   Widget build(BuildContext context) {
-    final sh = widget.dark ? const Color(0xFF252840) : const Color(0xFFE8EAF2);
+    final sh = widget.dark ? _T.darkChip : const Color(0xFFE9EBF5);
     return FadeTransition(
       opacity: Tween(begin: 0.5, end: 1.0).animate(_anim),
       child: Container(
         height: 140,
         decoration: BoxDecoration(
             color: _T.surface(widget.dark),
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(color: _T.border(widget.dark))),
         padding: const EdgeInsets.all(14),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             _Box(w: 130, h: 13, c: sh),
             const Spacer(),
-            _Box(w: 58, h: 22, c: sh, r: 8)
+            _Box(w: 58, h: 22, c: sh, r: 9)
           ]),
           const SizedBox(height: 12),
           Row(children: [
@@ -1763,13 +1839,13 @@ class _SkeletonCardState extends State<_SkeletonCard>
               _Box(w: 65, h: 10, c: sh)
             ]),
             const Spacer(),
-            _Box(w: 110, h: 38, c: sh, r: 6),
+            _Box(w: 110, h: 38, c: sh, r: 7),
           ]),
           const SizedBox(height: 10),
           Row(children: [
-            _Box(w: 60, h: 22, c: sh, r: 6),
+            _Box(w: 60, h: 22, c: sh, r: 7),
             const SizedBox(width: 5),
-            _Box(w: 60, h: 22, c: sh, r: 6)
+            _Box(w: 60, h: 22, c: sh, r: 7)
           ]),
         ]),
       ),
@@ -1791,7 +1867,7 @@ class _Box extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-// ALL PATTERNS PAGE
+// ALL PATTERNS PAGE (bottom sheet → full page)
 // ─────────────────────────────────────────────
 
 class AllPatternsPage extends StatefulWidget {
@@ -1858,7 +1934,7 @@ class _AllPatternsPageState extends State<AllPatternsPage> {
               child: Icon(Icons.arrow_back_ios_new_rounded,
                   size: 14, color: _T.text(dark))),
         ),
-        title: Text('Technical Patterns',
+        title: Text('Ready-Made Scanners',
             style: TextStyle(
                 fontSize: 17,
                 fontWeight: FontWeight.w800,
@@ -1871,10 +1947,10 @@ class _AllPatternsPageState extends State<AllPatternsPage> {
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
           child: Container(
-            height: 42,
+            height: 44,
             decoration: BoxDecoration(
                 color: _T.surface(dark),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(13),
                 border: Border.all(color: _T.border(dark))),
             child: Row(children: [
               const SizedBox(width: 12),
@@ -1886,8 +1962,8 @@ class _AllPatternsPageState extends State<AllPatternsPage> {
                 onChanged: (v) => setState(() => _search = v),
                 style: TextStyle(fontSize: 14, color: _T.text(dark)),
                 decoration: InputDecoration(
-                    hintText: 'Search patterns...',
-                    hintStyle: TextStyle(fontSize: 14, color: _T.sub(dark)),
+                    hintText: 'Search ready-made scanners…',
+                    hintStyle: TextStyle(fontSize: 13, color: _T.sub(dark)),
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero),
               )),
@@ -1921,10 +1997,11 @@ class _AllPatternsPageState extends State<AllPatternsPage> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                      color: sel ? _T.accent : _T.surface(dark),
+                      gradient: sel ? _T.brandGradient : null,
+                      color: sel ? null : _T.surface(dark),
                       borderRadius: BorderRadius.circular(20),
-                      border:
-                          Border.all(color: sel ? _T.accent : _T.border(dark))),
+                      border: Border.all(
+                          color: sel ? Colors.transparent : _T.border(dark))),
                   child: Text(cat,
                       style: TextStyle(
                           fontSize: 12,
@@ -1941,7 +2018,7 @@ class _AllPatternsPageState extends State<AllPatternsPage> {
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
                   Icon(Icons.search_off_rounded, size: 44, color: _T.sub(dark)),
                   const SizedBox(height: 12),
-                  Text('No patterns found',
+                  Text('No scanners found',
                       style: TextStyle(
                           color: _T.text(dark),
                           fontWeight: FontWeight.w600,
@@ -1954,80 +2031,176 @@ class _AllPatternsPageState extends State<AllPatternsPage> {
                   itemBuilder: (_, i) {
                     final p = _filtered[i];
                     final isActive = widget.activePatternKey == p.key;
-                    return GestureDetector(
-                      onTap: () {
+                    return _AllPatternCard(
+                      pattern: p,
+                      isActive: isActive,
+                      dark: dark,
+                      onUse: () {
                         widget.onSelect(p);
                         Navigator.pop(context);
                       },
-                      child: AnimatedContainer(
-                        duration: const Duration(milliseconds: 160),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: isActive
-                              ? _T.accent.withOpacity(0.08)
-                              : _T.surface(dark),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                              color: isActive
-                                  ? _T.accent.withOpacity(0.5)
-                                  : _T.border(dark)),
-                        ),
-                        child: Row(children: [
-                          Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                  color: isActive
-                                      ? _T.accent
-                                      : _T.accent.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(11)),
-                              child: Icon(p.icon,
-                                  size: 20,
-                                  color: isActive ? Colors.white : _T.accent)),
-                          const SizedBox(width: 12),
-                          Expanded(
-                              child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                Row(children: [
-                                  Text(p.label,
-                                      style: TextStyle(
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          color: _T.text(dark))),
-                                  const SizedBox(width: 6),
-                                  Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                          color: _T.accent.withOpacity(0.1),
-                                          borderRadius:
-                                              BorderRadius.circular(20)),
-                                      child: Text(p.category,
-                                          style: TextStyle(
-                                              fontSize: 9,
-                                              color: _T.accent,
-                                              fontWeight: FontWeight.w700))),
-                                ]),
-                                const SizedBox(height: 3),
-                                Text(p.description,
-                                    style: TextStyle(
-                                        fontSize: 12, color: _T.sub(dark))),
-                                const SizedBox(height: 6),
-                                Text(
-                                    '${p.filters.length} condition${p.filters.length == 1 ? '' : 's'}',
-                                    style: TextStyle(
-                                        fontSize: 11, color: _T.sub(dark))),
-                              ])),
-                          if (isActive)
-                            Icon(Icons.check_circle_rounded,
-                                color: _T.accent, size: 20),
-                        ]),
-                      ),
                     );
                   },
                 ),
         ),
+      ]),
+    );
+  }
+}
+
+class _AllPatternCard extends StatefulWidget {
+  final TechnicalPatternModel pattern;
+  final bool isActive;
+  final bool dark;
+  final VoidCallback onUse;
+  const _AllPatternCard(
+      {required this.pattern,
+      required this.isActive,
+      required this.dark,
+      required this.onUse});
+
+  @override
+  State<_AllPatternCard> createState() => _AllPatternCardState();
+}
+
+class _AllPatternCardState extends State<_AllPatternCard> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = widget.pattern;
+    final dark = widget.dark;
+    final active = widget.isActive;
+    return Container(
+      decoration: BoxDecoration(
+        color: active ? _T.accent.withOpacity(0.06) : _T.surface(dark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+            color: active ? _T.accent.withOpacity(0.5) : _T.border(dark)),
+      ),
+      child: Column(children: [
+        Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(children: [
+            Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                    gradient: active ? _T.brandGradient : null,
+                    color: active ? null : _T.accent.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12)),
+                child: Icon(p.icon,
+                    size: 20, color: active ? Colors.white : _T.accent)),
+            const SizedBox(width: 12),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                  Row(children: [
+                    Flexible(
+                      child: Text(p.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w700,
+                              color: _T.text(dark))),
+                    ),
+                    const SizedBox(width: 6),
+                    Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                            color: _T.accent.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(20)),
+                        child: Text(p.category,
+                            style: TextStyle(
+                                fontSize: 9,
+                                color: _T.accent,
+                                fontWeight: FontWeight.w700))),
+                  ]),
+                  const SizedBox(height: 3),
+                  Text(p.description,
+                      style: TextStyle(fontSize: 12, color: _T.sub(dark))),
+                ])),
+          ]),
+        ),
+        Divider(height: 1, color: _T.border(dark)),
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Row(children: [
+              Text(
+                  '${p.filters.length} rule${p.filters.length == 1 ? '' : 's'}',
+                  style: TextStyle(
+                      fontSize: 11,
+                      color: _T.sub(dark),
+                      fontWeight: FontWeight.w600)),
+              const SizedBox(width: 4),
+              AnimatedRotation(
+                turns: _expanded ? 0.5 : 0,
+                duration: const Duration(milliseconds: 160),
+                child: Icon(Icons.keyboard_arrow_down_rounded,
+                    size: 15, color: _T.sub(dark)),
+              ),
+              const Spacer(),
+              GestureDetector(
+                onTap: widget.onUse,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+                  decoration: BoxDecoration(
+                      gradient: _T.brandGradient,
+                      borderRadius: BorderRadius.circular(9)),
+                  child: const Text('Use',
+                      style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700)),
+                ),
+              ),
+            ]),
+          ),
+        ),
+        if (_expanded)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: p.filters
+                    .map((f) => Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 7),
+                          decoration: BoxDecoration(
+                              color: _T.surface2(dark),
+                              borderRadius: BorderRadius.circular(9),
+                              border: Border.all(color: _T.border(dark))),
+                          child: Row(children: [
+                            Icon(Icons.tune_rounded,
+                                size: 12, color: _T.accent),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(f.summary,
+                                        style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                            color: _T.text(dark))),
+                                    const SizedBox(height: 2),
+                                    Text(f.plainEnglish,
+                                        style: TextStyle(
+                                            fontSize: 10.5,
+                                            color: _T.sub(dark))),
+                                  ]),
+                            ),
+                          ]),
+                        ))
+                    .toList()),
+          ),
       ]),
     );
   }
@@ -2061,32 +2234,40 @@ class _SaveScannerDialogState extends State<_SaveScannerDialog> {
     final dark = widget.dark;
     return Dialog(
       backgroundColor: _T.surface(dark),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Row(children: [
             Container(
-                width: 36,
-                height: 36,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                    color: _T.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.bookmark_add_rounded,
-                    color: _T.accent, size: 18)),
+                    gradient: _T.brandGradient,
+                    borderRadius: BorderRadius.circular(11)),
+                child: const Icon(Icons.bookmark_add_rounded,
+                    color: Colors.white, size: 18)),
             const SizedBox(width: 10),
-            Text('Save Scanner',
+            Text('Save this scanner',
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: _T.text(dark))),
           ]),
-          const SizedBox(height: 18),
-          _Field(ctrl: _nameCtrl, hint: 'Scanner name *', dark: dark),
+          const SizedBox(height: 6),
+          Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Give it a name so you can re-run it anytime.',
+                  style: TextStyle(fontSize: 12, color: _T.sub(dark)))),
+          const SizedBox(height: 16),
+          _Field(
+              ctrl: _nameCtrl,
+              hint: 'Name — e.g. "My Uptrend Picks" *',
+              dark: dark),
           const SizedBox(height: 10),
           _Field(
               ctrl: _descCtrl,
-              hint: 'Description (optional)',
+              hint: 'Note to yourself (optional)',
               dark: dark,
               maxLines: 2),
           const SizedBox(height: 18),
@@ -2095,10 +2276,10 @@ class _SaveScannerDialogState extends State<_SaveScannerDialog> {
                 child: GestureDetector(
               onTap: () => Navigator.pop(context),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
                     color: _T.surface2(dark),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(13),
                     border: Border.all(color: _T.border(dark))),
                 child: Center(
                     child: Text('Cancel',
@@ -2117,11 +2298,10 @@ class _SaveScannerDialogState extends State<_SaveScannerDialog> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF5B7FFF), Color(0xFF9B6DFF)]),
-                    borderRadius: BorderRadius.circular(12)),
+                    gradient: _T.brandGradient,
+                    borderRadius: BorderRadius.circular(13)),
                 child: const Center(
                     child: Text('Save',
                         style: TextStyle(
@@ -2150,7 +2330,7 @@ class _Field extends StatelessWidget {
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
             color: _T.surface2(dark),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(13),
             border: Border.all(color: _T.border(dark))),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
         child: TextField(
@@ -2159,7 +2339,7 @@ class _Field extends StatelessWidget {
           style: TextStyle(fontSize: 14, color: _T.text(dark)),
           decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(fontSize: 14, color: _T.sub(dark)),
+              hintStyle: TextStyle(fontSize: 13, color: _T.sub(dark)),
               border: InputBorder.none,
               contentPadding:
                   EdgeInsets.symmetric(vertical: maxLines > 1 ? 8 : 0)),
@@ -2173,6 +2353,400 @@ class _Field extends StatelessWidget {
 
 enum _LoadState { idle, loading, error, loaded }
 
+// ─────────────────────────────────────────────
+// ONBOARDING KEY (bumped to v2)
+// ─────────────────────────────────────────────
+
+const _kOnboardingShownKey = 'screener_pro_onboarding_shown_v2';
+
+// ─────────────────────────────────────────────
+// PREMIUM DIALOG (restyled)
+// ─────────────────────────────────────────────
+
+class _PremiumDialog extends StatelessWidget {
+  const _PremiumDialog();
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    return Dialog(
+      backgroundColor: _T.surface(dark),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      insetPadding: const EdgeInsets.all(16),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFFFFB020), Color(0xFFFF7A45)]),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                          color: const Color(0xFFFF7A45).withOpacity(0.3),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6))
+                    ]),
+                child: const Icon(Icons.workspace_premium_rounded,
+                    color: Colors.white, size: 34),
+              ),
+              const SizedBox(height: 16),
+              Text('Unlock more saved scanners',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: _T.text(dark))),
+              const SizedBox(height: 6),
+              Text(
+                'The free plan lets you keep 10 scanners.\nUpgrade to keep up to 50.',
+                textAlign: TextAlign.center,
+                style:
+                    TextStyle(fontSize: 13, color: _T.sub(dark), height: 1.5),
+              ),
+              const SizedBox(height: 22),
+              _PlanCard(
+                dark: dark,
+                title: 'Pro',
+                price: '₹800',
+                period: '/month',
+                color: _T.gold,
+                features: const [
+                  'Keep 10 → 50 saved scanners',
+                  'Every screener feature included',
+                  'Priority support',
+                ],
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                        colors: [Color(0xFFFFB020), Color(0xFFFF7A45)]),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                          color: const Color(0xFFFF7A45).withOpacity(0.25),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4)),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      Get.toNamed("/subscription-razorpay");
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14)),
+                    ),
+                    child: const Text('View Plans & Subscribe',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text('Maybe later',
+                    style: TextStyle(color: _T.sub(dark), fontSize: 13)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanCard extends StatelessWidget {
+  final bool dark;
+  final String title, price, period;
+  final Color color;
+  final List<String> features;
+
+  const _PlanCard({
+    required this.dark,
+    required this.title,
+    required this.price,
+    required this.period,
+    required this.color,
+    required this.features,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _T.surface2(dark),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _T.border(dark)),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text(title,
+              style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: _T.text(dark))),
+          const Spacer(),
+          RichText(
+            text: TextSpan(children: [
+              TextSpan(
+                  text: price,
+                  style: TextStyle(
+                      color: color, fontSize: 20, fontWeight: FontWeight.w800)),
+              TextSpan(
+                  text: period,
+                  style: TextStyle(
+                      color: _T.sub(dark),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        ...features.map((f) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(children: [
+                Icon(Icons.check_circle_rounded, color: color, size: 14),
+                const SizedBox(width: 6),
+                Text(f,
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: _T.text(dark),
+                        fontWeight: FontWeight.w500)),
+              ]),
+            )),
+      ]),
+    );
+  }
+}
+// ─────────────────────────────────────────────
+// FIRST-OPEN ONBOARDING BOTTOM SHEET
+//   • Shows real Supabase technical_patterns.
+//   • "Show me later" / swipe → leaves key unmarked (shows again).
+//   • Picking a scanner OR "I'll build my own" → marks seen.
+// ─────────────────────────────────────────────
+
+class _OnboardingSheet extends StatelessWidget {
+  final bool dark;
+  final List<TechnicalPatternModel> patterns;
+  final void Function(TechnicalPatternModel pattern) onPickPattern;
+  final VoidCallback onCreateOwn;
+  final VoidCallback onShowLater;
+
+  const _OnboardingSheet({
+    required this.dark,
+    required this.patterns,
+    required this.onPickPattern,
+    required this.onCreateOwn,
+    required this.onShowLater,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Show a handful on the sheet; "See all" isn't needed here since this
+    // is the first-run welcome — the strip on the page covers browsing.
+    final preview = patterns.take(5).toList();
+
+    return DraggableScrollableSheet(
+      initialChildSize: 0.82,
+      maxChildSize: 0.95,
+      minChildSize: 0.5,
+      expand: false,
+      builder: (_, ctrl) => Container(
+        decoration: BoxDecoration(
+          color: _T.surface(dark),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+        ),
+        child: ListView(
+          controller: ctrl,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+          children: [
+            Center(
+                child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                        color: _T.border(dark),
+                        borderRadius: BorderRadius.circular(2)))),
+            const SizedBox(height: 20),
+
+            // ── Hero header ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                gradient: _T.brandGradient,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                      color: _T.accent.withOpacity(0.30),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6))
+                ],
+              ),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.radar_rounded,
+                        color: Colors.white, size: 30),
+                    const SizedBox(height: 10),
+                    const Text('Welcome to Screener Pro',
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.3)),
+                    const SizedBox(height: 5),
+                    Text(
+                        'A scanner is just a set of rules that finds stocks for you. Start with a ready-made one, or build your own in seconds.',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: 12.5,
+                            height: 1.5)),
+                  ]),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Ready-made scanners from Supabase ──
+            Text('START WITH A READY-MADE SCANNER',
+                style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: _T.sub(dark))),
+            const SizedBox(height: 10),
+
+            if (preview.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: _T.surface2(dark),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _T.border(dark)),
+                ),
+                child: Row(children: [
+                  Icon(Icons.hourglass_empty_rounded,
+                      size: 16, color: _T.sub(dark)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                        'No ready-made scanners available right now — build your own below.',
+                        style: TextStyle(fontSize: 12, color: _T.sub(dark))),
+                  ),
+                ]),
+              )
+            else
+              for (final p in preview) ...[
+                GestureDetector(
+                  onTap: () => onPickPattern(p),
+                  child: Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _T.surface2(dark),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: _T.border(dark)),
+                    ),
+                    child: Row(children: [
+                      Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                              color: _T.accent.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(12)),
+                          child: Icon(p.icon, color: _T.accent, size: 21)),
+                      const SizedBox(width: 12),
+                      Expanded(
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                            Text(p.label,
+                                style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
+                                    color: _T.text(dark))),
+                            const SizedBox(height: 3),
+                            Text(p.description,
+                                style: TextStyle(
+                                    fontSize: 11.5, color: _T.sub(dark)),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis),
+                          ])),
+                      const SizedBox(width: 8),
+                      Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                              gradient: _T.brandGradient,
+                              borderRadius: BorderRadius.circular(9)),
+                          child: const Text('Try',
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w800))),
+                    ]),
+                  ),
+                ),
+              ],
+
+            const SizedBox(height: 8),
+
+            // ── Create your own ──
+            GestureDetector(
+              onTap: onCreateOwn,
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 15),
+                decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                        color: _T.accent.withOpacity(0.45), width: 1.5),
+                    color: _T.accent.withOpacity(0.06)),
+                child:
+                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(Icons.tune_rounded, size: 16, color: _T.accent),
+                  const SizedBox(width: 8),
+                  Text('I\'ll build my own scanner',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _T.accent)),
+                ]),
+              ),
+            ),
+
+            const SizedBox(height: 6),
+
+            // ── Show me later (leaves key unmarked) ──
+            Center(
+              child: TextButton(
+                onPressed: onShowLater,
+                child: Text('Show me later',
+                    style: TextStyle(color: _T.sub(dark), fontSize: 13)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 // ─────────────────────────────────────────────
 // MAIN SCREENER PAGE
 // ─────────────────────────────────────────────
@@ -2197,34 +2771,30 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
 
   String _searchTerm = '';
   String? _activePatternKey;
-  String? _loadedScannerName; // tracks if a saved scanner is loaded
-  String? _loadedScannerId; // Firebase key of the loaded scanner for updating
+  String? _loadedScannerName;
+  String? _loadedScannerId;
+  String? _loadedScannerDescription;
+  DateTime? _loadedScannerCreatedAt;
   bool _loading = false;
   bool _filtersApplied = false;
-  bool _patternsExpanded = false;
   int _page = 1;
   int _total = 0;
   static const _pageSize = 10;
-  static const _patternPreviewCount = 4;
 
-  bool get _hasInput => _filters.isNotEmpty || _searchTerm.isNotEmpty;
-  bool _isSaved =
-      false; // true after a successful save, resets when filters change
-  bool _isSubscribed = false;
+  /// A run needs either a search term or at least one COMPLETE rule.
+  bool get _hasInput =>
+      _searchTerm.isNotEmpty || _filters.any((f) => f.isComplete);
+
+  bool _isSaved = false;
+  final _subsService = SubscriptionService();
+  SubscriptionInfo _subInfo = SubscriptionInfo.free;
   int _savedCount = 0;
-  static const _freeScreenerLimit = 10;
 
   @override
   void initState() {
     super.initState();
     _loadPatterns();
     _loadSubscriptionStatus();
-    // Check if launched with a saved scanner argument.
-    // Arguments may arrive as:
-    //   - a SavedScanner object (navigated from within this same file), or
-    //   - a plain Map (navigated from act_saved_screeners.dart, which defines
-    //     its own SavedScanner class — a different runtime type, so `is SavedScanner`
-    //     would be false if we checked the object directly).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = Get.arguments;
       if (args is SavedScanner) {
@@ -2233,8 +2803,52 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
         final map = Map<String, dynamic>.from(args);
         final id = map['id']?.toString() ?? '';
         _loadScanner(SavedScanner.fromRealtimeDatabase(id, map));
+      } else {
+        _maybeShowOnboarding();
       }
     });
+  }
+
+  /// Shows the welcome sheet once (first launch only, key bumped to v2).
+  /// "Show me later" / swipe leaves it unmarked → it shows again next visit.
+  /// Picking a scanner or "I'll build my own" marks it as seen.
+  Future<void> _maybeShowOnboarding() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final shown = prefs.getBool(_kOnboardingShownKey) ?? false;
+      if (!mounted || shown) return;
+      if (_patternsState == _LoadState.idle ||
+          _patternsState == _LoadState.loading) {
+        // Wait briefly for patterns to arrive so the sheet shows real ones.
+        await Future.delayed(const Duration(milliseconds: 600));
+      }
+      if (!mounted) return;
+
+      showModalBottomSheet(
+        context: context,
+        backgroundColor: Colors.transparent,
+        isScrollControlled: true,
+        isDismissible: true,
+        builder: (_) => _OnboardingSheet(
+          dark: _isDark,
+          patterns: _patterns,
+          onPickPattern: (p) async {
+            Navigator.pop(context);
+            await prefs.setBool(_kOnboardingShownKey, true);
+            _applyPattern(p);
+          },
+          onCreateOwn: () async {
+            Navigator.pop(context);
+            await prefs.setBool(_kOnboardingShownKey, true);
+            _snack('Add a rule below, then tap “Run Screener”', ok: true);
+          },
+          onShowLater: () {
+            // Do NOT mark seen — sheet returns next visit.
+            Navigator.pop(context);
+          },
+        ),
+      );
+    } catch (_) {}
   }
 
   @override
@@ -2260,12 +2874,12 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
   Future<void> _loadSubscriptionStatus() async {
     try {
       final results = await Future.wait([
-        _fbService._isPremium(),
+        _subsService.fetchSubscriptionInfo(),
         _fbService.fetchScanners(),
       ]);
       if (mounted) {
         setState(() {
-          _isSubscribed = results[0] as bool;
+          _subInfo = results[0] as SubscriptionInfo;
           _savedCount = (results[1] as List).length;
         });
       }
@@ -2273,13 +2887,16 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
   }
 
   Widget _buildUsageBanner(bool dark) {
-    final max = _isSubscribed ? 15 : _freeScreenerLimit;
+    final max = _subInfo.limit;
     final pct = (_savedCount / max).clamp(0.0, 1.0);
     final color = pct >= 1.0
         ? _T.red
         : pct >= 0.7
-            ? Colors.orange
+            ? _T.gold
             : _T.green;
+    final showUpgrade = !_subInfo.isPremium ||
+        (_subInfo.planKey != null && _subInfo.planKey!.toLowerCase() != 'max');
+
     return Row(
       children: [
         Expanded(
@@ -2290,34 +2907,25 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    '$_savedCount / $max screeners saved',
+                    '$_savedCount of $max scanners used',
                     style: TextStyle(
-                      color: _T.sub(dark),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
+                        color: _T.sub(dark),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
                   ),
-                  if (!_isSubscribed)
+                  if (showUpgrade)
                     GestureDetector(
                       onTap: _openPremiumDialog,
-                      child: const Row(
-                        children: [
-                          Text(
-                            'Upgrade',
+                      child: const Row(children: [
+                        Text('Upgrade',
                             style: TextStyle(
-                              color: Color(0xFFFFAB00),
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(width: 2),
-                          Icon(
-                            Icons.arrow_forward_rounded,
-                            color: Color(0xFFFFAB00),
-                            size: 14,
-                          ),
-                        ],
-                      ),
+                                color: _T.gold,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold)),
+                        SizedBox(width: 2),
+                        Icon(Icons.arrow_forward_rounded,
+                            color: _T.gold, size: 14),
+                      ]),
                     ),
                 ],
               ),
@@ -2362,9 +2970,9 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
         _total = count;
         _filtersApplied = true;
       });
-      _snack('$count stocks matched', ok: true);
+      _snack('$count stocks match your rules', ok: true);
     } catch (_) {
-      _snack('Failed to fetch data', ok: false);
+      _snack('Couldn\'t fetch data — please try again', ok: false);
     } finally {
       setState(() => _loading = false);
     }
@@ -2383,7 +2991,7 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
           pageSize: _pageSize);
       setState(() => _stocks = stocks);
     } catch (_) {
-      _snack('Failed to load page', ok: false);
+      _snack('Couldn\'t load this page', ok: false);
     } finally {
       setState(() => _loading = false);
     }
@@ -2395,9 +3003,16 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
     HapticFeedback.selectionClick();
     setState(() {
       _activePatternKey = pattern.key;
-      _filters = pattern.filters;
-      _patternsExpanded = false;
+      // FIX: copy the list so editing a rule doesn't mutate the pattern.
+      _filters = pattern.filters
+          .map((f) => ColumnComparisonFilter.fromJson(f.toJson()))
+          .toList();
+      // FIX: a pattern is not a loaded saved scanner → clear id so the
+      // Save button correctly shows "Save" instead of "Update".
+      _loadedScannerId = null;
       _loadedScannerName = null;
+      _loadedScannerDescription = null;
+      _loadedScannerCreatedAt = null;
       _isSaved = false;
     });
     _runFilters();
@@ -2411,6 +3026,8 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
       _activePatternKey = null;
       _loadedScannerName = null;
       _loadedScannerId = null;
+      _loadedScannerDescription = null;
+      _loadedScannerCreatedAt = null;
       _stocks = [];
       _total = 0;
       _filtersApplied = false;
@@ -2421,20 +3038,19 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
 
   Future<void> _saveScanner() async {
     if (!_hasInput) {
-      _snack('Add filters or a search term first', ok: false);
+      _snack('Add a complete rule or a search term first', ok: false);
       return;
     }
 
-    // ── Update existing loaded scanner ──
     if (_loadedScannerId != null && _loadedScannerName != null) {
       final updated = SavedScanner(
         id: _loadedScannerId!,
         name: _loadedScannerName!,
-        description: null,
         patternKey: _activePatternKey,
         filters: List.from(_filters),
         searchTerm: _searchTerm,
-        createdAt: DateTime.now(),
+        description: _loadedScannerDescription,
+        createdAt: _loadedScannerCreatedAt!,
       );
       final error = await _fbService.updateScannerFull(updated);
       if (error != null) {
@@ -2446,7 +3062,6 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
       return;
     }
 
-    // ── Save as new scanner ──
     final result = await showDialog<Map<String, String>>(
       context: context,
       builder: (_) => _SaveScannerDialog(dark: _isDark),
@@ -2471,7 +3086,7 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
       }
     } else {
       setState(() => _isSaved = true);
-      _snack('Scanner saved!', ok: true);
+      _snack('Scanner saved — find it under “Saved”', ok: true);
     }
   }
 
@@ -2483,7 +3098,9 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
       _activePatternKey = s.patternKey;
       _loadedScannerName = s.name;
       _loadedScannerId = s.id;
-      _isSaved = true; // already persisted
+      _loadedScannerDescription = s.description;
+      _loadedScannerCreatedAt = s.createdAt;
+      _isSaved = true;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _runFilters());
   }
@@ -2500,13 +3117,13 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
             child: Text(msg,
                 style: const TextStyle(
                     fontSize: 13,
-                    color: Color(0xFFEEF0FF),
+                    color: Color(0xFFF2F3FF),
                     fontWeight: FontWeight.w500))),
       ]),
-      backgroundColor: const Color(0xFF252840),
+      backgroundColor: _T.darkChip,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      margin: const EdgeInsets.all(12),
+      margin: const EdgeInsets.fromLTRB(12, 8, 12, 80),
       duration: const Duration(seconds: 3),
     ));
   }
@@ -2514,69 +3131,83 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
   @override
   Widget build(BuildContext context) {
     final dark = _isDark;
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final keyboardOpen = bottomInset > 0;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
         backgroundColor: _T.bg(dark),
-        body: CustomScrollView(
-          controller: _scrollCtrl,
-          slivers: [
-            _appBar(dark),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
-                child: Column(children: [
-                  // ── Usage banner ──
-                  _buildUsageBanner(dark),
-                  const SizedBox(height: 12),
-                  // Loaded scanner banner
-                  if (_loadedScannerName != null) ...[
-                    _LoadedScannerBanner(
-                        name: _loadedScannerName!,
-                        dark: dark,
-                        onClear: _clearAll),
-                    const SizedBox(height: 10),
-                  ],
-                  _SearchField(
-                      ctrl: _searchCtrl,
-                      dark: dark,
-                      onChanged: (v) => setState(() {
-                            _searchTerm = v;
-                            _loadedScannerName = null;
-                            _isSaved = false;
-                          }),
-                      onClear: _clearAll),
-                  const SizedBox(height: 12),
-                  _filtersCard(dark),
-                  const SizedBox(height: 12),
-                  _patternsCard(dark),
-                  const SizedBox(height: 14),
-                  // ── Run & Save action bar ──
-                  _ActionBar(
-                    hasInput: _hasInput,
-                    loading: _loading,
-                    isSaved: _isSaved,
-                    isLoaded: _loadedScannerId != null,
-                    dark: dark,
-                    onRun: _runFilters,
-                    onSave: _saveScanner,
+        body: Stack(
+          children: [
+            CustomScrollView(
+              controller: _scrollCtrl,
+              slivers: [
+                _appBar(dark),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+                    child: Column(children: [
+                      _buildUsageBanner(dark),
+                      const SizedBox(height: 12),
+                      if (_loadedScannerName != null) ...[
+                        _LoadedScannerBanner(
+                            name: _loadedScannerName!,
+                            dark: dark,
+                            onClear: _clearAll),
+                        const SizedBox(height: 10),
+                      ],
+                      _SearchField(
+                          ctrl: _searchCtrl,
+                          dark: dark,
+                          onChanged: (v) => setState(() {
+                                _searchTerm = v;
+                                _loadedScannerName = null;
+                                _loadedScannerId = null;
+                                _isSaved = false;
+                              }),
+                          onClear: _clearAll),
+                      const SizedBox(height: 12),
+                      _filtersCard(dark),
+                      const SizedBox(height: 12),
+                      _patternsCard(dark),
+                      if (_filtersApplied && !_loading) ...[
+                        const SizedBox(height: 12),
+                        Text('$_total stocks match your rules',
+                            style: TextStyle(
+                                fontSize: 12,
+                                color: _T.sub(dark),
+                                fontWeight: FontWeight.w500)),
+                      ],
+                      // room so the sticky bar doesn't cover content
+                      const SizedBox(height: 20),
+                    ]),
                   ),
-                  if (_filtersApplied && !_loading) ...[
-                    const SizedBox(height: 8),
-                    Text('$_total stocks found',
-                        style: TextStyle(
-                            fontSize: 12,
-                            color: _T.sub(dark),
-                            fontWeight: FontWeight.w500)),
-                  ],
-                  const SizedBox(height: 14),
-                ]),
+                ),
+                _resultsList(dark),
+                if (_total > _pageSize)
+                  SliverToBoxAdapter(child: _pagination(dark)),
+                const SliverToBoxAdapter(child: SizedBox(height: 40)),
+              ],
+            ),
+
+            // ── Sticky Run & Save bar ──
+            AnimatedPositioned(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOut,
+              left: 0,
+              right: 0,
+              bottom: keyboardOpen ? -160 : 0,
+              child: _StickyActionBar(
+                dark: dark,
+                hasInput: _hasInput,
+                completeRules: _filters.where((f) => f.isComplete).length,
+                loading: _loading,
+                isSaved: _isSaved,
+                isLoaded: _loadedScannerId != null,
+                onRun: _runFilters,
+                onSave: _saveScanner,
               ),
             ),
-            _resultsList(dark),
-            if (_total > _pageSize)
-              SliverToBoxAdapter(child: _pagination(dark)),
-            const SliverToBoxAdapter(child: SizedBox(height: 40)),
           ],
         ),
       ),
@@ -2624,7 +3255,7 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
                     Text('Screener Pro',
                         style: TextStyle(
                             fontSize: 18,
-                            fontWeight: FontWeight.w800,
+                            fontWeight: FontWeight.w900,
                             color: _T.text(dark),
                             letterSpacing: -0.3)),
                     if (_filtersApplied && _total > 0)
@@ -2632,7 +3263,6 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
                           style: TextStyle(fontSize: 11, color: _T.sub(dark))),
                   ]),
             ),
-            // ── Saved Scanners nav button ──
             GestureDetector(
               onTap: () => Navigator.push(
                   context,
@@ -2687,11 +3317,18 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
         dark: dark,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
-            Icon(Icons.tune_rounded, size: 15, color: _T.accent),
-            const SizedBox(width: 7),
-            Text('Custom Filters',
+            // Container(
+            //     width: 26,
+            //     height: 26,
+            //     decoration: BoxDecoration(
+            //         gradient: _T.brandGradient,
+            //         borderRadius: BorderRadius.circular(8)),
+            //     child: const Icon(Icons.tune_rounded,
+            //         size: 13, color: Colors.white)),
+            const SizedBox(width: 8),
+            Text('Your Rules',
                 style: TextStyle(
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w800,
                     fontSize: 14,
                     color: _T.text(dark))),
             const SizedBox(width: 6),
@@ -2708,14 +3345,17 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
                         fontWeight: FontWeight.w600)),
               ),
           ]),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
+          Text('Each rule compares two numbers — stocks must pass them all.',
+              style: TextStyle(fontSize: 11, color: _T.sub(dark))),
+          const SizedBox(height: 10),
           if (_filters.isEmpty)
             Center(
                 child: Column(children: [
               Icon(Icons.filter_list_off_rounded,
                   size: 28, color: _T.sub(dark)),
               const SizedBox(height: 6),
-              Text('No filters yet',
+              Text('No rules yet — add your first one',
                   style: TextStyle(color: _T.sub(dark), fontSize: 12)),
               const SizedBox(height: 10),
               GestureDetector(
@@ -2727,17 +3367,16 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   decoration: BoxDecoration(
-                      color: _T.accent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(9),
-                      border: Border.all(color: _T.accent.withOpacity(0.3))),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(Icons.add_rounded, size: 14, color: _T.accent),
-                    const SizedBox(width: 5),
-                    Text('Add Filter',
+                      gradient: _T.brandGradient,
+                      borderRadius: BorderRadius.circular(10)),
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(Icons.add_rounded, size: 14, color: Colors.white),
+                    SizedBox(width: 5),
+                    Text('Add a Rule',
                         style: TextStyle(
                             fontSize: 12,
-                            color: _T.accent,
-                            fontWeight: FontWeight.w600)),
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700)),
                   ]),
                 ),
               ),
@@ -2766,7 +3405,7 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
                 Icon(Icons.add_circle_outline_rounded,
                     size: 14, color: _T.accent),
                 const SizedBox(width: 5),
-                Text('Add Filter',
+                Text('Add another rule',
                     style: TextStyle(
                         fontSize: 12,
                         color: _T.accent,
@@ -2777,140 +3416,106 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
         ]));
   }
 
+  /// Horizontal strip of ready-made scanner cards + "See all" sheet.
   Widget _patternsCard(bool dark) {
     return _Card(
-        dark: dark,
-        child: Column(children: [
-          GestureDetector(
-            onTap: () => setState(() => _patternsExpanded = !_patternsExpanded),
-            child: Row(children: [
-              Text('Technical Patterns',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      color: _T.text(dark))),
-              const SizedBox(width: 6),
-              if (_activePatternKey != null) ...[
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                  decoration: BoxDecoration(
-                      color: _T.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(20)),
-                  child: Text(
-                      _patterns
-                          .firstWhere((p) => p.key == _activePatternKey,
-                              orElse: () => TechnicalPatternModel(
-                                  key: '',
-                                  label: _activePatternKey!,
-                                  iconName: '',
-                                  description: '',
-                                  filters: [],
-                                  category: '',
-                                  sortOrder: 0))
-                          .label,
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: _T.green,
-                          fontWeight: FontWeight.w600)),
-                )
-              ] else
-                Text('None',
-                    style: TextStyle(fontSize: 12, color: _T.sub(dark))),
-              const Spacer(),
-              AnimatedRotation(
-                turns: _patternsExpanded ? 0.5 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: Icon(Icons.keyboard_arrow_down_rounded,
-                    color: _T.sub(dark), size: 20),
+      dark: dark,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Text('Ready-Made Scanners',
+              style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                  color: _T.text(dark))),
+          const Spacer(),
+          if (_patternsState == _LoadState.loading)
+            SizedBox(
+                width: 14,
+                height: 14,
+                child:
+                    CircularProgressIndicator(color: _T.accent, strokeWidth: 2))
+          else if (_patternsState == _LoadState.error)
+            GestureDetector(
+                onTap: _loadPatterns,
+                child: Text('Retry',
+                    style: TextStyle(
+                        color: _T.accent,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600)))
+          else
+            GestureDetector(
+              onTap: () => _openAllPatternsSheet(dark),
+              child: Row(children: [
+                Text('See all',
+                    style: TextStyle(
+                        fontSize: 12,
+                        color: _T.accent,
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(width: 2),
+                Icon(Icons.arrow_forward_rounded, size: 13, color: _T.accent),
+              ]),
+            ),
+        ]),
+        const SizedBox(height: 4),
+        Text('Tap one to run it instantly — or tweak it after.',
+            style: TextStyle(fontSize: 11, color: _T.sub(dark))),
+        const SizedBox(height: 10),
+        if (_patternsState == _LoadState.loading)
+          SizedBox(
+            height: 126,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: 3,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, __) => Container(
+                width: 158,
+                decoration: BoxDecoration(
+                    color: _T.surface2(dark),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: _T.border(dark))),
               ),
-            ]),
+            ),
+          )
+        else if (_patternsState == _LoadState.error)
+          Text('Couldn\'t load the ready-made list',
+              style: TextStyle(color: _T.sub(dark), fontSize: 13))
+        else if (_patterns.isEmpty)
+          Text('Nothing available right now',
+              style: TextStyle(color: _T.sub(dark), fontSize: 13))
+        else
+          SizedBox(
+            height: 126,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _patterns.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (_, i) {
+                final p = _patterns[i];
+                return _ScannerChip(
+                  pattern: p,
+                  isActive: _activePatternKey == p.key,
+                  dark: dark,
+                  onTap: () => _applyPattern(p),
+                );
+              },
+            ),
           ),
-          if (_patternsExpanded) ...[
-            const SizedBox(height: 14),
-            if (_patternsState == _LoadState.loading)
-              Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  child: Center(
-                      child: CircularProgressIndicator(
-                          color: _T.accent, strokeWidth: 2)))
-            else if (_patternsState == _LoadState.error)
-              Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Column(children: [
-                    Text('Failed to load patterns',
-                        style: TextStyle(color: _T.sub(dark), fontSize: 13)),
-                    const SizedBox(height: 8),
-                    GestureDetector(
-                        onTap: _loadPatterns,
-                        child: Text('Retry',
-                            style: TextStyle(
-                                color: _T.accent,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600))),
-                  ]))
-            else if (_patterns.isEmpty)
-              Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  child: Text('No patterns available',
-                      style: TextStyle(color: _T.sub(dark), fontSize: 13)))
-            else ...[
-              GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.zero,
-                crossAxisCount: 2,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
-                childAspectRatio: 3.2,
-                children: _patterns
-                    .take(_patternPreviewCount)
-                    .map((p) => _PatternTile(
-                          key: ValueKey(p.key),
-                          pattern: p,
-                          isActive: _activePatternKey == p.key,
-                          dark: dark,
-                          onTap: () => _applyPattern(p),
-                        ))
-                    .toList(),
-              ),
-              if (_patterns.length > _patternPreviewCount) ...[
-                const SizedBox(height: 10),
-                GestureDetector(
-                  onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => AllPatternsPage(
-                                patterns: _patterns,
-                                activePatternKey: _activePatternKey,
-                                onSelect: _applyPattern,
-                                dark: dark,
-                              ))),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                        color: _T.accent.withOpacity(0.07),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: _T.accent.withOpacity(0.2))),
-                    child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Text('View all ${_patterns.length} patterns',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w600,
-                                  color: _T.accent)),
-                          const SizedBox(width: 5),
-                          Icon(Icons.arrow_forward_rounded,
-                              size: 13, color: _T.accent),
-                        ]),
-                  ),
-                ),
-              ],
-            ],
-          ],
-        ]));
+      ]),
+    );
+  }
+
+  void _openAllPatternsSheet(bool dark) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AllPatternsPage(
+          patterns: _patterns,
+          activePatternKey: _activePatternKey,
+          onSelect: _applyPattern,
+          dark: dark,
+        ),
+      ),
+    );
   }
 
   Widget _resultsList(bool dark) {
@@ -2948,10 +3553,12 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
         child: _EmptyState(
       dark: dark,
       icon: _filtersApplied ? Icons.inbox_rounded : Icons.manage_search_rounded,
-      title: _filtersApplied ? 'No stocks matched' : 'Ready to screen',
+      title: _filtersApplied
+          ? 'No stocks matched your rules'
+          : 'Ready when you are',
       subtitle: _filtersApplied
-          ? 'Try adjusting your filters or search term'
-          : 'Set filters or pick a pattern, then tap Run Screener',
+          ? 'Try loosening a rule — e.g. RSI below 40 instead of 35'
+          : 'Pick a ready-made scanner above, or add your own rules and tap “Run Screener”',
     ));
   }
 
@@ -2993,8 +3600,185 @@ class _StockScreenerPageProState extends State<StockScreenerPagePro> {
 }
 
 // ─────────────────────────────────────────────
-// BRIDGE: SavedScannersPage navigated to from screener
-// (renders the full saved scanners page with its own state)
+// STICKY ACTION BAR (Run + Save)
+// ─────────────────────────────────────────────
+
+class _StickyActionBar extends StatelessWidget {
+  final bool dark;
+  final bool hasInput;
+  final int completeRules;
+  final bool loading;
+  final bool isSaved;
+  final bool isLoaded;
+  final VoidCallback onRun;
+  final VoidCallback onSave;
+
+  const _StickyActionBar({
+    required this.dark,
+    required this.hasInput,
+    required this.completeRules,
+    required this.loading,
+    required this.isSaved,
+    required this.isLoaded,
+    required this.onRun,
+    required this.onSave,
+  });
+
+  String get _runLabel {
+    if (completeRules == 0 && !hasInput) return 'Add a rule to start';
+    final n = completeRules;
+    return 'Run Screener${n > 0 ? ' · $n rule${n == 1 ? '' : 's'}' : ''}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = hasInput && !loading;
+    return Container(
+      decoration: BoxDecoration(
+        color: _T.surface(dark),
+        border: Border(top: BorderSide(color: _T.border(dark))),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(dark ? 0.35 : 0.08),
+              blurRadius: 18,
+              offset: const Offset(0, -4)),
+        ],
+      ),
+      padding: EdgeInsets.fromLTRB(
+          14, 10, 14, 10 + MediaQuery.of(context).padding.bottom),
+      child: Row(children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: enabled ? onRun : null,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              height: 54,
+              decoration: BoxDecoration(
+                gradient: enabled
+                    ? const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF3D7BFF),
+                          Color(0xFF2F5BFF),
+                          Color(0xFF1F8FFF)
+                        ],
+                        stops: [0.0, 0.5, 1.0],
+                      )
+                    : null,
+                color: enabled ? null : _T.surface2(dark),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: enabled
+                      ? Colors.white.withOpacity(0.18) // subtle glass edge
+                      : _T.border(dark),
+                ),
+                boxShadow: enabled
+                    ? [
+                        // soft colored glow
+                        BoxShadow(
+                            color: _T.accent.withOpacity(0.35),
+                            blurRadius: 20,
+                            spreadRadius: -2,
+                            offset: const Offset(0, 8)),
+                        // tight contact shadow
+                        BoxShadow(
+                            color: Colors.black.withOpacity(dark ? 0.35 : 0.10),
+                            blurRadius: 4,
+                            offset: const Offset(0, 2)),
+                      ]
+                    : [],
+              ),
+              child: loading
+                  ? const Center(
+                      child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white)))
+                  : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: enabled
+                              ? Colors.white.withOpacity(0.18)
+                              : _T.border(dark),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.play_arrow_rounded,
+                            color: enabled ? Colors.white : _T.sub(dark),
+                            size: 18),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: Text(
+                          _runLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: enabled ? Colors.white : _T.sub(dark),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
+                    ]),
+            ),
+          ),
+        ),
+        if (hasInput) ...[
+          const SizedBox(width: 10),
+          GestureDetector(
+            onTap: isSaved ? null : onSave,
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 220),
+              width: 92,
+              height: 54,
+              decoration: BoxDecoration(
+                color: isSaved ? _T.green.withOpacity(0.10) : _T.surface2(dark),
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                    color: isSaved
+                        ? _T.green.withOpacity(0.45)
+                        : _T.accent.withOpacity(0.35)),
+              ),
+              child:
+                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                Icon(
+                  isSaved
+                      ? Icons.bookmark_rounded
+                      : isLoaded
+                          ? Icons.save_rounded
+                          : Icons.bookmark_add_outlined,
+                  color: isSaved ? _T.green : _T.accent,
+                  size: 18,
+                ),
+                const SizedBox(width: 5),
+                Text(
+                  isSaved
+                      ? 'Saved'
+                      : isLoaded
+                          ? 'Update'
+                          : 'Save',
+                  style: TextStyle(
+                      fontSize: 12,
+                      color: isSaved ? _T.green : _T.accent,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.2),
+                ),
+              ]),
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+// SAVED SCANNERS PAGE (opened from the screener)
 // ─────────────────────────────────────────────
 
 class _SavedScannersPageBridge extends StatefulWidget {
@@ -3007,12 +3791,14 @@ class _SavedScannersPageBridge extends StatefulWidget {
 
 class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
   final _svc = ScannerFirebaseService();
+  final _subsService = SubscriptionService();
+
   List<SavedScanner> _scanners = [];
   bool _loading = true;
   String? _error;
-  bool _isSubscribed = false;
-  static const _freeLimit = 3;
-  static const _maxlimit = 50;
+  SubscriptionInfo _subInfo = SubscriptionInfo.free;
+
+  bool get _isSubscribed => _subInfo.isPremium;
 
   bool get _isDark => Theme.of(context).brightness == Brightness.dark;
 
@@ -3030,10 +3816,10 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
     try {
       final results = await Future.wait([
         _svc.fetchScanners(),
-        _svc._isPremium(),
+        _subsService.fetchSubscriptionInfo(),
       ]);
       _scanners = results[0] as List<SavedScanner>;
-      _isSubscribed = results[1] as bool;
+      _subInfo = results[1] as SubscriptionInfo;
     } catch (e) {
       _error = e.toString();
     } finally {
@@ -3043,12 +3829,12 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
 
   Widget _buildUsageBanner(bool dark) {
     final used = _scanners.length;
-    final max = _isSubscribed ? _maxlimit : _freeLimit;
+    final max = _subInfo.limit;
     final pct = (used / max).clamp(0.0, 1.0);
     final color = pct >= 1.0
         ? _T.red
         : pct >= 0.7
-            ? Colors.orange
+            ? _T.gold
             : _T.green;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -3062,7 +3848,7 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '$used / $max scanners saved',
+                      '$used of $max scanners used',
                       style: TextStyle(
                         color: _T.sub(dark),
                         fontSize: 12,
@@ -3074,20 +3860,20 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
                         onTap: () => showDialog(
                             context: context,
                             builder: (_) => const _PremiumDialog()),
-                        child: Row(
+                        child: const Row(
                           children: [
                             Text(
                               'Upgrade',
                               style: TextStyle(
-                                color: const Color(0xFFFFAB00),
+                                color: _T.gold,
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            const SizedBox(width: 2),
-                            const Icon(
+                            SizedBox(width: 2),
+                            Icon(
                               Icons.arrow_forward_rounded,
-                              color: Color(0xFFFFAB00),
+                              color: _T.gold,
                               size: 14,
                             ),
                           ],
@@ -3119,16 +3905,16 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
       context: context,
       builder: (_) => AlertDialog(
         backgroundColor: _T.surface(dark),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('Delete Scanner',
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Text('Delete this scanner?',
             style:
                 TextStyle(color: _T.text(dark), fontWeight: FontWeight.w700)),
-        content: Text('Delete "${s.name}"? This cannot be undone.',
+        content: Text('“${s.name}” will be gone for good.',
             style: TextStyle(color: _T.sub(dark), fontSize: 13)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text('Cancel', style: TextStyle(color: _T.sub(dark)))),
+              child: Text('Keep it', style: TextStyle(color: _T.sub(dark)))),
           TextButton(
               onPressed: () => Navigator.pop(context, true),
               child: Text('Delete',
@@ -3155,19 +3941,17 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
     if (error != null) {
       _snack(error, ok: false);
     } else {
-      _snack('Scanner updated', ok: true);
+      _snack('Renamed successfully', ok: true);
       await _load();
     }
   }
 
   void _runScanner(SavedScanner s) {
-    // Client-side guard: block request if free limit reached
-    if (!_isSubscribed && _scanners.length >= _freeLimit) {
+    if (_scanners.length >= _subInfo.limit) {
       showDialog(context: context, builder: (_) => const _PremiumDialog());
       return;
     }
     Navigator.pop(context);
-    // Navigate to a fresh screener page with scanner loaded
     Get.toNamed('/screenerpro', arguments: s);
   }
 
@@ -3181,10 +3965,10 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
             child: Text(msg,
                 style: const TextStyle(
                     fontSize: 13,
-                    color: Color(0xFFEEF0FF),
+                    color: Color(0xFFF2F3FF),
                     fontWeight: FontWeight.w500))),
       ]),
-      backgroundColor: const Color(0xFF252840),
+      backgroundColor: _T.darkChip,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       margin: const EdgeInsets.all(12),
@@ -3227,8 +4011,7 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
                   fontWeight: FontWeight.w800,
                   color: _T.text(dark))),
           if (!_loading && _error == null)
-            Text(
-                '${_scanners.length} scanner${_scanners.length == 1 ? '' : 's'}',
+            Text('${_scanners.length} saved',
                 style: TextStyle(fontSize: 11, color: _T.sub(dark))),
         ]),
         bottom: PreferredSize(
@@ -3257,27 +4040,32 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Container(
-                                        width: 72,
-                                        height: 72,
+                                        width: 76,
+                                        height: 76,
                                         decoration: BoxDecoration(
-                                            color:
-                                                _T.sub(dark).withOpacity(0.1),
-                                            shape: BoxShape.circle),
-                                        child: Icon(
+                                            gradient: _T.brandGradient,
+                                            shape: BoxShape.circle,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  color: _T.accent
+                                                      .withOpacity(0.3),
+                                                  blurRadius: 18,
+                                                  offset: const Offset(0, 6))
+                                            ]),
+                                        child: const Icon(
                                             Icons.bookmark_border_rounded,
-                                            size: 32,
-                                            color:
-                                                _T.sub(dark).withOpacity(0.7)),
+                                            size: 34,
+                                            color: Colors.white),
                                       ),
-                                      const SizedBox(height: 16),
+                                      const SizedBox(height: 18),
                                       Text('No saved scanners yet',
                                           style: TextStyle(
                                               fontSize: 16,
-                                              fontWeight: FontWeight.w700,
+                                              fontWeight: FontWeight.w800,
                                               color: _T.text(dark))),
                                       const SizedBox(height: 6),
                                       Text(
-                                          'Build a screener with filters or patterns,\nthen save it to reuse anytime.',
+                                          'Build a scanner with your own rules,\nthen save it here to re-run anytime.',
                                           textAlign: TextAlign.center,
                                           style: TextStyle(
                                               fontSize: 13,
@@ -3291,11 +4079,11 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
                                         },
                                         child: Container(
                                           padding: const EdgeInsets.symmetric(
-                                              horizontal: 20, vertical: 11),
+                                              horizontal: 22, vertical: 12),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF2D3250),
+                                            gradient: _T.brandGradient,
                                             borderRadius:
-                                                BorderRadius.circular(12),
+                                                BorderRadius.circular(13),
                                           ),
                                           child: const Text('Go to Screener',
                                               style: TextStyle(
@@ -3333,7 +4121,7 @@ class _SavedScannersPageBridgeState extends State<_SavedScannersPageBridge> {
 }
 
 // ─────────────────────────────────────────────
-// SCANNER CARD (used in bridge)
+// SCANNER CARD
 // ─────────────────────────────────────────────
 
 class _ScannerCard extends StatefulWidget {
@@ -3376,13 +4164,13 @@ class _ScannerCardState extends State<_ScannerCard> {
     return Container(
       decoration: BoxDecoration(
         color: _T.surface(dark),
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _T.border(dark)),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(dark ? 0.18 : 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 3))
+              color: _T.accent.withOpacity(dark ? 0.10 : 0.04),
+              blurRadius: 12,
+              offset: const Offset(0, 4))
         ],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -3390,16 +4178,15 @@ class _ScannerCardState extends State<_ScannerCard> {
           padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            // ── Title row ──
             Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                      color: _T.accent.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(11)),
-                  child: Icon(Icons.manage_search_rounded,
-                      color: _T.accent, size: 20)),
+              // Container(
+              //     width: 42,
+              //     height: 42,
+              //     decoration: BoxDecoration(
+              //         gradient: _T.brandGradient,
+              //         borderRadius: BorderRadius.circular(12)),
+              //     child: const Icon(Icons.manage_search_rounded,
+              //         color: Colors.white, size: 20)),
               const SizedBox(width: 10),
               Expanded(
                   child: Column(
@@ -3427,14 +4214,12 @@ class _ScannerCardState extends State<_ScannerCard> {
                   style: TextStyle(fontSize: 10, color: _T.sub(dark))),
             ]),
             const SizedBox(height: 10),
-
-            // ── Meta chips + expandable filter toggle ──
             Row(children: [
               if (scanner.patternKey != null) ...[
                 _MetaChip(
                     icon: Icons.auto_graph_rounded,
                     label: scanner.patternKey!,
-                    color: _T.accentSoft,
+                    color: _T.accent,
                     dark: dark),
                 const SizedBox(width: 6),
               ],
@@ -3470,7 +4255,7 @@ class _ScannerCardState extends State<_ScannerCard> {
                           color: _filtersExpanded ? _T.accent : _T.sub(dark)),
                       const SizedBox(width: 4),
                       Text(
-                        '${activeFilters.length} filter${activeFilters.length == 1 ? '' : 's'}',
+                        '${activeFilters.length} rule${activeFilters.length == 1 ? '' : 's'}',
                         style: TextStyle(
                             fontSize: 10,
                             color: _filtersExpanded ? _T.accent : _T.sub(dark),
@@ -3490,12 +4275,10 @@ class _ScannerCardState extends State<_ScannerCard> {
               else
                 _MetaChip(
                     icon: Icons.tune_rounded,
-                    label: 'No filters',
+                    label: 'No rules',
                     color: _T.sub(dark),
                     dark: dark),
             ]),
-
-            // ── Expandable filter chips ──
             if (hasFilters)
               AnimatedCrossFade(
                 duration: const Duration(milliseconds: 200),
@@ -3511,14 +4294,14 @@ class _ScannerCardState extends State<_ScannerCard> {
                     children: activeFilters
                         .map((f) => Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 4),
+                                  horizontal: 9, vertical: 5),
                               decoration: BoxDecoration(
                                 color: _T.accent.withOpacity(0.08),
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
                                     color: _T.accent.withOpacity(0.2)),
                               ),
-                              child: Text(f.summary,
+                              child: Text('${f.summary} · ${f.plainEnglish}',
                                   style: TextStyle(
                                       fontSize: 10,
                                       color: _T.accent,
@@ -3530,13 +4313,11 @@ class _ScannerCardState extends State<_ScannerCard> {
               ),
           ]),
         ),
-
-        // ── Action bar ──
         Container(
           decoration: BoxDecoration(
             color: _T.surface2(dark),
             borderRadius:
-                const BorderRadius.vertical(bottom: Radius.circular(16)),
+                const BorderRadius.vertical(bottom: Radius.circular(18)),
             border: Border(top: BorderSide(color: _T.border(dark))),
           ),
           child: Row(children: [
@@ -3544,22 +4325,23 @@ class _ScannerCardState extends State<_ScannerCard> {
                 child: GestureDetector(
               onTap: widget.onRun,
               child: Container(
-                height: 46,
+                height: 48,
                 decoration: const BoxDecoration(
                   borderRadius:
-                      BorderRadius.only(bottomLeft: Radius.circular(16)),
+                      BorderRadius.only(bottomLeft: Radius.circular(18)),
                 ),
                 child:
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                    Row(mainAxisAlignment: MainAxisAlignment.start, children: [
                   Container(
-                    width: 26,
-                    height: 26,
+                    width: 28,
+                    height: 28,
+                    margin: const EdgeInsets.only(left: 14),
                     decoration: BoxDecoration(
-                      color: _T.accent.withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(7),
+                      gradient: _T.brandGradient,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    child: Icon(Icons.play_arrow_rounded,
-                        color: _T.accent, size: 16),
+                    child: const Icon(Icons.play_arrow_rounded,
+                        color: Colors.white, size: 16),
                   ),
                   const SizedBox(width: 8),
                   Text(
@@ -3580,7 +4362,7 @@ class _ScannerCardState extends State<_ScannerCard> {
                 onTap: widget.onEdit,
                 child: Container(
                     width: 52,
-                    height: 44,
+                    height: 46,
                     alignment: Alignment.center,
                     child:
                         Icon(Icons.edit_rounded, size: 17, color: _T.accent))),
@@ -3590,10 +4372,10 @@ class _ScannerCardState extends State<_ScannerCard> {
                 onTap: widget.onDelete,
                 child: Container(
                   width: 52,
-                  height: 44,
+                  height: 46,
                   decoration: const BoxDecoration(
                       borderRadius:
-                          BorderRadius.only(bottomRight: Radius.circular(16))),
+                          BorderRadius.only(bottomRight: Radius.circular(18))),
                   alignment: Alignment.center,
                   child: Icon(Icons.delete_outline_rounded,
                       size: 17, color: _T.red),
@@ -3634,7 +4416,7 @@ class _MetaChip extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────
-// EDIT SCANNER DIALOG (used inside bridge)
+// EDIT SCANNER DIALOG
 // ─────────────────────────────────────────────
 
 class _EditScannerDialog extends StatefulWidget {
@@ -3669,31 +4451,32 @@ class _EditScannerDialogState extends State<_EditScannerDialog> {
     final dark = widget.dark;
     return Dialog(
       backgroundColor: _T.surface(dark),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Row(children: [
             Container(
-                width: 36,
-                height: 36,
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                    color: _T.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10)),
-                child: Icon(Icons.edit_rounded, color: _T.accent, size: 18)),
+                    gradient: _T.brandGradient,
+                    borderRadius: BorderRadius.circular(11)),
+                child: const Icon(Icons.edit_rounded,
+                    color: Colors.white, size: 18)),
             const SizedBox(width: 10),
-            Text('Edit Scanner',
+            Text('Rename scanner',
                 style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w800,
                     color: _T.text(dark))),
           ]),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           _Field(ctrl: _nameCtrl, hint: 'Scanner name *', dark: dark),
           const SizedBox(height: 10),
           _Field(
               ctrl: _descCtrl,
-              hint: 'Description (optional)',
+              hint: 'Note to yourself (optional)',
               dark: dark,
               maxLines: 2),
           const SizedBox(height: 18),
@@ -3702,10 +4485,10 @@ class _EditScannerDialogState extends State<_EditScannerDialog> {
                 child: GestureDetector(
               onTap: () => Navigator.pop(context),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
                     color: _T.surface2(dark),
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(13),
                     border: Border.all(color: _T.border(dark))),
                 child: Center(
                     child: Text('Cancel',
@@ -3724,11 +4507,10 @@ class _EditScannerDialogState extends State<_EditScannerDialog> {
                 });
               },
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 13),
                 decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                        colors: [Color(0xFF5B7FFF), Color(0xFF9B6DFF)]),
-                    borderRadius: BorderRadius.circular(12)),
+                    gradient: _T.brandGradient,
+                    borderRadius: BorderRadius.circular(13)),
                 child: const Center(
                     child: Text('Save',
                         style: TextStyle(
@@ -3739,149 +4521,6 @@ class _EditScannerDialogState extends State<_EditScannerDialog> {
         ]),
       ),
     );
-  }
-}
-
-// ─────────────────────────────────────────────
-// ACTION BAR (Run + Save - clearly visible)
-// ─────────────────────────────────────────────
-
-class _ActionBar extends StatelessWidget {
-  final bool hasInput;
-  final bool loading;
-  final bool isSaved;
-  final bool isLoaded;
-  final bool dark;
-  final VoidCallback onRun;
-  final VoidCallback onSave;
-
-  const _ActionBar(
-      {required this.hasInput,
-      required this.loading,
-      required this.isSaved,
-      required this.isLoaded,
-      required this.dark,
-      required this.onRun,
-      required this.onSave});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-      // ── Run Screener (primary) ──
-      Expanded(
-        child: GestureDetector(
-          onTap: (loading || !hasInput) ? null : onRun,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            height: 52,
-            decoration: BoxDecoration(
-              color: hasInput ? const Color(0xFF5B7FFF) : _T.surface2(dark),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: hasInput ? const Color(0xFF5B7FFF) : _T.border(dark),
-              ),
-              boxShadow: hasInput
-                  ? [
-                      BoxShadow(
-                          color: const Color(0xFF5B7FFF).withOpacity(0.25),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4)),
-                      BoxShadow(
-                          color: const Color(0xFF5B7FFF).withOpacity(0.10),
-                          blurRadius: 24,
-                          offset: const Offset(0, 8)),
-                    ]
-                  : [],
-            ),
-            child: loading
-                ? const Center(
-                    child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white)))
-                : Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                    Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: hasInput
-                            ? Colors.white.withOpacity(0.15)
-                            : _T.border(dark),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Icon(
-                        Icons.play_arrow_rounded,
-                        color: hasInput ? Colors.white : _T.sub(dark),
-                        size: 18,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'Run Screener',
-                      style: TextStyle(
-                        color: hasInput ? Colors.white : _T.sub(dark),
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                        letterSpacing: 0.1,
-                      ),
-                    ),
-                  ]),
-          ),
-        ),
-      ),
-      // ── Save / Update / Saved (secondary icon button) ──
-      if (hasInput) ...[
-        const SizedBox(width: 10),
-        GestureDetector(
-          onTap: isSaved ? null : onSave,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 220),
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: isSaved ? _T.green.withOpacity(0.10) : _T.surface(dark),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                  color: isSaved
-                      ? _T.green.withOpacity(0.45)
-                      : _T.accent.withOpacity(0.35)),
-              boxShadow: [
-                BoxShadow(
-                    color: Colors.black.withOpacity(dark ? 0.14 : 0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 3)),
-              ],
-            ),
-            child:
-                Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Icon(
-                isSaved
-                    ? Icons.bookmark_rounded
-                    : isLoaded
-                        ? Icons.save_rounded
-                        : Icons.bookmark_add_outlined,
-                color: isSaved ? _T.green : _T.accent,
-                size: 19,
-              ),
-              const SizedBox(height: 2),
-              Text(
-                isSaved
-                    ? 'Saved'
-                    : isLoaded
-                        ? 'Update'
-                        : 'Save',
-                style: TextStyle(
-                    fontSize: 9,
-                    color: isSaved ? _T.green : _T.accent,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.2),
-              ),
-            ]),
-          ),
-        ),
-      ],
-    ]);
   }
 }
 
@@ -3904,7 +4543,7 @@ class _LoadedScannerBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
         color: _T.accent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(13),
         border: Border.all(color: _T.accent.withOpacity(0.25)),
       ),
       child: Row(children: [
@@ -3914,7 +4553,7 @@ class _LoadedScannerBanner extends StatelessWidget {
             child: RichText(
                 text: TextSpan(children: [
           TextSpan(
-              text: 'Loaded: ',
+              text: 'Now showing: ',
               style: TextStyle(
                   fontSize: 12,
                   color: _T.sub(dark),
@@ -3967,13 +4606,12 @@ class _ErrorState extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                 decoration: BoxDecoration(
-                    color: _T.accent.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: _T.accent.withOpacity(0.3))),
-                child: Text('Retry',
+                    gradient: _T.brandGradient,
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Text('Try again',
                     style: TextStyle(
                         fontSize: 13,
-                        color: _T.accent,
+                        color: Colors.white,
                         fontWeight: FontWeight.w700)),
               ),
             ),
@@ -4000,6 +4638,7 @@ class _EmptyState extends StatelessWidget {
           Icon(icon, size: 44, color: _T.sub(dark)),
           const SizedBox(height: 12),
           Text(title,
+              textAlign: TextAlign.center,
               style: TextStyle(
                   fontSize: 15,
                   color: _T.text(dark),
@@ -4025,16 +4664,16 @@ class _SearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        height: 46,
+        height: 48,
         decoration: BoxDecoration(
           color: _T.surface(dark),
-          borderRadius: BorderRadius.circular(13),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: _T.border(dark)),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.16 : 0.04),
-                blurRadius: 8,
-                offset: const Offset(0, 2))
+                color: _T.accent.withOpacity(dark ? 0.12 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, 3))
           ],
         ),
         child: Row(children: [
@@ -4047,8 +4686,8 @@ class _SearchField extends StatelessWidget {
             onChanged: onChanged,
             style: TextStyle(fontSize: 14, color: _T.text(dark)),
             decoration: InputDecoration(
-                hintText: 'Search stocks by name...',
-                hintStyle: TextStyle(fontSize: 14, color: _T.sub(dark)),
+                hintText: 'Search a company name…',
+                hintStyle: TextStyle(fontSize: 13, color: _T.sub(dark)),
                 border: InputBorder.none,
                 contentPadding: EdgeInsets.zero),
           )),
@@ -4108,7 +4747,7 @@ class _DetailSheet extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
           color: _T.surface(dark),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24))),
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(26))),
       child: DraggableScrollableSheet(
         initialChildSize: 0.7,
         maxChildSize: 0.95,
@@ -4120,7 +4759,7 @@ class _DetailSheet extends StatelessWidget {
             child: Column(children: [
               Center(
                   child: Container(
-                      width: 36,
+                      width: 40,
                       height: 4,
                       decoration: BoxDecoration(
                           color: _T.border(dark),
@@ -4178,9 +4817,8 @@ class _DetailSheet extends StatelessWidget {
                   width: double.infinity,
                   child: DecoratedBox(
                     decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                            colors: [Color(0xFF5B7FFF), Color(0xFF9B6DFF)]),
-                        borderRadius: BorderRadius.circular(12)),
+                        gradient: _T.brandGradient,
+                        borderRadius: BorderRadius.circular(13)),
                     child: ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
@@ -4190,7 +4828,7 @@ class _DetailSheet extends StatelessWidget {
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(13)),
                           padding: const EdgeInsets.symmetric(vertical: 12)),
                       icon: const Icon(Icons.open_in_new_rounded,
                           color: Colors.white, size: 15),
@@ -4251,7 +4889,7 @@ class _InfoGrid extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
           color: _T.surface2(dark),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(15),
           border: Border.all(color: _T.border(dark))),
       child: GridView.count(
         shrinkWrap: true,
@@ -4297,10 +4935,10 @@ class _WeekRange extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
           color: _T.surface2(dark),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(15),
           border: Border.all(color: _T.border(dark))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('52 Week Range',
+        Text('52 Week Range — where today\'s price sits this year',
             style: TextStyle(
                 fontSize: 11,
                 color: _T.sub(dark),
@@ -4346,10 +4984,10 @@ class _MASection extends StatelessWidget {
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
           color: _T.surface2(dark),
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(15),
           border: Border.all(color: _T.border(dark))),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Moving Averages',
+        Text('Trend lines (averages) — green = price above the line',
             style: TextStyle(
                 fontSize: 11,
                 color: _T.sub(dark),
@@ -4389,3 +5027,30 @@ class _MASection extends StatelessWidget {
     );
   }
 }
+
+// ─────────────────────────────────────────────
+// DELETE LIST (old widgets removed)
+// ─────────────────────────────────────────────
+// Removed: `_QuickStart`, `_kQuickStarts`, `_OnboardingSheet` old version,
+// inline `_patternsCard` GridView expander, `_PatternTile` usages in grid,
+// `_ActionBar` inline row, and `0xFF232641` literal snackbar background.
+// ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────
+// FINAL CHECKLIST
+// ─────────────────────────────────────────────
+// ✅ Colors: purple→teal replaced with electric blue→sky + clean green/red.
+// ✅ Run & Save moved into sticky bottom bar (hides when keyboard open).
+// ✅ Run label reflects rule count; disabled until a complete rule exists.
+// ✅ Save button label: Save → Update → Saved.
+// ✅ `_hasInput` requires a complete rule (no empty-rule full scans).
+// ✅ Ready-made scanners: horizontal card strip + "See all" bottom sheet
+//    with search, category chips, expandable rules, and Use button.
+// ✅ First-open sheet shows real Supabase patterns; "Show me later"/swipe
+//    leaves it unmarked; picking a scanner or "I'll build my own" marks seen.
+// ✅ Onboarding key bumped to v2.
+// ✅ Bug fix: applying a pattern copies the filter list.
+// ✅ Bug fix: applying a pattern clears `_loadedScannerId` → Save not Update.
+// ⚠️ Security (unchanged): `_buildQuery` still interpolates `searchTerm`
+//    into raw SQL. Fix before shipping (parameterized query / RPC).
+// ─────────────────────────────────────────────

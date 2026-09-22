@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/get.dart';
 import 'package:optionxi/Auth_Service/auth_service.dart';
+import 'package:optionxi/Main_Pages/AIStockPick/act_stock_pick.dart';
 import 'package:optionxi/Main_Pages/BrokersConnect/connect_fyers_page.dart';
 import 'package:optionxi/Main_Pages/BrokersConnect/connect_upstox_page.dart';
 import 'package:optionxi/Main_Pages/BrokersConnect/connect_zerodha_page.dart';
@@ -14,6 +15,8 @@ import 'package:optionxi/Helpers/get_database.dart';
 import 'package:optionxi/Login_Signup/login2.dart';
 import 'package:optionxi/Main_Pages/Achivements/act_achievement_page.dart';
 import 'package:optionxi/Main_Pages/Community/community_sync_gate.dart';
+import 'package:optionxi/Main_Pages/IndicatorBacktest/indicator-backtest.dart';
+import 'package:optionxi/Main_Pages/Leaderboard/act_leaderboard.dart';
 import 'package:optionxi/Main_Pages/MarketSentiments/act_market_sentiments.dart';
 import 'package:optionxi/Main_Pages/MarketSentiments/act_market_sentiments_chart.dart';
 import 'package:optionxi/Main_Pages/ScreenerPro/act_custom_screener_pro.dart';
@@ -28,6 +31,7 @@ import 'package:optionxi/Main_Pages/Screener/act_screener_history.dart';
 import 'package:optionxi/Main_Pages/Search/act_search_stocks_meili.dart';
 import 'package:optionxi/Main_Pages/StockPages/act_setalert_page_all.dart';
 import 'package:optionxi/Main_Pages/StockPages/act_stock_detail.dart';
+import 'package:optionxi/Main_Pages/SubscriptionsRazorpay/act_subscription_razorpay.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
 import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 import 'package:optionxi/Theme/theme_controller.dart';
@@ -200,7 +204,6 @@ class MyApp extends StatelessWidget {
           initialRoute: '/',
           themeMode:
               themeController.isDarkMode ? ThemeMode.dark : ThemeMode.light,
-          home: AuthService().handleAuthState(),
           getPages: _buildRoutes(),
         );
       },
@@ -212,11 +215,21 @@ class MyApp extends StatelessWidget {
       GetPage(name: '/', page: () => AuthService().handleAuthState()),
       GetPage(name: '/home', page: () => Homepage()),
       GetPage(name: '/login', page: () => ModernLoginPage()),
+      // GetPage(
+      //     name: '/subscription-google', page: () => SubscriptionScreenModern()),
+      GetPage(
+          name: '/subscription-razorpay',
+          page: () => SubscriptionScreenRazorPay()),
+
       GetPage(name: '/alerts', page: () => MyAlertsPage()),
       GetPage(name: '/notifications', page: () => NotificationPage()),
+      GetPage(
+          name: '/premium-notifications',
+          page: () => NotificationPage(initialTabIndex: 1)),
       GetPage(name: '/achievements', page: () => AchievementsPage()),
       GetPage(name: '/basket', page: () => BasketFullPage()),
       GetPage(name: '/stocks', page: () => AllSearchPageMeili()),
+      GetPage(name: '/leaderboard', page: () => LeaderboardPage()),
       GetPage(name: '/screenerpro', page: () => StockScreenerPagePro()),
       GetPage(name: '/community', page: () => const CommunitySyncGate()),
       GetPage(
@@ -285,6 +298,21 @@ class MyApp extends StatelessWidget {
       GetPage(
         name: '/market-sentiments-chart',
         page: () => MarketSentimentChartPage(),
+        transition: Transition.fade,
+      ),
+
+      //Market Sentiments Stocks
+      GetPage(
+        name: '/ai-picked-stocks',
+        page: () => AIPickedStocksPage(),
+        transition: Transition.fade,
+      ),
+
+      //Saved backtest nifty
+
+      GetPage(
+        name: '/saved-backtest',
+        page: () => SavedBacktestsPage(),
         transition: Transition.fade,
       ),
     ];

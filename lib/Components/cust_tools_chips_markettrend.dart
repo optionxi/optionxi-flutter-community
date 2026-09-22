@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:optionxi/Components/cust_tool_card.dart';
-import 'package:optionxi/Main_Pages/AlgoDeploy/algo_page.dart';
+import 'package:optionxi/Main_Pages/AIIndexPick/act_index_pick.dart';
 import 'package:optionxi/Main_Pages/StockPages/act_alert_stocks.dart';
 import 'package:optionxi/Main_Pages/BollingerBreakouts/act_breakout_page.dart';
 import 'package:optionxi/Main_Pages/News/act_news.dart';
 import 'package:optionxi/Main_Pages/Sectorwise/act_sectorwise_page.dart';
-import 'package:optionxi/Main_Pages/TopGainers-Recommended/act_topgainers_losers.dart';
 
 // ─────────────────────────────────────────────
 // Main Section Widget
@@ -33,18 +32,18 @@ class _StockChipsSectionMarketTrendState
 
   void _buildChips() {
     _chips = [
-      ChipItem(
-        label: 'Movers',
-        sublabel: 'Market movers',
-        icon: Icons.trending_up_rounded,
-        lightColor: const Color(0xFF059669),
-        darkColor: const Color(0xFF34D399),
-        onTap: () => Navigator.push(
-          context,
-          _fadeRoute(
-              TopGainersLosersPage(initialTab: StockMarketTab.topGainers)),
-        ),
-      ),
+      // ChipItem(
+      //   label: 'Movers',
+      //   sublabel: 'Market movers',
+      //   icon: Icons.trending_up_rounded,
+      //   lightColor: const Color(0xFF059669),
+      //   darkColor: const Color(0xFF34D399),
+      //   onTap: () => Navigator.push(
+      //     context,
+      //     _fadeRoute(
+      //         TopGainersLosersPage(initialTab: StockMarketTab.topGainers)),
+      //   ),
+      // ),
       ChipItem(
         label: 'Sector Pulse',
         sublabel: 'Sector view',
@@ -63,6 +62,14 @@ class _StockChipsSectionMarketTrendState
             Navigator.push(context, _fadeRoute(BollingerBreakoutsPage())),
       ),
       ChipItem(
+        label: 'Breakouts',
+        sublabel: 'Nifty breakouts',
+        icon: Icons.ssid_chart_rounded,
+        lightColor: const Color(0xFF0891B2),
+        darkColor: const Color(0xFF22D3EE),
+        onTap: () => Navigator.push(context, _fadeRoute(AIPickedIndexPage())),
+      ),
+      ChipItem(
         label: 'Stock Alerts',
         sublabel: 'Breakout Signals',
         icon: Icons.trending_up_rounded,
@@ -78,14 +85,14 @@ class _StockChipsSectionMarketTrendState
         darkColor: const Color(0xFF38BDF8),
         onTap: () => Navigator.push(context, _fadeRoute(NewsFeedPage())),
       ),
-      ChipItem(
-        label: 'Algo Trade',
-        sublabel: 'Automate your strategy',
-        icon: Icons.auto_graph_rounded,
-        lightColor: const Color(0xFF059669), // emerald
-        darkColor: const Color(0xFF34D399),
-        onTap: () => Navigator.push(context, _fadeRoute(AlgoTradingPage())),
-      ),
+      // ChipItem(
+      //   label: 'Algo Trade',
+      //   sublabel: 'Automate your strategy',
+      //   icon: Icons.auto_graph_rounded,
+      //   lightColor: const Color(0xFF059669), // emerald
+      //   darkColor: const Color(0xFF34D399),
+      //   onTap: () => Navigator.push(context, _fadeRoute(AlgoTradingPage())),
+      // ),
     ];
   }
 

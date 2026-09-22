@@ -124,7 +124,7 @@ class _BrokerHubHeader extends StatelessWidget {
                   const SizedBox(width: 14),
                   Text(
                     'Broker Hub',
-                    style: theme.textTheme.titleLarge?.copyWith(
+                    style: theme.textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
                       letterSpacing: -0.5,
                       color: isDark ? Colors.white : const Color(0xFF0D0D0D),

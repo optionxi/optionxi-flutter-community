@@ -353,6 +353,110 @@ class HeroStat extends StatelessWidget {
   }
 }
 
+/// Shimmering placeholder block — base unit for all loading skeletons.
+class AtlasSkeletonBox extends StatefulWidget {
+  final double width;
+  final double height;
+  final BorderRadius? borderRadius;
+  const AtlasSkeletonBox({
+    super.key,
+    this.width = double.infinity,
+    required this.height,
+    this.borderRadius,
+  });
+  @override
+  State<AtlasSkeletonBox> createState() => _AtlasSkeletonBoxState();
+}
+
+class _AtlasSkeletonBoxState extends State<AtlasSkeletonBox>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = atlasColors(context);
+    return AnimatedBuilder(
+      animation: _ctrl,
+      builder: (ctx, _) {
+        final t = _ctrl.value;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          decoration: BoxDecoration(
+            borderRadius: widget.borderRadius ?? BorderRadius.circular(8),
+            gradient: LinearGradient(
+              begin: Alignment(-1 + 2 * t, 0),
+              end: Alignment(0.3 + 2 * t, 0),
+              colors: [c.surfaceAlt, c.border, c.surfaceAlt],
+              stops: const [0.0, 0.5, 1.0],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Skeleton stand-in for HeroStat — same ring + text layout, so nothing
+/// jumps/reflows when real data swaps in.
+class HeroStatSkeleton extends StatelessWidget {
+  final bool withRing;
+  const HeroStatSkeleton({super.key, this.withRing = true});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        if (withRing) ...[
+          const AtlasSkeletonBox(
+            width: 76,
+            height: 76,
+            borderRadius: BorderRadius.all(Radius.circular(38)),
+          ),
+          const SizedBox(width: Sp.lg),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              AtlasSkeletonBox(width: 90, height: 11),
+              SizedBox(height: 10),
+              AtlasSkeletonBox(width: 130, height: 28),
+              SizedBox(height: 8),
+              AtlasSkeletonBox(width: 200, height: 12),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Generic skeleton for an AtlasCard-shaped block (used for the
+/// reward/risk card, daily chart, etc. while data is loading).
+class AtlasCardSkeleton extends StatelessWidget {
+  final double height;
+  const AtlasCardSkeleton({super.key, this.height = 90});
+  @override
+  Widget build(BuildContext context) {
+    return AtlasCard(
+      child: AtlasSkeletonBox(
+          height: height, borderRadius: BorderRadius.circular(10)),
+    );
+  }
+}
+
 /// A colored progress ring for a 0-100 percentage (accuracy, win rate).
 /// Reads at a glance as "mostly green / mostly full" before the digits
 /// register — faster to scan than a bare number, especially in a list.

@@ -166,19 +166,21 @@ bool _withinSignalWindow(DateTime local) {
 // PUBLIC WIDGET
 // ============================================================================
 
-class MarketSentimentSection extends StatefulWidget {
+class MarketSentimentSection_Index extends StatefulWidget {
   final EdgeInsetsGeometry margin;
 
-  const MarketSentimentSection({
+  const MarketSentimentSection_Index({
     super.key,
     this.margin = const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
   });
 
   @override
-  State<MarketSentimentSection> createState() => _MarketSentimentSectionState();
+  State<MarketSentimentSection_Index> createState() =>
+      _MarketSentimentSection_IndexState();
 }
 
-class _MarketSentimentSectionState extends State<MarketSentimentSection> {
+class _MarketSentimentSection_IndexState
+    extends State<MarketSentimentSection_Index> {
   _Status _status = _Status.loading;
   _QualifyingSignal? _signal;
   bool _signalIsToday = true;
@@ -266,39 +268,60 @@ class _MarketSentimentSectionState extends State<MarketSentimentSection> {
 
       final list = rows as List;
       if (list.isEmpty) {
-        if (now.isBefore(
-            signalTs.add(const Duration(minutes: _kVerifyWindowMinutes)))) {
-          return _VerifyResult.pending;
-        }
-        return _VerifyResult.unavailable;
+        return now.isBefore(
+                signalTs.add(const Duration(minutes: _kVerifyWindowMinutes)))
+            ? _VerifyResult.pending
+            : _VerifyResult.unavailable;
       }
 
-      final startPrice = (list.first[_kCandleOpenCol] as num).toDouble();
-
+      // Entry price = close of the last candle at or before the signal time.
+      Map<String, dynamic>? entryCandle;
       for (final row in list) {
         final m = row as Map<String, dynamic>;
-        final open = (m[_kCandleOpenCol] as num).toDouble();
-        final close = (m[_kCandleCloseCol] as num).toDouble();
-        final low = (m[_kCandleLowCol] as num?)?.toDouble() ?? close;
-        final high = (m[_kCandleHighCol] as num?)?.toDouble() ?? close;
-
-        if (isBull) {
-          if (close > startPrice || close > open || high > startPrice) {
-            return _VerifyResult.correct;
-          }
+        final ts = DateTime.parse(m[_kCandleTimeCol] as String);
+        if (!ts.isAfter(utcSignalTs)) {
+          entryCandle = m;
         } else {
-          // Bearish logic: Price moved down relative to entry/open
-          if (close < startPrice || close < open || low < startPrice) {
-            return _VerifyResult.correct;
-          }
+          break;
         }
       }
+      entryCandle ??= list.first as Map<String, dynamic>;
+      final entryPrice = (entryCandle[_kCandleCloseCol] as num).toDouble();
 
-      if (now.isBefore(
-          signalTs.add(const Duration(minutes: _kVerifyWindowMinutes)))) {
+      // Candles strictly after the signal, up to window end.
+      final afterSignal = list.where((r) {
+        final ts = DateTime.parse(
+            (r as Map<String, dynamic>)[_kCandleTimeCol] as String);
+        return ts.isAfter(utcSignalTs) && !ts.isAfter(windowEndUtc);
+      }).toList();
+
+      final windowElapsed = !now.isBefore(windowEndUtc.toLocal());
+
+      if (afterSignal.isEmpty) {
+        return windowElapsed
+            ? _VerifyResult.unavailable
+            : _VerifyResult.pending;
+      }
+
+      if (!windowElapsed) {
+        // Don't judge outcome until the full window has actually passed.
         return _VerifyResult.pending;
       }
-      return _VerifyResult.incorrect;
+
+      // End price = close of the last candle within the window.
+      final endPrice =
+          ((afterSignal.last as Map<String, dynamic>)[_kCandleCloseCol] as num)
+              .toDouble();
+
+      if (isBull) {
+        return endPrice > entryPrice
+            ? _VerifyResult.correct
+            : _VerifyResult.incorrect;
+      } else {
+        return endPrice < entryPrice
+            ? _VerifyResult.correct
+            : _VerifyResult.incorrect;
+      }
     } catch (_) {
       return _VerifyResult.unavailable;
     }

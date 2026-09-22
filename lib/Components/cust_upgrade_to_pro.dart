@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:optionxi/Components/cust_contact_us.dart';
+import 'package:get/get.dart';
 
 /// Button: "Purchase the Pro version, to receive realtime notifications."
 /// Opens WhatsApp with a prefilled message when tapped.
@@ -36,10 +36,11 @@ class ProUpgradeButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           splashColor: Colors.white.withOpacity(0.15),
           highlightColor: Colors.white.withOpacity(0.05),
-          onTap: () => showContactOptions(
-            context,
-            'Upgrade to Pro — get realtime alerts on WhatsApp',
-          ),
+          // onTap: () => showContactOptions(
+          //   context,
+          //   'Upgrade to Pro — get realtime alerts on WhatsApp',
+          // ),
+          onTap: () => Get.toNamed('/subscription-razorpay'),
           child: Padding(
             padding:
                 const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),

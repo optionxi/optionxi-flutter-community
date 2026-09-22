@@ -29,10 +29,15 @@ class ToolItem {
 }
 
 // ─────────────────────────────────────────────
-// Main Section Widget — a single homepage card
+// Main Section Widget — a single homepage banner
 // ─────────────────────────────────────────────
 class StockChipsSectionMyTools extends StatefulWidget {
-  const StockChipsSectionMyTools({Key? key}) : super(key: key);
+  /// The banner is self-explanatory now, so the old "MY TOOLS" divider
+  /// header is off by default. Set to true to bring it back.
+  final bool showHeader;
+
+  const StockChipsSectionMyTools({Key? key, this.showHeader = false})
+      : super(key: key);
 
   @override
   State<StockChipsSectionMyTools> createState() =>
@@ -147,38 +152,39 @@ class _StockChipsSectionMyToolsState extends State<StockChipsSectionMyTools>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Section header ──────────────────────
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 12),
-            child: Row(
-              children: [
-                Text(
-                  'MY TOOLS',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.2,
-                    color: isDark ? Colors.white38 : Colors.black38,
+          // ── Optional section header ─────────────
+          if (widget.showHeader)
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 12),
+              child: Row(
+                children: [
+                  Text(
+                    'MY TOOLS',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 1.2,
+                      color: isDark ? Colors.white38 : Colors.black38,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Container(
-                    height: 1,
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: isDark
-                            ? [Colors.white12, Colors.transparent]
-                            : [Colors.black12, Colors.transparent],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Container(
+                      height: 1,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: isDark
+                              ? [Colors.white12, Colors.transparent]
+                              : [Colors.black12, Colors.transparent],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
 
-          // ── Single card, fixed height ───────────
+          // ── Single banner, fixed height ─────────
           FadeTransition(
             opacity: _fadeIn,
             child: _SingleToolsCard(
@@ -194,10 +200,17 @@ class _StockChipsSectionMyToolsState extends State<StockChipsSectionMyTools>
 }
 
 // ─────────────────────────────────────────────
-// One intuitive fixed-height card for the homepage
-// Shows a stacked icon cluster + a hint of what's inside
+// Modern fixed-height banner.
+//
+// Left  : three gradient tiles (Journal / Screeners / Alerts), staggered
+//         and overlapping, each in its own tool colour — so the banner
+//         literally shows what's inside.
+// Middle: title + one colour-coded line naming the three tools.
+// Right : a small "lift" button — the sheet rises from the bottom.
 // ─────────────────────────────────────────────
-class _SingleToolsCard extends StatelessWidget {
+class _SingleToolsCard extends StatefulWidget {
+  static const double kHeight = 92;
+
   final List<ToolItem> tools;
   final bool isDark;
   final VoidCallback onTap;
@@ -209,102 +222,187 @@ class _SingleToolsCard extends StatelessWidget {
   });
 
   @override
+  State<_SingleToolsCard> createState() => _SingleToolsCardState();
+}
+
+class _SingleToolsCardState extends State<_SingleToolsCard> {
+  bool _pressed = false;
+
+  // Gradient pairs for the tiles, one per tool (same hues as ToolItem).
+  static const List<List<Color>> _tileGradients = [
+    [Color(0xFF7C3AED), Color(0xFFA78BFA)], // Journal
+    [Color(0xFF0284C7), Color(0xFF38BDF8)], // Screeners
+    [Color(0xFFDC2626), Color(0xFFF87171)], // Alerts
+  ];
+
+  // Short names for the caption line.
+  static const List<String> _shortNames = ['Journal', 'Screeners', 'Alerts'];
+
+  @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          height: 92,
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: isDark ? Colors.white12 : Colors.black12,
+    final isDark = widget.isDark;
+    final tools = widget.tools;
+    final accent = const Color(0xFF8B5CF6);
+    final cutout = isDark ? const Color(0xFF1E1A2B) : const Color(0xFFFAF8FF);
+
+    return Semantics(
+      button: true,
+      label: 'My tools. Opens journal, screeners and alerts.',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: widget.onTap,
+        child: AnimatedScale(
+          scale: _pressed ? 0.98 : 1.0,
+          duration: const Duration(milliseconds: 110),
+          curve: Curves.easeOut,
+          child: Container(
+            height: _SingleToolsCard.kHeight,
+            padding: const EdgeInsets.fromLTRB(16, 0, 14, 0),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: isDark
+                    ? const [Color(0xFF241C3A), Color(0xFF17151F)]
+                    : const [Color(0xFFF3EFFF), Colors.white],
+              ),
+              border: Border.all(
+                color: isDark ? Colors.white10 : accent.withOpacity(0.14),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark ? Colors.black : accent)
+                      .withOpacity(isDark ? 0.30 : 0.10),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
             ),
-            boxShadow: isDark
-                ? []
-                : [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-          ),
-          child: Row(
-            children: [
-              // overlapping icon stack — hints "3 things live here"
-              SizedBox(
-                width: 64,
-                height: 64,
-                child: Stack(
-                  children: [
-                    for (int i = 0; i < tools.length; i++)
-                      Positioned(
-                        left: i * 16.0,
-                        child: Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color:
-                                isDark ? const Color(0xFF1C1C1E) : Colors.white,
-                            border: Border.all(
-                              color: isDark ? Colors.white12 : Colors.black12,
-                              width: 2,
+            child: Row(
+              children: [
+                // ── Staggered, overlapping tool tiles ──
+                SizedBox(
+                  width: 74,
+                  height: 46,
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      for (int i = 0; i < tools.length; i++)
+                        Positioned(
+                          left: i * 20.0,
+                          top: i == 1 ? 12 : 0,
+                          child: Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(11),
+                              gradient: LinearGradient(
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                                colors:
+                                    _tileGradients[i % _tileGradients.length],
+                              ),
+                              border: Border.all(color: cutout, width: 2.5),
+                              boxShadow: [
+                                BoxShadow(
+                                  color:
+                                      _tileGradients[i % _tileGradients.length]
+                                          .first
+                                          .withOpacity(0.35),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 3),
+                                ),
+                              ],
                             ),
-                          ),
-                          child: Center(
                             child: Icon(
                               tools[i].icon,
-                              size: 17,
-                              color: isDark
-                                  ? tools[i].darkColor
-                                  : tools[i].lightColor,
+                              color: Colors.white,
+                              size: 16,
                             ),
                           ),
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 10),
-              // title + hint text
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      'My Tools',
-                      style: TextStyle(
-                        fontSize: 15.5,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : Colors.black87,
+                const SizedBox(width: 14),
+
+                // ── Title + colour-coded tool names ──
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'My Tools',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color:
+                              isDark ? Colors.white : const Color(0xFF111827),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'Journal · Screeners · Alerts',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white38 : Colors.black45,
+                      const SizedBox(height: 5),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (int i = 0; i < tools.length; i++) ...[
+                              if (i != 0) const SizedBox(width: 10),
+                              Container(
+                                width: 6,
+                                height: 6,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDark
+                                      ? tools[i].darkColor
+                                      : tools[i].lightColor,
+                                ),
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                i < _shortNames.length
+                                    ? _shortNames[i]
+                                    : tools[i].label,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w500,
+                                  color:
+                                      isDark ? Colors.white60 : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              Icon(
-                Icons.chevron_right_rounded,
-                color: isDark ? Colors.white38 : Colors.black26,
-              ),
-            ],
+                const SizedBox(width: 8),
+
+                // ── Lift button ──
+                Container(
+                  width: 30,
+                  height: 30,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: accent.withOpacity(isDark ? 0.20 : 0.10),
+                  ),
+                  child: Icon(
+                    Icons.keyboard_arrow_up_rounded,
+                    size: 20,
+                    color: isDark ? const Color(0xFFC4B5FD) : accent,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -314,6 +412,7 @@ class _SingleToolsCard extends StatelessWidget {
 
 // ─────────────────────────────────────────────
 // Bottom sheet: lists the 3 tools, each expandable
+// (unchanged)
 // ─────────────────────────────────────────────
 class _ToolsBottomSheet extends StatefulWidget {
   final List<ToolItem> tools;
@@ -396,6 +495,7 @@ class _ToolsBottomSheetState extends State<_ToolsBottomSheet> {
 // A separate "Show more" reveals a short description, and
 // a nested "View more" inside that reveals the full detail —
 // neither of those taps navigate anywhere.
+// (unchanged)
 // ─────────────────────────────────────────────
 class _ToolRow extends StatefulWidget {
   final ToolItem tool;

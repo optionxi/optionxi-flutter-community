@@ -288,7 +288,7 @@ class _SectionHeader extends StatelessWidget {
                       title,
                       style: TextStyle(
                         color: ink,
-                        fontSize: 26,
+                        fontSize: 18,
                         fontWeight: FontWeight.w800,
                         letterSpacing: -0.8,
                         height: 1.05,
@@ -299,7 +299,7 @@ class _SectionHeader extends StatelessWidget {
                       subtitle,
                       style: const TextStyle(
                         color: _P.muted,
-                        fontSize: 13,
+                        fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -427,8 +427,6 @@ class _BreadthCard extends StatelessWidget {
                     color: ink.withOpacity(0.25), size: 18),
               ],
             ),
-            const SizedBox(height: 20),
-
             AnimatedBuilder(
               animation: barAnim,
               builder: (_, __) {
@@ -458,7 +456,7 @@ class _BreadthCard extends StatelessWidget {
                               adv.toString(),
                               style: TextStyle(
                                 color: bull,
-                                fontSize: 36,
+                                fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -1.5,
                                 height: 1,
@@ -495,7 +493,7 @@ class _BreadthCard extends StatelessWidget {
                               dec.toString(),
                               style: TextStyle(
                                 color: bear,
-                                fontSize: 36,
+                                fontSize: 24,
                                 fontWeight: FontWeight.w800,
                                 letterSpacing: -1.5,
                                 height: 1,

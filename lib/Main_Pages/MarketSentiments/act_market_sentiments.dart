@@ -5,18 +5,37 @@ import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:optionxi/Dialogs/custom_atlas_detaildialog.dart';
 import 'package:optionxi/Main_Pages/Achivements/fastapi_achivement.dart';
+import 'package:optionxi/Main_Pages/MarketSentiments/act_market_sentiments_chart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Design Tokens
-// ─────────────────────────────────────────────────────────────────────────────
-class _T {
-  // Radii
-  static const double rXS = 6.0;
-  static const double rSM = 10.0;
-  static const double rMD = 14.0;
-  static const double rLG = 18.0;
+// ═════════════════════════════════════════════════════════════════════════════
+// Shared design tokens + plain-English helpers (also used by the chart page)
+// ═════════════════════════════════════════════════════════════════════════════
+class Mood {
+  final String headline, tag, plain, voteWord;
+  final Color color, dimDark, dimLight;
+  final IconData icon;
+  const Mood({
+    required this.headline,
+    required this.tag,
+    required this.plain,
+    required this.voteWord,
+    required this.color,
+    required this.dimDark,
+    required this.dimLight,
+    required this.icon,
+  });
+  Color dim(bool dark) => dark ? dimDark : dimLight;
+}
+
+class SX {
+  SX._();
+
+  static const double rXS = 6, rSM = 10, rMD = 14, rLG = 20;
+
+  /// One source of truth for "how sure is the engine".
+  static const double strongProb = 70, mediumProb = 60;
 
   // Light
   static const Color lBg = Color(0xFFF4F5F9);
@@ -32,35 +51,511 @@ class _T {
   static const Color dTextP = Color(0xFFEDF0F7);
   static const Color dTextS = Color(0xFF828A9B);
 
-  // Accent — warm indigo (comfortable on both modes)
   static const Color accent = Color(0xFF6366F1);
   static const Color accentDim = Color(0x1A6366F1);
   static const Color accentLight = Color(0xFFEEEEFF);
 
-  // Bull — sapphire blue (calm on white, bright on dark)
   static const Color bull = Color(0xFF3B82F6);
   static const Color bullDim = Color(0x153B82F6);
   static const Color bullDimL = Color(0xFFEFF4FF);
 
-  // Bear — warm rose
   static const Color bear = Color(0xFFF43F5E);
   static const Color bearDim = Color(0x15F43F5E);
   static const Color bearDimL = Color(0xFFFFF0F3);
 
-  // Neutral — muted teal
   static const Color neutral = Color(0xFF14B8A6);
   static const Color neutralDim = Color(0x1514B8A6);
   static const Color neutralDimL = Color(0xFFEEFBF9);
 
-  // Probability colour bands (numeric only, not background sentiment)
+  static const Color strong = Color(0xFFF59E0B);
+
   static const Color probHigh = Color(0xFF10B981);
   static const Color probMid = Color(0xFFEAB308);
   static const Color probLow = Color(0xFFF43F5E);
+
+  static const Mood up = Mood(
+    headline: 'Likely going up',
+    tag: 'Bullish',
+    plain: 'Buyers are in control',
+    voteWord: 'up',
+    color: bull,
+    dimDark: bullDim,
+    dimLight: bullDimL,
+    icon: Icons.trending_up_rounded,
+  );
+  static const Mood down = Mood(
+    headline: 'Likely going down',
+    tag: 'Bearish',
+    plain: 'Sellers are in control',
+    voteWord: 'down',
+    color: bear,
+    dimDark: bearDim,
+    dimLight: bearDimL,
+    icon: Icons.trending_down_rounded,
+  );
+  static const Mood flat = Mood(
+    headline: 'Undecided',
+    tag: 'Neutral',
+    plain: 'No clear winner yet',
+    voteWord: 'unsure',
+    color: neutral,
+    dimDark: neutralDim,
+    dimLight: neutralDimL,
+    icon: Icons.trending_flat_rounded,
+  );
+
+  static Mood mood(String type) =>
+      type == 'Bull' ? up : (type == 'Bear' ? down : flat);
+
+  static Color probColor(double p) =>
+      p >= strongProb ? probHigh : (p >= mediumProb ? probMid : probLow);
+
+  static String confidenceShort(double p) =>
+      p >= strongProb ? 'High' : (p >= mediumProb ? 'Medium' : 'Low');
+
+  static String confidence(double p) => '${confidenceShort(p)} confidence';
+
+  static String trendWord(String t) {
+    final s = t.toLowerCase();
+    if (s.contains('bull')) return 'Up';
+    if (s.contains('bear')) return 'Down';
+    return 'Sideways';
+  }
+
+  static Color trendColor(String t) {
+    final s = t.toLowerCase();
+    if (s.contains('bull')) return bull;
+    if (s.contains('bear')) return bear;
+    return neutral;
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Model
-// ─────────────────────────────────────────────────────────────────────────────
+extension SxContext on BuildContext {
+  bool get isDark => Theme.of(this).brightness == Brightness.dark;
+  Color get sxBg => isDark ? SX.dBg : SX.lBg;
+  Color get sxSurface => isDark ? SX.dSurface : SX.lSurface;
+  Color get sxBorder => isDark ? SX.dBorder : SX.lBorder;
+  Color get sxTextP => isDark ? SX.dTextP : SX.lTextP;
+  Color get sxTextS => isDark ? SX.dTextS : SX.lTextS;
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Shared atoms
+// ═════════════════════════════════════════════════════════════════════════════
+class SxTapScale extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  const SxTapScale({super.key, required this.child, this.onTap});
+  @override
+  State<SxTapScale> createState() => _SxTapScaleState();
+}
+
+class _SxTapScaleState extends State<SxTapScale>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 90));
+  late final Animation<double> _s = Tween<double>(begin: 1, end: 0.97)
+      .animate(CurvedAnimation(parent: _c, curve: Curves.easeOut));
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapDown: (_) => _c.forward(),
+        onTapUp: (_) {
+          _c.reverse();
+          widget.onTap?.call();
+        },
+        onTapCancel: () => _c.reverse(),
+        child: ScaleTransition(scale: _s, child: widget.child),
+      );
+}
+
+class SxIconBtn extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final String? tooltip;
+  final double size;
+  const SxIconBtn({
+    super.key,
+    required this.icon,
+    required this.onTap,
+    this.tooltip,
+    this.size = 18,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final btn = SxTapScale(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: context.sxSurface,
+          borderRadius: BorderRadius.circular(SX.rMD),
+          border: Border.all(color: context.sxBorder),
+        ),
+        child: Icon(icon, size: size, color: context.sxTextP),
+      ),
+    );
+    return tooltip == null ? btn : Tooltip(message: tooltip!, child: btn);
+  }
+}
+
+/// Labelled action pill (icon + text) for header actions.
+class SxPillBtn extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  const SxPillBtn(
+      {super.key,
+      required this.icon,
+      required this.label,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => SxTapScale(
+        onTap: onTap,
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: SX.accent,
+            borderRadius: BorderRadius.circular(SX.rMD),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 16, color: Colors.white),
+            const SizedBox(width: 6),
+            Text(label,
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700)),
+          ]),
+        ),
+      );
+}
+
+class SxRing extends StatelessWidget {
+  final double value; // 0..100
+  final double size;
+  final Color color;
+  final Color? track;
+  final Color? textColor;
+  const SxRing({
+    super.key,
+    required this.value,
+    required this.color,
+    this.size = 56,
+    this.track,
+    this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+        width: size,
+        height: size,
+        child: Stack(alignment: Alignment.center, children: [
+          SizedBox(
+            width: size,
+            height: size,
+            child: CircularProgressIndicator(
+              value: (value / 100).clamp(0.0, 1.0),
+              strokeWidth: size * 0.11,
+              strokeCap: StrokeCap.round,
+              backgroundColor: track ?? color.withValues(alpha: 0.15),
+              valueColor: AlwaysStoppedAnimation<Color>(color),
+            ),
+          ),
+          Text('${value.round()}%',
+              style: TextStyle(
+                fontSize: size * 0.26,
+                fontWeight: FontWeight.w800,
+                color: textColor ?? color,
+              )),
+        ]),
+      );
+}
+
+class SxChip extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final Color color;
+  const SxChip(
+      {super.key, required this.label, required this.color, this.icon});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(SX.rXS + 2),
+          border: Border.all(color: color.withValues(alpha: 0.28)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(label,
+              style: TextStyle(
+                  fontSize: 10.5, fontWeight: FontWeight.w600, color: color)),
+        ]),
+      );
+}
+
+class SxVoteBar extends StatelessWidget {
+  final int pos, neut, neg;
+  final double height;
+  const SxVoteBar(
+      {super.key,
+      required this.pos,
+      required this.neut,
+      required this.neg,
+      this.height = 6});
+
+  @override
+  Widget build(BuildContext context) {
+    if (pos + neut + neg == 0) return const SizedBox.shrink();
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(height / 2),
+      child: SizedBox(
+        height: height,
+        child: Row(children: [
+          if (pos > 0)
+            Expanded(flex: pos, child: const ColoredBox(color: SX.bull)),
+          if (neut > 0)
+            Expanded(flex: neut, child: const ColoredBox(color: SX.neutral)),
+          if (neg > 0)
+            Expanded(flex: neg, child: const ColoredBox(color: SX.bear)),
+        ]),
+      ),
+    );
+  }
+}
+
+class SxVoteLegend extends StatelessWidget {
+  final int pos, neut, neg;
+  const SxVoteLegend(
+      {super.key, required this.pos, required this.neut, required this.neg});
+
+  Widget _d(Color c, String t) =>
+      Row(mainAxisSize: MainAxisSize.min, children: [
+        Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(color: c, shape: BoxShape.circle)),
+        const SizedBox(width: 5),
+        Text(t,
+            style:
+                TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: c)),
+      ]);
+
+  @override
+  Widget build(BuildContext context) =>
+      Wrap(spacing: 12, runSpacing: 4, children: [
+        _d(SX.bull, '$pos say up'),
+        _d(SX.neutral, '$neut unsure'),
+        _d(SX.bear, '$neg say down'),
+      ]);
+}
+
+class SxMessage extends StatelessWidget {
+  final IconData icon;
+  final Color? color;
+  final String title, body;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const SxMessage({
+    super.key,
+    required this.icon,
+    required this.title,
+    required this.body,
+    this.color,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final c = color ?? context.sxTextS;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(32, 40, 32, 32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: context.sxSurface,
+              shape: BoxShape.circle,
+              border: Border.all(color: context.sxBorder),
+            ),
+            child: Icon(icon, size: 30, color: c),
+          ),
+          const SizedBox(height: 18),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                  color: context.sxTextP)),
+          const SizedBox(height: 6),
+          Text(body,
+              textAlign: TextAlign.center,
+              style:
+                  TextStyle(fontSize: 13, height: 1.4, color: context.sxTextS)),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 20),
+            FilledButton(
+              onPressed: onAction,
+              style: FilledButton.styleFrom(
+                backgroundColor: SX.accent,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(SX.rMD)),
+              ),
+              child: Text(actionLabel!),
+            ),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// "How to read this" sheet
+// ═════════════════════════════════════════════════════════════════════════════
+Future<void> showSentimentGuide(BuildContext context) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const _GuideSheet(),
+    );
+
+class _GuideItem {
+  final IconData icon;
+  final Color color;
+  final String title, text;
+  const _GuideItem(this.icon, this.color, this.title, this.text);
+}
+
+class _GuideSheet extends StatelessWidget {
+  const _GuideSheet();
+
+  static const _items = <_GuideItem>[
+    _GuideItem(Icons.trending_up_rounded, SX.bull, 'Going up (bullish)',
+        'More buyers than sellers. Prices tend to rise.'),
+    _GuideItem(Icons.trending_down_rounded, SX.bear, 'Going down (bearish)',
+        'More sellers than buyers. Prices tend to fall.'),
+    _GuideItem(Icons.speed_rounded, SX.probHigh, 'Confidence',
+        'How sure the Atlas engine is about its call. 70% or more is high. It is the engine\'s own estimate, not a promise.'),
+    _GuideItem(Icons.how_to_vote_rounded, SX.accent, 'Market gauges',
+        'Atlas checks many technical gauges (trend lines, momentum and so on). Each one votes up, down or unsure. The coloured bar shows the votes.'),
+    _GuideItem(Icons.flag_rounded, SX.accent, 'Fresh move',
+        'The first signal after the direction changes. It marks where a new move may be starting.'),
+    _GuideItem(Icons.call_made_rounded, SX.bull, 'Breakout',
+        'Price pushed past its recent high (up) or recent low (down).'),
+    _GuideItem(Icons.schedule_rounded, SX.neutral, 'Short-term and long-term',
+        'The direction of the quick trend versus the bigger trend. When both agree, the signal is easier to trust.'),
+    _GuideItem(Icons.show_chart_rounded, SX.strong, 'On the chart',
+        'Big triangles are fresh moves. Small diamonds and squares are regular signals. Up markers sit above a candle, down markers below it.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final h = MediaQuery.of(context).size.height;
+    return Container(
+      constraints: BoxConstraints(maxHeight: h * 0.88),
+      decoration: BoxDecoration(
+        color: context.sxSurface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(26)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(
+            margin: const EdgeInsets.only(top: 10, bottom: 14),
+            width: 36,
+            height: 4,
+            decoration: BoxDecoration(
+                color: context.sxBorder,
+                borderRadius: BorderRadius.circular(2)),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 6),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text('How to read this screen',
+                  style: TextStyle(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w800,
+                      color: context.sxTextP)),
+            ),
+          ),
+          Flexible(
+            child: ListView.separated(
+              shrinkWrap: true,
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 8),
+              itemCount: _items.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 14),
+              itemBuilder: (_, i) {
+                final it = _items[i];
+                return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(9),
+                        decoration: BoxDecoration(
+                          color: it.color.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(SX.rSM + 2),
+                        ),
+                        child: Icon(it.icon, size: 18, color: it.color),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(it.title,
+                                  style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w700,
+                                      color: context.sxTextP)),
+                              const SizedBox(height: 2),
+                              Text(it.text,
+                                  style: TextStyle(
+                                      fontSize: 12.5,
+                                      height: 1.4,
+                                      color: context.sxTextS)),
+                            ]),
+                      ),
+                    ]);
+              },
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
+            child: Text(
+              'For learning only. Signals are not investment advice, and any call can be wrong.',
+              style: TextStyle(fontSize: 11.5, color: context.sxTextS),
+            ),
+          ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Model (fields unchanged: AtlasDetailDialog depends on them)
+// ═════════════════════════════════════════════════════════════════════════════
 class AtlasOutput {
   final int id;
   final String createdAt;
@@ -143,1708 +638,1053 @@ class AtlasOutput {
       upbreakout: json['upbreakout'] as bool,
     );
   }
+
+  // ── plain-English helpers ──
+  DateTime get ts => DateTime.parse(createdAt);
+  Mood get mood => SX.mood(type);
+  int get totalIndicators =>
+      positiveIndicators + negativeIndicators + neutralIndicators;
+
+  String get summary {
+    final t = totalIndicators;
+    if (t == 0) return mood.plain;
+    final n = type == 'Bull'
+        ? positiveIndicators
+        : (type == 'Bear' ? negativeIndicators : neutralIndicators);
+    return '$n of $t market gauges say ${mood.voteWord}.';
+  }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 // Service
-// ─────────────────────────────────────────────────────────────────────────────
-class SupabaseService {
+// ═════════════════════════════════════════════════════════════════════════════
+class AtlasPage {
+  final List<AtlasOutput> items;
+  final int total;
+  const AtlasPage(this.items, this.total);
+}
+
+class AtlasLogService {
   final SupabaseClient _client;
-  RealtimeChannel? _channel;
+  AtlasLogService(this._client);
 
-  SupabaseService(this._client);
+  PostgrestFilterBuilder _filters(
+    PostgrestFilterBuilder q, {
+    DateTime? date,
+    required bool strong,
+    required bool firstEntry,
+    String? type,
+  }) {
+    if (date != null) {
+      final s = DateTime(date.year, date.month, date.day);
+      final e = s.add(const Duration(days: 1));
+      // Send UTC so "today" means the user's local day, not the server's.
+      q = q
+          .gte('created_at', s.toUtc().toIso8601String())
+          .lt('created_at', e.toUtc().toIso8601String());
+    }
+    if (strong) q = q.gte('probability', SX.strongProb);
+    if (firstEntry) q = q.eq('entry', true);
+    if (type != null) q = q.eq('type', type);
+    return q;
+  }
 
-  Future<Map<String, dynamic>> getAtlasOutputs({
-    int page = 1,
-    int pageSize = 10,
-    DateTime? selectedDate,
-    bool strongTrendOnly = false,
-    bool firstEntryOnly = false,
+  Future<AtlasPage> fetch({
+    required int page,
+    required int pageSize,
+    DateTime? date,
+    bool strong = false,
+    bool firstEntry = false,
+    String? type,
   }) async {
     final from = (page - 1) * pageSize;
     final to = from + pageSize - 1;
-    int _mediumThreshold = 70;
 
-    var q = _client.from('atlas_output').select();
-    if (selectedDate != null) {
-      final s =
-          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-      final e = s
-          .add(const Duration(days: 1))
-          .subtract(const Duration(milliseconds: 1));
-      q = q
-          .gte('created_at', s.toIso8601String())
-          .lte('created_at', e.toIso8601String());
-    }
-    if (strongTrendOnly) q = q.gt('probability', _mediumThreshold);
-    if (firstEntryOnly) q = q.eq('entry', true);
+    final rows = await _filters(
+      _client.from('atlas_output').select(),
+      date: date,
+      strong: strong,
+      firstEntry: firstEntry,
+      type: type,
+    ).order('created_at', ascending: false).range(from, to);
 
-    final resp = await q.order('created_at', ascending: false).range(from, to);
-    final outputs = (resp as List).map((e) => AtlasOutput.fromJson(e)).toList();
-
-    var cq = _client.from('atlas_output').select('id');
-    if (selectedDate != null) {
-      final s =
-          DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
-      final e = s
-          .add(const Duration(days: 1))
-          .subtract(const Duration(milliseconds: 1));
-      cq = cq
-          .gte('created_at', s.toIso8601String())
-          .lte('created_at', e.toIso8601String());
-    }
-    if (strongTrendOnly) cq = cq.gt('probability', 50.0);
-    if (firstEntryOnly) cq = cq.eq('entry', true);
-
-    final countResp = await cq;
-    return {
-      'data': outputs,
-      'count': (countResp as List).length,
-      'page': page,
-      'pageSize': pageSize,
-    };
-  }
-
-  StreamSubscription<dynamic> subscribeToAtlasOutputs(
-    void Function(AtlasOutput) callback, {
-    bool strongTrendOnly = false,
-    DateTime? selectedDate,
-  }) {
-    _channel?.unsubscribe();
-    final channel = _client.channel('atlas_output_changes');
-
-    PostgresChangeFilter? filter;
-    if (strongTrendOnly) {
-      filter = PostgresChangeFilter(
-        type: PostgresChangeFilterType.gt,
-        column: 'probability',
-        value: 50.0,
-      );
-    }
-
-    channel.onPostgresChanges(
-      event: PostgresChangeEvent.all,
-      schema: 'public',
-      table: 'atlas_output',
-      filter: filter,
-      callback: (payload) {
-        if (payload.newRecord.isNotEmpty) {
-          final out = AtlasOutput.fromJson(payload.newRecord);
-          if (selectedDate != null) {
-            final dt = DateTime.parse(out.createdAt);
-            final s = DateTime(
-                selectedDate.year, selectedDate.month, selectedDate.day);
-            final e = s.add(const Duration(days: 1));
-            if (dt.isAfter(s) && dt.isBefore(e)) callback(out);
-          } else {
-            callback(out);
-          }
-        }
-      },
+    final ids = await _filters(
+      _client.from('atlas_output').select('id'),
+      date: date,
+      strong: strong,
+      firstEntry: firstEntry,
+      type: type,
     );
 
-    channel.subscribe((status, [error]) {
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        debugPrint('subscribed atlas_output');
-      }
-    });
-
-    _channel = channel;
-    final ctrl = StreamController<dynamic>();
-    final sub = ctrl.stream.listen((_) {});
-    return _SubWrapper(sub, onCancel: () {
-      channel.unsubscribe();
-      ctrl.close();
-    });
-  }
-}
-
-class _SubWrapper implements StreamSubscription<dynamic> {
-  final StreamSubscription<dynamic> _s;
-  final VoidCallback onCancel;
-  _SubWrapper(this._s, {required this.onCancel});
-
-  @override
-  Future<void> cancel() {
-    onCancel();
-    return _s.cancel();
+    return AtlasPage(
+      (rows as List)
+          .map((e) => AtlasOutput.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      (ids as List).length,
+    );
   }
 
-  @override
-  Future<E> asFuture<E>([E? v]) => _s.asFuture(v);
-  @override
-  bool get isPaused => _s.isPaused;
-  @override
-  void onData(void Function(dynamic)? h) => _s.onData(h);
-  @override
-  void onDone(void Function()? h) => _s.onDone(h);
-  @override
-  void onError(Function? h) => _s.onError(h);
-  @override
-  void pause([Future<void>? r]) => _s.pause(r);
-  @override
-  void resume() => _s.resume();
+  RealtimeChannel subscribe(void Function(AtlasOutput) onNew) {
+    return _client
+        .channel('atlas_feed_${DateTime.now().millisecondsSinceEpoch}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'atlas_output',
+          callback: (payload) {
+            if (payload.newRecord.isEmpty) return;
+            try {
+              onNew(AtlasOutput.fromJson(payload.newRecord));
+            } catch (e) {
+              debugPrint('atlas realtime parse error: $e');
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  void unsubscribe(RealtimeChannel ch) => _client.removeChannel(ch);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Sentiment Style
-// ─────────────────────────────────────────────────────────────────────────────
-class _SStyle {
-  final String label;
-  final Color primary;
-  final Color dimDark;
-  final Color dimLight;
-  final IconData icon;
-  const _SStyle({
-    required this.label,
-    required this.primary,
-    required this.dimDark,
-    required this.dimLight,
-    required this.icon,
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 // Page
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 class MarketSentimentPage extends StatefulWidget {
-  const MarketSentimentPage({Key? key}) : super(key: key);
+  /// true when opened from the chart page (header button then goes back).
+  final bool fromChart;
+  const MarketSentimentPage({super.key, this.fromChart = false});
 
   @override
   State<MarketSentimentPage> createState() => _MarketSentimentPageState();
 }
 
-class _MarketSentimentPageState extends State<MarketSentimentPage>
-    with SingleTickerProviderStateMixin {
-  final _svc = SupabaseService(Supabase.instance.client);
+class _MarketSentimentPageState extends State<MarketSentimentPage> {
+  static const _pageSize = 10;
+  final _svc = AtlasLogService(Supabase.instance.client);
+  RealtimeChannel? _channel;
+  int _req = 0;
 
-  List<AtlasOutput> _outputs = [];
+  List<AtlasOutput> _items = [];
   bool _loading = true;
   String? _error;
-  int _page = 1;
-  int _totalPages = 1;
-  DateTime? _selectedDate;
-  bool _strongOnly = true;
-  double _strongThreshold = 70.0;
-  double _mediumThreshold = 60.0;
+  int _page = 1, _total = 0;
+  DateTime? _date;
+  bool _strong = true;
   bool _firstEntry = false;
-  TabController? _tab;
-  StreamSubscription? _sub;
+  int _view = 0; // 0 all, 1 up, 2 down
+
+  String? get _typeFilter => _view == 1 ? 'Bull' : (_view == 2 ? 'Bear' : null);
+  bool get _hasFilters => _date != null || _strong || _firstEntry;
+  int get _totalPages => (_total / _pageSize).ceil().clamp(1, 99999);
 
   @override
   void initState() {
     super.initState();
-    _tab = TabController(length: 3, vsync: this);
+    AchievementEvents.openedSentiment(); // once, not on every rebuild
     _fetch();
-    _subscribe();
+    _channel = _svc.subscribe(_onLive);
   }
 
   @override
   void dispose() {
-    _tab?.dispose();
-    _sub?.cancel();
+    final ch = _channel;
+    if (ch != null) _svc.unsubscribe(ch);
     super.dispose();
   }
 
-  void _subscribe() {
-    _sub = _svc.subscribeToAtlasOutputs((out) {
-      final dateOk = _selectedDate == null ||
-          (DateTime.parse(out.createdAt).day == _selectedDate!.day &&
-              DateTime.parse(out.createdAt).month == _selectedDate!.month &&
-              DateTime.parse(out.createdAt).year == _selectedDate!.year);
-      final trendOk = !_strongOnly || out.probability > _strongThreshold;
-      if (dateOk && trendOk && mounted) {
-        setState(() => _outputs = [out, ..._outputs].take(10).toList());
+  bool _matches(AtlasOutput o) {
+    if (_date != null) {
+      final t = o.ts;
+      if (t.year != _date!.year ||
+          t.month != _date!.month ||
+          t.day != _date!.day) {
+        return false;
       }
+    }
+    if (_strong && o.probability < SX.strongProb) return false;
+    if (_firstEntry && !o.entry) return false;
+    if (_typeFilter != null && o.type != _typeFilter) return false;
+    return true;
+  }
+
+  void _onLive(AtlasOutput o) {
+    if (!mounted || _page != 1 || !_matches(o)) return;
+    HapticFeedback.lightImpact();
+    setState(() {
+      _items =
+          [o, ..._items.where((e) => e.id != o.id)].take(_pageSize).toList();
+      _total++;
     });
   }
 
   Future<void> _fetch() async {
-    if (mounted)
-      setState(() {
-        _loading = true;
-        _error = null;
-      });
+    final req = ++_req;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final r = await _svc.getAtlasOutputs(
+      final r = await _svc.fetch(
         page: _page,
-        pageSize: 10,
-        selectedDate: _selectedDate,
-        strongTrendOnly: _strongOnly,
-        firstEntryOnly: _firstEntry,
+        pageSize: _pageSize,
+        date: _date,
+        strong: _strong,
+        firstEntry: _firstEntry,
+        type: _typeFilter,
       );
-      if (mounted)
-        setState(() {
-          _outputs = r['data'];
-          _totalPages = ((r['count'] as int) / 10).ceil().clamp(1, 99999);
-          _loading = false;
-        });
+      if (!mounted || req != _req) return;
+      setState(() {
+        _items = r.items;
+        _total = r.total;
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted)
-        setState(() {
-          _error = e.toString();
-          _loading = false;
-        });
+      debugPrint('atlas fetch error: $e');
+      if (!mounted || req != _req) return;
+      setState(() {
+        _error =
+            'We couldn\'t load the signals. Check your internet connection and try again.';
+        _loading = false;
+      });
     }
   }
 
-  void _resetFilters() {
+  void _apply(VoidCallback change) {
     setState(() {
-      _selectedDate = null;
-      _strongOnly = false;
-      _firstEntry = false;
+      change();
       _page = 1;
-      _tab?.index = 0;
     });
     _fetch();
   }
 
-  bool get _hasFilters => _selectedDate != null || _strongOnly || _firstEntry;
+  void _resetFilters() => _apply(() {
+        _date = null;
+        _strong = false;
+        _firstEntry = false;
+        _view = 0;
+      });
 
-  _SStyle _styleFor(String type) {
-    switch (type) {
-      case 'Bull':
-        return const _SStyle(
-            label: 'Bullish',
-            primary: _T.bull,
-            dimDark: _T.bullDim,
-            dimLight: _T.bullDimL,
-            icon: Icons.arrow_upward_rounded);
-      case 'Bear':
-        return const _SStyle(
-            label: 'Bearish',
-            primary: _T.bear,
-            dimDark: _T.bearDim,
-            dimLight: _T.bearDimL,
-            icon: Icons.arrow_downward_rounded);
-      default:
-        return const _SStyle(
-            label: 'Neutral',
-            primary: _T.neutral,
-            dimDark: _T.neutralDim,
-            dimLight: _T.neutralDimL,
-            icon: Icons.remove_rounded);
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: Theme.of(ctx).colorScheme.copyWith(primary: SX.accent),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null && mounted) _apply(() => _date = picked);
+  }
+
+  void _openChart({DateTime? date, bool allowPop = false}) {
+    if (allowPop && widget.fromChart) {
+      Navigator.of(context).maybePop();
+      return;
     }
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => MarketSentimentChartPage(
+        initialDate: date ?? (_items.isNotEmpty ? _items.first.ts : null),
+        fromList: true,
+      ),
+    ));
   }
 
-  Color _probColor(double p) {
-    if (p >= _strongThreshold) return _T.probHigh;
-    if (p >= _mediumThreshold) return _T.probMid;
-    return _T.probLow;
-  }
+  void _showDetail(AtlasOutput o) => showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (_) => AtlasDetailDialog(output: o),
+      );
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    AchievementEvents.openedSentiment();
-
+    final dark = context.isDark;
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: isDark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
+      value: dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
       child: Scaffold(
-        backgroundColor: isDark ? _T.dBg : _T.lBg,
+        backgroundColor: context.sxBg,
         body: SafeArea(
-          child: Column(
-            children: [
-              // ── Only the tab bar is sticky ──────────────────────────
-              _TopBar(
-                tab: _tab!,
-                isDark: isDark,
-                outputs: _outputs,
-              ),
-
-              // ── Each tab scrolls independently ──────────────────────
-              Expanded(
-                child: TabBarView(
-                  controller: _tab,
-                  children: ['All', 'Bull', 'Bear']
-                      .map((t) => _TabBody(
-                            key: ValueKey(t),
-                            tabType: t,
-                            isDark: isDark,
-                            loading: _loading,
-                            error: _error,
-                            outputs: _outputs,
-                            page: _page,
-                            totalPages: _totalPages,
-                            hasFilters: _hasFilters,
-                            selectedDate: _selectedDate,
-                            strongOnly: _strongOnly,
-                            firstEntry: _firstEntry,
-                            styleFor: _styleFor,
-                            probColor: _probColor,
-                            onRetry: _fetch,
-                            onReset: _resetFilters,
-                            onPrev: _page > 1
-                                ? () {
-                                    setState(() => _page--);
-                                    _fetch();
-                                  }
-                                : null,
-                            onNext: _page < _totalPages
-                                ? () {
-                                    setState(() => _page++);
-                                    _fetch();
-                                  }
-                                : null,
-                            onDatePick: () async {
-                              final picked = await showDatePicker(
-                                context: context,
-                                initialDate: _selectedDate ?? DateTime.now(),
-                                firstDate: DateTime(2020),
-                                lastDate: DateTime.now(),
-                                builder: (ctx, child) => Theme(
-                                  data: Theme.of(ctx).copyWith(
-                                    colorScheme: Theme.of(ctx)
-                                        .colorScheme
-                                        .copyWith(primary: _T.accent),
-                                  ),
-                                  child: child!,
-                                ),
-                              );
-                              if (picked != null && mounted) {
-                                setState(() {
-                                  _selectedDate = picked;
-                                  _page = 1;
-                                });
-                                _fetch();
-                              }
-                            },
-                            onDateClear: () {
-                              setState(() {
-                                _selectedDate = null;
-                                _page = 1;
-                              });
-                              _fetch();
-                            },
-                            onStrongToggle: (v) {
-                              setState(() {
-                                _strongOnly = v;
-                                _page = 1;
-                              });
-                              _fetch();
-                            },
-                            onFirstEntryToggle: (v) {
-                              setState(() {
-                                _firstEntry = v;
-                                _page = 1;
-                              });
-                              _fetch();
-                            },
-                            onShowDetail: (out) => showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (_) => AtlasDetailDialog(output: out),
-                            ),
-                          ))
-                      .toList(),
+          child: RefreshIndicator(
+            color: SX.accent,
+            onRefresh: _fetch,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              slivers: [
+                SliverToBoxAdapter(
+                  child: _Header(
+                    onBack: () => Navigator.of(context).maybePop(),
+                    onHelp: () => showSentimentGuide(context),
+                    onChart: () => _openChart(allowPop: true),
+                  ),
                 ),
-              ),
-            ],
+                if (!_loading && _error == null && _items.isNotEmpty)
+                  SliverToBoxAdapter(
+                    child: _Hero(
+                      o: _items.first,
+                      onChart: () => _openChart(date: _items.first.ts),
+                      onGuide: () => showSentimentGuide(context),
+                    ),
+                  ),
+                SliverToBoxAdapter(
+                  child: _Segmented(
+                    value: _view,
+                    onChanged: (v) => _apply(() => _view = v),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: _Filters(
+                    date: _date,
+                    strong: _strong,
+                    firstEntry: _firstEntry,
+                    hasFilters: _hasFilters,
+                    onDate: _pickDate,
+                    onDateClear: () => _apply(() => _date = null),
+                    onStrong: (v) => _apply(() => _strong = v),
+                    onFirstEntry: (v) => _apply(() => _firstEntry = v),
+                    onReset: _resetFilters,
+                    onGuide: () => showSentimentGuide(context),
+                  ),
+                ),
+                ..._body(),
+                const SliverToBoxAdapter(child: SizedBox(height: 24)),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Top Bar — back button + title + tab pills (sticky)
-// ─────────────────────────────────────────────────────────────────────────────
-class _TopBar extends StatelessWidget {
-  final TabController tab;
-  final bool isDark;
-  final List<AtlasOutput> outputs;
-
-  const _TopBar({
-    required this.tab,
-    required this.isDark,
-    required this.outputs,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-
-    final allC = outputs.length;
-    final bullC = outputs.where((o) => o.type == 'Bull').length;
-    final bearC = outputs.where((o) => o.type == 'Bear').length;
-
-    return Container(
-      color: isDark ? _T.dBg : _T.lBg,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Back + title row
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 14, 16, 6),
-            child: Row(
-              children: [
-                // Back button
-                _TapScale(
-                  onTap: () => Navigator.of(context).maybePop(),
-                  child: Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: surface,
-                      borderRadius: BorderRadius.circular(_T.rSM),
-                      border: Border.all(color: border),
-                    ),
-                    child: Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      size: 15,
-                      color: textP,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-
-                // Title + live dot
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Market Sentiments',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                            color: textP,
-                            letterSpacing: -0.3,
-                          )),
-                      Row(
-                        children: [
-                          _LiveDot(),
-                          const SizedBox(width: 5),
-                          Text('Live · Atlas Engine',
-                              style: TextStyle(fontSize: 11, color: textS)),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+  List<Widget> _body() {
+    if (_loading) {
+      return [
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate((_, __) => const _Skeleton(),
+                childCount: 4),
           ),
-
-          // Tab pill bar
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-            child: Container(
-              padding: const EdgeInsets.all(3),
-              decoration: BoxDecoration(
-                color: surface,
-                borderRadius: BorderRadius.circular(_T.rMD),
-                border: Border.all(color: border),
-              ),
-              child: TabBar(
-                controller: tab,
-                indicator: BoxDecoration(
-                  color: _T.accent,
-                  borderRadius: BorderRadius.circular(_T.rSM),
-                ),
-                indicatorSize: TabBarIndicatorSize.tab,
-                dividerColor: Colors.transparent,
-                labelColor: Colors.white,
-                unselectedLabelColor: textS,
-                labelStyle:
-                    const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
-                unselectedLabelStyle:
-                    const TextStyle(fontWeight: FontWeight.w500, fontSize: 12),
-                tabs: [
-                  Tab(text: 'All  $allC'),
-                  Tab(text: '↑ Bull  $bullC'),
-                  Tab(text: '↓ Bear  $bearC'),
-                ],
-              ),
-            ),
+        ),
+      ];
+    }
+    if (_error != null) {
+      return [
+        SliverToBoxAdapter(
+          child: SxMessage(
+            icon: Icons.cloud_off_rounded,
+            color: SX.bear,
+            title: 'Can\'t reach the server',
+            body: _error!,
+            actionLabel: 'Try again',
+            onAction: _fetch,
           ),
-        ],
+        ),
+      ];
+    }
+    if (_items.isEmpty) {
+      return [
+        SliverToBoxAdapter(
+          child: SxMessage(
+            icon: Icons.inbox_rounded,
+            title: 'No signals to show',
+            body: _hasFilters || _view != 0
+                ? 'Nothing matches your filters. Turn some off to see more.'
+                : 'New signals appear here as soon as Atlas produces them.',
+            actionLabel: _hasFilters || _view != 0 ? 'Clear filters' : null,
+            onAction: _hasFilters || _view != 0 ? _resetFilters : null,
+          ),
+        ),
+      ];
+    }
+    return [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (_, i) => _SignalCard(
+              key: ValueKey(_items[i].id),
+              o: _items[i],
+              index: i,
+              onTap: () => _showDetail(_items[i]),
+              onChart: () => _openChart(date: _items[i].ts),
+            ),
+            childCount: _items.length,
+          ),
+        ),
       ),
-    );
+      SliverToBoxAdapter(
+        child: _Pagination(
+          page: _page,
+          totalPages: _totalPages,
+          total: _total,
+          onPrev: _page > 1
+              ? () {
+                  setState(() => _page--);
+                  _fetch();
+                }
+              : null,
+          onNext: _page < _totalPages
+              ? () {
+                  setState(() => _page++);
+                  _fetch();
+                }
+              : null,
+        ),
+      ),
+    ];
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated live dot
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
+// Header
+// ═════════════════════════════════════════════════════════════════════════════
+class _Header extends StatelessWidget {
+  final VoidCallback onBack, onHelp, onChart;
+  const _Header(
+      {required this.onBack, required this.onHelp, required this.onChart});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Row(children: [
+          SxIconBtn(
+              icon: Icons.arrow_back_ios_new_rounded, size: 15, onTap: onBack),
+          const SizedBox(width: 12),
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Market mood',
+                  style: TextStyle(
+                      fontSize: 21,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.5,
+                      color: context.sxTextP)),
+              const SizedBox(height: 2),
+              Row(children: [
+                const _LiveDot(),
+                const SizedBox(width: 6),
+                Text('Live, updates by itself',
+                    style: TextStyle(fontSize: 11.5, color: context.sxTextS)),
+              ]),
+            ]),
+          ),
+          SxIconBtn(
+              icon: Icons.help_outline_rounded,
+              tooltip: 'How to read this',
+              onTap: onHelp),
+          const SizedBox(width: 8),
+          SxPillBtn(
+              icon: Icons.show_chart_rounded, label: 'Chart', onTap: onChart),
+        ]),
+      );
+}
+
 class _LiveDot extends StatefulWidget {
+  const _LiveDot();
   @override
   State<_LiveDot> createState() => _LiveDotState();
 }
 
 class _LiveDotState extends State<_LiveDot>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1200))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.4, end: 1.0).animate(_ctrl);
-  }
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 1200))
+    ..repeat(reverse: true);
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _c.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Opacity(
-        opacity: _anim.value,
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: Tween<double>(begin: 0.35, end: 1).animate(_c),
         child: Container(
-          width: 5,
-          height: 5,
-          decoration: const BoxDecoration(
-            color: _T.probHigh,
-            shape: BoxShape.circle,
-          ),
+          width: 6,
+          height: 6,
+          decoration:
+              const BoxDecoration(color: SX.probHigh, shape: BoxShape.circle),
         ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Tab Body — scrollable (filters + cards + pagination)
-// ─────────────────────────────────────────────────────────────────────────────
-class _TabBody extends StatelessWidget {
-  final String tabType;
-  final bool isDark;
-  final bool loading;
-  final String? error;
-  final List<AtlasOutput> outputs;
-  final int page;
-  final int totalPages;
-  final bool hasFilters;
-  final DateTime? selectedDate;
-  final bool strongOnly;
-  final bool firstEntry;
-  final _SStyle Function(String) styleFor;
-  final Color Function(double) probColor;
-  final VoidCallback onRetry;
-  final VoidCallback onReset;
-  final VoidCallback? onPrev;
-  final VoidCallback? onNext;
-  final VoidCallback onDatePick;
-  final VoidCallback onDateClear;
-  final ValueChanged<bool> onStrongToggle;
-  final ValueChanged<bool> onFirstEntryToggle;
-  final void Function(AtlasOutput) onShowDetail;
-
-  const _TabBody({
-    Key? key,
-    required this.tabType,
-    required this.isDark,
-    required this.loading,
-    required this.error,
-    required this.outputs,
-    required this.page,
-    required this.totalPages,
-    required this.hasFilters,
-    required this.selectedDate,
-    required this.strongOnly,
-    required this.firstEntry,
-    required this.styleFor,
-    required this.probColor,
-    required this.onRetry,
-    required this.onReset,
-    required this.onPrev,
-    required this.onNext,
-    required this.onDatePick,
-    required this.onDateClear,
-    required this.onStrongToggle,
-    required this.onFirstEntryToggle,
-    required this.onShowDetail,
-  }) : super(key: key);
-
-  List<AtlasOutput> get _filtered =>
-      outputs.where((o) => tabType == 'All' || o.type == tabType).toList();
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading) {
-      return ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-        itemCount: 5,
-        itemBuilder: (_, __) => _SkeletonCard(isDark: isDark),
       );
-    }
-    if (error != null) return _buildError(context);
+}
 
-    final items = _filtered;
+// ═════════════════════════════════════════════════════════════════════════════
+// Hero: the latest read in one glance
+// ═════════════════════════════════════════════════════════════════════════════
+class _Hero extends StatelessWidget {
+  final AtlasOutput o;
+  final VoidCallback onChart, onGuide;
+  const _Hero({required this.o, required this.onChart, required this.onGuide});
 
-    return CustomScrollView(
-      slivers: [
-        // Filters scroll with content
-        SliverToBoxAdapter(
-          child: _FilterSection(
-            isDark: isDark,
-            selectedDate: selectedDate,
-            strongOnly: strongOnly,
-            firstEntry: firstEntry,
-            hasFilters: hasFilters,
-            onDatePick: onDatePick,
-            onDateClear: onDateClear,
-            onStrongToggle: onStrongToggle,
-            onFirstEntryToggle: onFirstEntryToggle,
-            onReset: onReset,
-          ),
+  @override
+  Widget build(BuildContext context) {
+    final m = o.mood;
+    final c2 = Color.lerp(m.color, SX.accent, 0.55)!;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [m.color, c2],
         ),
-
-        if (items.isEmpty)
-          SliverFillRemaining(child: _buildEmpty(context))
-        else ...[
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (_, i) => _SignalCard(
-                  key: ValueKey(items[i].id),
-                  output: items[i],
-                  style: styleFor(items[i].type),
-                  isDark: isDark,
-                  index: i,
-                  probColor: probColor,
-                  onTap: () => onShowDetail(items[i]),
-                ),
-                childCount: items.length,
-              ),
-            ),
-          ),
-          SliverToBoxAdapter(
-            child: _Pagination(
-              isDark: isDark,
-              page: page,
-              totalPages: totalPages,
-              resultCount: outputs.length,
-              onPrev: onPrev,
-              onNext: onNext,
-            ),
+        borderRadius: BorderRadius.circular(SX.rLG + 4),
+        boxShadow: [
+          BoxShadow(
+            color: m.color.withValues(alpha: 0.28),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
           ),
         ],
-
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-      ],
-    );
-  }
-
-  Widget _buildError(BuildContext context) {
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.cloud_off_rounded, size: 44, color: _T.bear),
-            const SizedBox(height: 16),
-            Text('Connection error',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700, color: textP)),
-            const SizedBox(height: 6),
-            Text(error!,
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: textS)),
-            const SizedBox(height: 20),
-            _TapScale(
-              onTap: onRetry,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 11),
-                decoration: BoxDecoration(
-                    color: _T.accent,
-                    borderRadius: BorderRadius.circular(_T.rMD)),
-                child: const Text('Retry',
-                    style: TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w600)),
-              ),
-            ),
-          ],
-        ),
       ),
-    );
-  }
-
-  Widget _buildEmpty(BuildContext context) {
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: surface,
-                shape: BoxShape.circle,
-                border: Border.all(color: border),
-              ),
-              child: Icon(Icons.inbox_rounded, size: 28, color: textS),
-            ),
-            const SizedBox(height: 18),
-            Text('No signals found',
-                style: TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w700, color: textP)),
-            const SizedBox(height: 6),
-            Text('Adjust your filters or select a different date.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: textS)),
-            if (hasFilters) ...[
-              const SizedBox(height: 22),
-              _TapScale(
-                onTap: onReset,
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  decoration: BoxDecoration(
-                      color: _T.accent,
-                      borderRadius: BorderRadius.circular(_T.rMD)),
-                  child: const Text('Clear Filters',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w600)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Latest read, ${timeago.format(o.ts)}',
+            style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: Colors.white70)),
+        const SizedBox(height: 12),
+        Row(children: [
+          Expanded(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Row(children: [
+                Icon(m.icon, color: Colors.white, size: 28),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(m.headline,
+                      style: const TextStyle(
+                          fontSize: 23,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          color: Colors.white)),
                 ),
-              ),
-            ],
-          ],
-        ),
-      ),
+              ]),
+              const SizedBox(height: 6),
+              Text('${m.plain}. ${o.summary}',
+                  style: const TextStyle(
+                      fontSize: 13.5, height: 1.35, color: Colors.white)),
+            ]),
+          ),
+          const SizedBox(width: 14),
+          Column(children: [
+            SxRing(
+              value: o.probability,
+              size: 68,
+              color: Colors.white,
+              track: Colors.white24,
+            ),
+            const SizedBox(height: 4),
+            Text(SX.confidence(o.probability),
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white70)),
+          ]),
+        ]),
+        const SizedBox(height: 16),
+        Row(children: [
+          FilledButton.icon(
+            onPressed: onChart,
+            icon: const Icon(Icons.show_chart_rounded, size: 18),
+            label: const Text('See it on the chart'),
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: m.color,
+              textStyle:
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(SX.rMD)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          TextButton(
+            onPressed: onGuide,
+            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            child: const Text('Tell me more?',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600)),
+          ),
+        ]),
+      ]),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Filter Section (scrolls with content)
-// ─────────────────────────────────────────────────────────────────────────────
-class _FilterSection extends StatelessWidget {
-  final bool isDark;
-  final DateTime? selectedDate;
-  final bool strongOnly;
-  final bool firstEntry;
-  final bool hasFilters;
-  final VoidCallback onDatePick;
-  final VoidCallback onDateClear;
-  final ValueChanged<bool> onStrongToggle;
-  final ValueChanged<bool> onFirstEntryToggle;
-  final VoidCallback onReset;
+// ═════════════════════════════════════════════════════════════════════════════
+// All / Going up / Going down
+// ═════════════════════════════════════════════════════════════════════════════
+class _Segmented extends StatelessWidget {
+  final int value;
+  final ValueChanged<int> onChanged;
+  const _Segmented({required this.value, required this.onChanged});
 
-  const _FilterSection({
-    required this.isDark,
-    required this.selectedDate,
-    required this.strongOnly,
+  static const _labels = ['All', 'Going up', 'Going down'];
+  static const _icons = [
+    Icons.apps_rounded,
+    Icons.trending_up_rounded,
+    Icons.trending_down_rounded,
+  ];
+  static const _colors = [SX.accent, SX.bull, SX.bear];
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: context.sxSurface,
+          borderRadius: BorderRadius.circular(SX.rMD + 2),
+          border: Border.all(color: context.sxBorder),
+        ),
+        child: Row(children: [
+          for (var i = 0; i < 3; i++)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => onChanged(i),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 180),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: value == i ? _colors[i] : Colors.transparent,
+                    borderRadius: BorderRadius.circular(SX.rMD - 2),
+                  ),
+                  child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(_icons[i],
+                            size: 15,
+                            color: value == i ? Colors.white : context.sxTextS),
+                        const SizedBox(width: 6),
+                        Text(_labels[i],
+                            style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: value == i
+                                    ? Colors.white
+                                    : context.sxTextS)),
+                      ]),
+                ),
+              ),
+            ),
+        ]),
+      );
+}
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Filters
+// ═════════════════════════════════════════════════════════════════════════════
+class _Filters extends StatelessWidget {
+  final DateTime? date;
+  final bool strong, firstEntry, hasFilters;
+  final VoidCallback onDate, onDateClear, onReset, onGuide;
+  final ValueChanged<bool> onStrong, onFirstEntry;
+
+  const _Filters({
+    required this.date,
+    required this.strong,
     required this.firstEntry,
     required this.hasFilters,
-    required this.onDatePick,
+    required this.onDate,
     required this.onDateClear,
-    required this.onStrongToggle,
-    required this.onFirstEntryToggle,
     required this.onReset,
+    required this.onGuide,
+    required this.onStrong,
+    required this.onFirstEntry,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 14),
-      child: Column(
-        children: [
-          // Date filter row
-          Row(
-            children: [
-              Expanded(
-                child: _TapScale(
-                  onTap: onDatePick,
-                  child: _FilterPill(
-                    isDark: isDark,
-                    isActive: selectedDate != null,
-                    icon: Icons.calendar_today_rounded,
-                    label: selectedDate != null
-                        ? DateFormat('MMM d, yyyy').format(selectedDate!)
-                        : 'Filter by date',
-                    trailing: selectedDate != null
-                        ? GestureDetector(
-                            onTap: onDateClear,
-                            child: Icon(Icons.close_rounded,
-                                size: 14, color: textS),
-                          )
-                        : Icon(Icons.expand_more_rounded,
-                            size: 16, color: textS),
-                  ),
-                ),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _FilterPill(
+              icon: Icons.calendar_today_rounded,
+              label: date == null
+                  ? 'Any date'
+                  : DateFormat('d MMM yyyy').format(date!),
+              active: date != null,
+              onTap: onDate,
+              onClear: date != null ? onDateClear : null,
+            ),
+            _FilterPill(
+              icon: Icons.bolt_rounded,
+              label: 'High confidence',
+              active: strong,
+              onTap: () => onStrong(!strong),
+            ),
+            _FilterPill(
+              icon: Icons.flag_rounded,
+              label: 'Fresh moves',
+              active: firstEntry,
+              onTap: () => onFirstEntry(!firstEntry),
+            ),
+            if (hasFilters)
+              _FilterPill(
+                icon: Icons.filter_alt_off_rounded,
+                label: 'Clear',
+                active: false,
+                danger: true,
+                onTap: onReset,
               ),
-              if (hasFilters) ...[
-                const SizedBox(width: 8),
-                _TapScale(
-                  onTap: onReset,
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: surface,
-                      borderRadius: BorderRadius.circular(_T.rSM),
-                      border: Border.all(color: border),
-                    ),
-                    child: Icon(Icons.filter_alt_off_rounded,
-                        size: 16, color: _T.bear),
-                  ),
-                ),
-              ],
-            ],
-          ),
-
+          ]),
           const SizedBox(height: 8),
-
-          // Two toggle chips
-          Row(
-            children: [
-              Expanded(
-                child: _ToggleChip(
-                  isDark: isDark,
-                  label: 'Strong Trend',
-                  sublabel: '> 70% probability',
-                  icon: Icons.bolt_rounded,
-                  value: strongOnly,
-                  onChanged: onStrongToggle,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _ToggleChip(
-                  isDark: isDark,
-                  label: 'First Entry',
-                  sublabel: 'Entry signals only',
-                  icon: Icons.flag_rounded,
-                  value: firstEntry,
-                  onChanged: onFirstEntryToggle,
-                ),
-              ),
-            ],
+          GestureDetector(
+            onTap: onGuide,
+            child: Text(
+              'High confidence means the engine is 70% or more sure. A fresh move is the first signal after a change in direction.',
+              style: TextStyle(
+                  fontSize: 11.5, height: 1.35, color: context.sxTextS),
+            ),
           ),
-        ],
-      ),
-    );
-  }
+        ]),
+      );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Filter Pill
-// ─────────────────────────────────────────────────────────────────────────────
 class _FilterPill extends StatelessWidget {
-  final bool isDark;
-  final bool isActive;
   final IconData icon;
   final String label;
-  final Widget? trailing;
-
+  final bool active, danger;
+  final VoidCallback onTap;
+  final VoidCallback? onClear;
   const _FilterPill({
-    required this.isDark,
-    required this.isActive,
     required this.icon,
     required this.label,
-    this.trailing,
+    required this.active,
+    required this.onTap,
+    this.onClear,
+    this.danger = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final iconC = isActive ? _T.accent : (isDark ? _T.dTextS : _T.lTextS);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: isActive ? _T.accentDim : surface,
-        borderRadius: BorderRadius.circular(_T.rSM),
-        border: Border.all(
-          color: isActive ? _T.accent.withValues(alpha: 0.4) : border,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 14, color: iconC),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w500,
-                  color: isActive ? _T.accent : textP,
-                )),
-          ),
-          if (trailing != null) trailing!,
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Toggle Chip
-// ─────────────────────────────────────────────────────────────────────────────
-class _ToggleChip extends StatelessWidget {
-  final bool isDark;
-  final String label;
-  final String sublabel;
-  final IconData icon;
-  final bool value;
-  final ValueChanged<bool> onChanged;
-
-  const _ToggleChip({
-    required this.isDark,
-    required this.label,
-    required this.sublabel,
-    required this.icon,
-    required this.value,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-
+    final fg = danger ? SX.bear : (active ? SX.accent : context.sxTextS);
     return GestureDetector(
-      onTap: () => onChanged(!value),
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: value ? (isDark ? _T.accentDim : _T.accentLight) : surface,
-          borderRadius: BorderRadius.circular(_T.rSM),
+          color: active ? SX.accent.withValues(alpha: 0.12) : context.sxSurface,
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: value ? _T.accent.withValues(alpha: 0.4) : border,
-          ),
+              color: active
+                  ? SX.accent.withValues(alpha: 0.45)
+                  : context.sxBorder),
         ),
-        child: Row(
-          children: [
-            Icon(icon, size: 13, color: value ? _T.accent : textS),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 14, color: fg),
+          const SizedBox(width: 6),
+          Text(label,
+              style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active || danger ? fg : context.sxTextP)),
+          if (onClear != null) ...[
             const SizedBox(width: 6),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: value ? _T.accent : textP,
-                      )),
-                  Text(sublabel, style: TextStyle(fontSize: 9.5, color: textS)),
-                ],
-              ),
-            ),
-            // Compact toggle
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: 28,
-              height: 16,
-              decoration: BoxDecoration(
-                color: value ? _T.accent : (isDark ? _T.dBorder : _T.lBorder),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: AnimatedAlign(
-                duration: const Duration(milliseconds: 180),
-                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  margin: const EdgeInsets.all(2),
-                  width: 12,
-                  height: 12,
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
+            GestureDetector(
+              onTap: onClear,
+              child: Icon(Icons.close_rounded, size: 14, color: fg),
             ),
           ],
-        ),
+        ]),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Signal Card
-// ─────────────────────────────────────────────────────────────────────────────
-class _SignalCard extends StatefulWidget {
-  final AtlasOutput output;
-  final _SStyle style;
-  final bool isDark;
+// ═════════════════════════════════════════════════════════════════════════════
+// Signal card
+// ═════════════════════════════════════════════════════════════════════════════
+class _SignalCard extends StatelessWidget {
+  final AtlasOutput o;
   final int index;
-  final Color Function(double) probColor;
-  final VoidCallback onTap;
-
+  final VoidCallback onTap, onChart;
   const _SignalCard({
-    Key? key,
-    required this.output,
-    required this.style,
-    required this.isDark,
+    super.key,
+    required this.o,
     required this.index,
-    required this.probColor,
     required this.onTap,
-  }) : super(key: key);
-
-  @override
-  State<_SignalCard> createState() => _SignalCardState();
-}
-
-class _SignalCardState extends State<_SignalCard>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _fade;
-  late final Animation<Offset> _slide;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 280 + widget.index * 45),
-    );
-    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
-    _slide = Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-    _ctrl.forward();
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _fade,
-      child: SlideTransition(
-        position: _slide,
-        child: _CardBody(
-          output: widget.output,
-          style: widget.style,
-          isDark: widget.isDark,
-          probColor: widget.probColor,
-          onTap: widget.onTap,
-        ),
-      ),
-    );
-  }
-}
-
-class _CardBody extends StatelessWidget {
-  final AtlasOutput output;
-  final _SStyle style;
-  final bool isDark;
-  final Color Function(double) probColor;
-  final VoidCallback onTap;
-
-  const _CardBody({
-    required this.output,
-    required this.style,
-    required this.isDark,
-    required this.probColor,
-    required this.onTap,
+    required this.onChart,
   });
 
   @override
   Widget build(BuildContext context) {
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-    final dim = isDark ? style.dimDark : style.dimLight;
-    final pc = probColor(output.probability);
-    final total = output.positiveIndicators +
-        output.negativeIndicators +
-        output.neutralIndicators;
+    final dark = context.isDark;
+    final m = o.mood;
+    final pc = SX.probColor(o.probability);
 
-    return _TapScale(
+    final card = SxTapScale(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 6),
         decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(_T.rLG),
-          border: Border.all(color: border),
-          boxShadow: isDark
-              ? []
+          color: context.sxSurface,
+          borderRadius: BorderRadius.circular(SX.rLG),
+          border: Border.all(color: context.sxBorder),
+          boxShadow: dark
+              ? null
               : [
                   BoxShadow(
                     color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
                 ],
         ),
-        child: Column(
-          children: [
-            // Accent strip
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
             Container(
-              height: 3,
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
-                color: style.primary,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(_T.rLG),
-                  topRight: Radius.circular(_T.rLG),
-                ),
+                color: m.dim(dark),
+                borderRadius: BorderRadius.circular(SX.rMD),
               ),
+              child: Icon(m.icon, size: 22, color: m.color),
             ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+            const SizedBox(width: 12),
+            Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Row 1: icon + label + time + prob badge
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: dim,
-                          borderRadius: BorderRadius.circular(_T.rSM),
-                        ),
-                        child: Icon(style.icon, size: 15, color: style.primary),
-                      ),
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('${style.label} Signal',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
-                                color: textP,
-                              )),
-                          Text(
-                            timeago.format(DateTime.parse(output.createdAt)),
-                            style: TextStyle(fontSize: 11, color: textS),
-                          ),
-                        ],
-                      ),
-                      const Spacer(),
-                      // Probability badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: pc.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(_T.rXS),
-                          border: Border.all(color: pc.withValues(alpha: 0.28)),
-                        ),
-                        child: Text(
-                          '${output.probability.toStringAsFixed(1)}%',
-                          style: TextStyle(
-                            fontSize: 12,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(m.headline,
+                        style: TextStyle(
+                            fontSize: 15.5,
                             fontWeight: FontWeight.w700,
-                            color: pc,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Icon(Icons.chevron_right_rounded, size: 16, color: textS),
-                    ],
-                  ),
-
-                  const SizedBox(height: 11),
-                  Divider(height: 1, color: border),
-                  const SizedBox(height: 11),
-
-                  // Row 2: timestamp + term pills
-                  Row(
-                    children: [
-                      Icon(Icons.schedule_rounded, size: 12, color: textS),
-                      const SizedBox(width: 4),
-                      Text(
-                        DateFormat('MMM d · h:mm a')
-                            .format(DateTime.parse(output.createdAt)),
-                        style: TextStyle(fontSize: 11, color: textS),
-                      ),
-                      const Spacer(),
-                      _TermPill(label: 'S', type: output.shortterm),
-                      const SizedBox(width: 5),
-                      _TermPill(label: 'L', type: output.longterm),
-                    ],
-                  ),
-
-                  // Breakout chips
-                  if (output.upbreakout || output.lowbreakout) ...[
-                    const SizedBox(height: 9),
-                    Wrap(spacing: 6, children: [
-                      if (output.upbreakout)
-                        _BreakoutChip(
-                          label: 'Up Breakout',
-                          icon: Icons.north_rounded,
-                          color: _T.bull,
-                          dim: isDark ? _T.bullDim : _T.bullDimL,
-                        ),
-                      if (output.lowbreakout)
-                        _BreakoutChip(
-                          label: 'Low Breakout',
-                          icon: Icons.south_rounded,
-                          color: _T.bear,
-                          dim: isDark ? _T.bearDim : _T.bearDimL,
-                        ),
-                    ]),
-                  ],
-
-                  // First Entry badge
-                  if (output.entry) ...[
-                    const SizedBox(height: 9),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: isDark ? _T.accentDim : _T.accentLight,
-                        borderRadius: BorderRadius.circular(_T.rXS),
-                        border:
-                            Border.all(color: _T.accent.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.flag_rounded, size: 10, color: _T.accent),
-                          const SizedBox(width: 4),
-                          Text('First Entry',
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: _T.accent,
-                              )),
-                        ],
-                      ),
-                    ),
-                  ],
-
-                  const SizedBox(height: 11),
-
-                  // Indicator bar
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Indicators',
-                          style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: textS)),
-                      Text('$total total',
-                          style: TextStyle(fontSize: 10, color: textS)),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: SizedBox(
-                      height: 5,
-                      child: Row(children: [
-                        if (output.positiveIndicators > 0)
-                          Expanded(
-                              flex: output.positiveIndicators,
-                              child: Container(color: _T.bull)),
-                        if (output.neutralIndicators > 0)
-                          Expanded(
-                              flex: output.neutralIndicators,
-                              child: Container(color: _T.neutral)),
-                        if (output.negativeIndicators > 0)
-                          Expanded(
-                              flex: output.negativeIndicators,
-                              child: Container(color: _T.bear)),
-                      ]),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(children: [
-                    _IndLabel(
-                        color: _T.bull, label: '+${output.positiveIndicators}'),
-                    const SizedBox(width: 10),
-                    _IndLabel(
-                        color: _T.neutral,
-                        label: '~${output.neutralIndicators}'),
-                    const SizedBox(width: 10),
-                    _IndLabel(
-                        color: _T.bear, label: '-${output.negativeIndicators}'),
+                            color: context.sxTextP)),
+                    const SizedBox(height: 2),
+                    Text(
+                        '${DateFormat('h:mm a').format(o.ts)}, ${timeago.format(o.ts)}',
+                        style:
+                            TextStyle(fontSize: 11.5, color: context.sxTextS)),
                   ]),
-                ],
+            ),
+            Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text('${o.probability.toStringAsFixed(0)}%',
+                  style: TextStyle(
+                      fontSize: 19, fontWeight: FontWeight.w800, color: pc)),
+              Text(SX.confidence(o.probability),
+                  style: TextStyle(
+                      fontSize: 10, fontWeight: FontWeight.w600, color: pc)),
+            ]),
+          ]),
+          const SizedBox(height: 12),
+          Text(o.summary,
+              style: TextStyle(fontSize: 13, color: context.sxTextP)),
+          const SizedBox(height: 10),
+          SxVoteBar(
+              pos: o.positiveIndicators,
+              neut: o.neutralIndicators,
+              neg: o.negativeIndicators),
+          const SizedBox(height: 7),
+          SxVoteLegend(
+              pos: o.positiveIndicators,
+              neut: o.neutralIndicators,
+              neg: o.negativeIndicators),
+          const SizedBox(height: 12),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            if (o.entry)
+              const SxChip(
+                  label: 'Fresh move',
+                  icon: Icons.flag_rounded,
+                  color: SX.accent),
+            if (o.upbreakout)
+              const SxChip(
+                  label: 'Broke above recent high',
+                  icon: Icons.north_rounded,
+                  color: SX.bull),
+            if (o.lowbreakout)
+              const SxChip(
+                  label: 'Broke below recent low',
+                  icon: Icons.south_rounded,
+                  color: SX.bear),
+            SxChip(
+                label: 'Short-term: ${SX.trendWord(o.shortterm)}',
+                color: SX.trendColor(o.shortterm)),
+            SxChip(
+                label: 'Long-term: ${SX.trendWord(o.longterm)}',
+                color: SX.trendColor(o.longterm)),
+          ]),
+          const SizedBox(height: 4),
+          Divider(height: 16, color: context.sxBorder),
+          Row(children: [
+            TextButton.icon(
+              onPressed: onChart,
+              icon: const Icon(Icons.show_chart_rounded, size: 16),
+              label: const Text('View on chart'),
+              style: TextButton.styleFrom(
+                foregroundColor: SX.accent,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                textStyle: const TextStyle(
+                    fontSize: 12.5, fontWeight: FontWeight.w600),
               ),
             ),
-          ],
-        ),
+            const Spacer(),
+            const Text('Details',
+                style: TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                    color: SX.accent)),
+            const Icon(Icons.chevron_right_rounded, size: 18, color: SX.accent),
+          ]),
+        ]),
       ),
+    );
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 240 + index * 40),
+      curve: Curves.easeOut,
+      builder: (_, v, child) => Opacity(
+        opacity: v,
+        child:
+            Transform.translate(offset: Offset(0, (1 - v) * 10), child: child),
+      ),
+      child: card,
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 // Pagination
-// ─────────────────────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════════════════════
 class _Pagination extends StatelessWidget {
-  final bool isDark;
-  final int page;
-  final int totalPages;
-  final int resultCount;
-  final VoidCallback? onPrev;
-  final VoidCallback? onNext;
-
+  final int page, totalPages, total;
+  final VoidCallback? onPrev, onNext;
   const _Pagination({
-    required this.isDark,
     required this.page,
     required this.totalPages,
-    required this.resultCount,
+    required this.total,
     required this.onPrev,
     required this.onNext,
   });
 
   @override
-  Widget build(BuildContext context) {
-    final surface = isDark ? _T.dSurface : _T.lSurface;
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-    final textS = isDark ? _T.dTextS : _T.lTextS;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: surface,
-          borderRadius: BorderRadius.circular(_T.rMD),
-          border: Border.all(color: border),
-        ),
-        child: Row(
-          children: [
-            _PageBtn(
-              isDark: isDark,
-              icon: Icons.chevron_left_rounded,
-              enabled: onPrev != null,
-              onTap: onPrev ?? () {},
-            ),
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: context.sxSurface,
+            borderRadius: BorderRadius.circular(SX.rMD),
+            border: Border.all(color: context.sxBorder),
+          ),
+          child: Row(children: [
+            _PageBtn(icon: Icons.chevron_left_rounded, onTap: onPrev),
             Expanded(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text('$page / $totalPages',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: textP)),
-                  Text('$resultCount results',
-                      style: TextStyle(fontSize: 10, color: textS)),
-                ],
-              ),
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text('Page $page of $totalPages',
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: context.sxTextP)),
+                Text('$total signals in total',
+                    style: TextStyle(fontSize: 11, color: context.sxTextS)),
+              ]),
             ),
-            _PageBtn(
-              isDark: isDark,
-              icon: Icons.chevron_right_rounded,
-              enabled: onNext != null,
-              onTap: onNext ?? () {},
-            ),
-          ],
+            _PageBtn(icon: Icons.chevron_right_rounded, onTap: onNext),
+          ]),
         ),
-      ),
-    );
-  }
+      );
 }
 
 class _PageBtn extends StatelessWidget {
-  final bool isDark;
   final IconData icon;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _PageBtn({
-    required this.isDark,
-    required this.icon,
-    required this.enabled,
-    required this.onTap,
-  });
+  final VoidCallback? onTap;
+  const _PageBtn({required this.icon, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    final border = isDark ? _T.dBorder : _T.lBorder;
-    final textP = isDark ? _T.dTextP : _T.lTextP;
-
-    return _TapScale(
-      onTap: enabled ? onTap : () {},
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 180),
-        opacity: enabled ? 1.0 : 0.28,
-        child: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(_T.rSM),
-            border: Border.all(color: border),
+  Widget build(BuildContext context) => SxTapScale(
+        onTap: onTap,
+        child: AnimatedOpacity(
+          duration: const Duration(milliseconds: 180),
+          opacity: onTap != null ? 1 : 0.28,
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(SX.rSM),
+              border: Border.all(color: context.sxBorder),
+            ),
+            child: Icon(icon, size: 20, color: context.sxTextP),
           ),
-          child: Icon(icon, size: 18, color: textP),
         ),
-      ),
-    );
-  }
+      );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Atoms
-// ─────────────────────────────────────────────────────────────────────────────
-class _TermPill extends StatelessWidget {
-  final String label;
-  final String type;
-  const _TermPill({required this.label, required this.type});
-
+// ═════════════════════════════════════════════════════════════════════════════
+// Skeleton
+// ═════════════════════════════════════════════════════════════════════════════
+class _Skeleton extends StatefulWidget {
+  const _Skeleton();
   @override
-  Widget build(BuildContext context) {
-    Color c;
-    IconData ico;
-    switch (type) {
-      case 'Bull':
-        c = _T.bull;
-        ico = Icons.north_rounded;
-        break;
-      case 'Bear':
-        c = _T.bear;
-        ico = Icons.south_rounded;
-        break;
-      default:
-        c = _T.neutral;
-        ico = Icons.remove_rounded;
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: c.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(_T.rXS),
-        border: Border.all(color: c.withValues(alpha: 0.25)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(label,
-              style: TextStyle(
-                  fontSize: 9, fontWeight: FontWeight.w700, color: c)),
-          const SizedBox(width: 2),
-          Icon(ico, size: 9, color: c),
-        ],
-      ),
-    );
-  }
+  State<_Skeleton> createState() => _SkeletonState();
 }
 
-class _BreakoutChip extends StatelessWidget {
-  final String label;
-  final IconData icon;
-  final Color color;
-  final Color dim;
-  const _BreakoutChip({
-    required this.label,
-    required this.icon,
-    required this.color,
-    required this.dim,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: dim,
-        borderRadius: BorderRadius.circular(_T.rXS),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 10, color: color),
-          const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-        ],
-      ),
-    );
-  }
-}
-
-class _IndLabel extends StatelessWidget {
-  final Color color;
-  final String label;
-  const _IndLabel({required this.color, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(label,
-            style: TextStyle(
-                fontSize: 10, fontWeight: FontWeight.w600, color: color)),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Skeleton Card
-// ─────────────────────────────────────────────────────────────────────────────
-class _SkeletonCard extends StatefulWidget {
-  final bool isDark;
-  const _SkeletonCard({required this.isDark});
-  @override
-  State<_SkeletonCard> createState() => _SkeletonCardState();
-}
-
-class _SkeletonCardState extends State<_SkeletonCard>
+class _SkeletonState extends State<_Skeleton>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _anim;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 900))
-      ..repeat(reverse: true);
-    _anim = Tween<double>(begin: 0.35, end: 0.85).animate(_ctrl);
-  }
+  late final AnimationController _c = AnimationController(
+      vsync: this, duration: const Duration(milliseconds: 900))
+    ..repeat(reverse: true);
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _c.dispose();
     super.dispose();
   }
 
+  Widget _b(BuildContext ctx, double w, double h, {double r = 6}) => Container(
+        width: w,
+        height: h,
+        decoration: BoxDecoration(
+          color: ctx.isDark
+              ? Colors.white.withValues(alpha: 0.07)
+              : Colors.black.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(r),
+        ),
+      );
+
   @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _anim,
-      builder: (_, __) => Opacity(
-        opacity: _anim.value,
+  Widget build(BuildContext context) => FadeTransition(
+        opacity: Tween<double>(begin: 0.4, end: 1).animate(_c),
         child: Container(
           margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            color: widget.isDark ? _T.dSurface : _T.lSurface,
-            borderRadius: BorderRadius.circular(_T.rLG),
-            border: Border.all(color: widget.isDark ? _T.dBorder : _T.lBorder),
+            color: context.sxSurface,
+            borderRadius: BorderRadius.circular(SX.rLG),
+            border: Border.all(color: context.sxBorder),
           ),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(children: [
-              _sk(32, 32, circle: true),
-              const SizedBox(width: 10),
+              _b(context, 42, 42, r: 14),
+              const SizedBox(width: 12),
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                _sk(110, 13),
-                const SizedBox(height: 5),
-                _sk(65, 10),
+                _b(context, 140, 14),
+                const SizedBox(height: 6),
+                _b(context, 90, 10),
               ]),
               const Spacer(),
-              _sk(52, 24),
+              _b(context, 48, 30),
             ]),
-            const SizedBox(height: 11),
-            _sk(double.infinity, 1),
-            const SizedBox(height: 11),
+            const SizedBox(height: 14),
+            _b(context, double.infinity, 12),
+            const SizedBox(height: 10),
+            _b(context, double.infinity, 6),
+            const SizedBox(height: 12),
             Row(children: [
-              _sk(130, 10),
-              const Spacer(),
-              _sk(34, 18),
-              const SizedBox(width: 5),
-              _sk(34, 18),
-            ]),
-            const SizedBox(height: 11),
-            _sk(double.infinity, 5),
-            const SizedBox(height: 6),
-            Row(children: [
-              _sk(35, 10),
-              const SizedBox(width: 10),
-              _sk(35, 10),
-              const SizedBox(width: 10),
-              _sk(35, 10),
+              _b(context, 90, 22, r: 8),
+              const SizedBox(width: 8),
+              _b(context, 110, 22, r: 8),
             ]),
           ]),
         ),
-      ),
-    );
-  }
-
-  Widget _sk(double w, double h, {bool circle = false}) => Container(
-        width: w,
-        height: h,
-        decoration: BoxDecoration(
-          color: widget.isDark
-              ? Colors.white.withValues(alpha: 0.06)
-              : Colors.black.withValues(alpha: 0.07),
-          borderRadius:
-              circle ? BorderRadius.circular(h / 2) : BorderRadius.circular(4),
-        ),
       );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Tap Scale
-// ─────────────────────────────────────────────────────────────────────────────
-class _TapScale extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onTap;
-  const _TapScale({required this.child, required this.onTap});
-  @override
-  State<_TapScale> createState() => _TapScaleState();
-}
-
-class _TapScaleState extends State<_TapScale>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _scale;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 90));
-    _scale = Tween<double>(begin: 1.0, end: 0.95)
-        .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => _ctrl.forward(),
-      onTapUp: (_) {
-        _ctrl.reverse();
-        widget.onTap();
-      },
-      onTapCancel: () => _ctrl.reverse(),
-      child: ScaleTransition(scale: _scale, child: widget.child),
-    );
-  }
 }

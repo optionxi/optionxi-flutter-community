@@ -12,16 +12,13 @@ import 'package:optionxi/PushNotification/notifcation_service.dart';
 // Determine target route from message content
 // ─────────────────────────────────────────────────────────────
 String _getRouteForMessage(RemoteMessage message) {
-  final title = message.notification?.title?.toLowerCase() ?? '';
-  final type = message.data['type']?.toString().toLowerCase() ?? '';
+  final type = message.data['type']?.toString().toLowerCase();
 
-  if (title.contains('alert') || type == 'alert') {
-    return '/alerts'; // → NotificationPage showing alerts
-  } else if (title.contains('notification') || type == 'notification') {
-    return '/notifications'; // → NotificationPage
-  } else {
-    return '/home'; // → Homepage
+  if (type == null || type.isEmpty) {
+    return '/home';
   }
+
+  return '/$type';
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -52,6 +49,7 @@ Future<void> handleMessageBackground(RemoteMessage message) async {
 class NotificationServiceFirebase {
   static const String _tokenKey = 'fcm_token';
   static const String _pendingTokenKey = 'pending_fcm_token';
+  String? _lastHandledMessageId;
 
   String? _currentToken;
   bool _isInitialized = false;
@@ -86,32 +84,10 @@ class NotificationServiceFirebase {
   // Call this from Homepage.initState via addPostFrameCallback
   // Handles the case where app was killed and user tapped notification
   // ─────────────────────────────────────────────────────────────
-  Future<void> handlePendingNavigation() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final route = prefs.getString('pending_navigation_route');
-      final dataStr = prefs.getString('pending_navigation_data');
-
-      if (route != null) {
-        await prefs.remove('pending_navigation_route');
-        await prefs.remove('pending_navigation_data');
-
-        final data = dataStr != null ? jsonDecode(dataStr) : null;
-        debugPrint("Handling pending navigation → $route");
-
-        await Future.delayed(const Duration(milliseconds: 300));
-        Get.toNamed(route, arguments: data);
-      }
-    } catch (e) {
-      debugPrint("Pending navigation error: $e");
-    }
-  }
 
   void _setupMessageHandlers(FirebaseMessaging messaging) {
-    // App launched from killed state by tapping notification
     messaging.getInitialMessage().then((msg) {
       if (msg != null) {
-        debugPrint("App opened from terminated state via notification");
         Future.delayed(const Duration(milliseconds: 500), () {
           _navigateForMessage(msg);
         });
@@ -121,23 +97,26 @@ class NotificationServiceFirebase {
       return null;
     });
 
-    // App was backgrounded, user tapped notification
     FirebaseMessaging.onMessageOpenedApp.listen((msg) {
-      debugPrint("App foregrounded via notification tap");
       _navigateForMessage(msg);
     });
 
-    // App is in foreground — show local notification
     FirebaseMessaging.onMessage.listen((msg) {
-      debugPrint("Foreground message received");
       _showForegroundNotification(msg);
     });
 
-    // App is in background/killed — handled by top-level function
     FirebaseMessaging.onBackgroundMessage(handleMessageBackground);
   }
 
   void _navigateForMessage(RemoteMessage message) {
+    // Idempotency guard: same message can't navigate twice
+    final id = message.messageId;
+    if (id != null && id == _lastHandledMessageId) {
+      debugPrint("Duplicate navigation suppressed for $id");
+      return;
+    }
+    _lastHandledMessageId = id;
+
     final route = _getRouteForMessage(message);
     debugPrint("Navigating to: $route");
     try {
@@ -341,4 +320,40 @@ class NotificationServiceFirebase {
 
   String? getCurrentToken() => _currentToken;
   bool get isInitialized => _isInitialized;
+
+  // For algo refresh token
+  static const String _lastForceRefreshKey = 'last_token_forced_refresh';
+  static const int _forceRefreshIntervalDays = 7;
+
+  Future<void> ensureFreshTokenForAlgos() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastRefreshMillis = prefs.getInt(_lastForceRefreshKey);
+      final now = DateTime.now();
+
+      if (lastRefreshMillis != null) {
+        final last = DateTime.fromMillisecondsSinceEpoch(lastRefreshMillis);
+        if (now.difference(last).inDays < _forceRefreshIntervalDays) {
+          debugPrint(
+              "Token force-refresh skipped — last done ${now.difference(last).inDays}d ago");
+          return; // still fresh enough, skip the round-trip
+        }
+      }
+
+      debugPrint("Forcing FCM token rotation for algo portal...");
+      await FirebaseMessaging.instance.deleteToken();
+      final token = await FirebaseMessaging.instance.getToken();
+      if (token != null && token.isNotEmpty) {
+        _currentToken = token;
+        await _storeTokenLocally(token);
+        await _updateUserFCMToken(token);
+        await prefs.setInt(_lastForceRefreshKey, now.millisecondsSinceEpoch);
+        debugPrint("Algo-portal token force-refresh complete");
+      }
+    } catch (e) {
+      debugPrint("Algo-portal token force-refresh error: $e");
+    }
+  }
+
+  // End For algo refresh token
 }

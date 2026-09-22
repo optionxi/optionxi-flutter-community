@@ -210,17 +210,37 @@ class _SetAlertPageState extends State<SetAlertPage>
   Future<void> _checkPremiumStatus() async {
     final userId = FirebaseAuth.instance.currentUser?.uid;
     if (userId == null) return;
+
     try {
       final response = await _supabase
-          .from('subscriptions')
-          .select()
-          .eq('user_id', userId)
-          .eq('is_active', true)
+          .from('subscribed_users')
+          .select('active_plan_key, expires_at')
+          .eq('suid', userId)
           .maybeSingle();
-      if (mounted) setState(() => _isPremium = response != null);
+
+      final planKey = response?['active_plan_key'] as String?;
+      final expiresAtRaw = response?['expires_at'] as String?;
+
+      bool isPremium = false;
+
+      if (planKey != null && ['basic', 'pro', 'max'].contains(planKey)) {
+        if (expiresAtRaw != null) {
+          final expiresAt = DateTime.parse(expiresAtRaw);
+          isPremium = expiresAt.isAfter(DateTime.now().toUtc());
+        } else {
+          // No expiry set — treat as active (e.g. lifetime plan)
+          isPremium = true;
+        }
+      }
+
+      if (mounted) {
+        setState(() => _isPremium = isPremium);
+      }
     } catch (e) {
       debugPrint('Premium check error: $e');
-      if (mounted) setState(() => _isPremium = false);
+      if (mounted) {
+        setState(() => _isPremium = false);
+      }
     }
   }
 

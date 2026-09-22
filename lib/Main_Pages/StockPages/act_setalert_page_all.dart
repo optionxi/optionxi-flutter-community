@@ -1,191 +1,367 @@
 import 'dart:async';
-import 'dart:ui';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:optionxi/Components/cust_floating_ai.dart';
+import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Main_Pages/Search/act_search_stocks_meili.dart';
+import 'package:optionxi/Main_Pages/StockPages/act_set_alert.dart';
 import 'package:optionxi/PushNotification/notifcation_service_firebase.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import 'package:optionxi/Helpers/constants.dart';
-import 'package:optionxi/Main_Pages/StockPages/act_set_alert.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
+// ═════════════════════════════════════════════════════════════════════════════
+//  DESIGN NOTES
+//  • Flat "ledger" look: hairline borders, no gradients, no glow, no heavy
+//    shadows. One teal accent for actions; green / red only mean up / down.
+//  • Every alert is written as a plain sentence ("Goes above ₹2,900.00").
+//  • Tap an alert to see "What this means" in everyday words.
+//  • The "Guide" button explains every alert type, status and trading term.
+// ═════════════════════════════════════════════════════════════════════════════
+
 // ─────────────────────────────────────────────
-//  Adaptive Design Tokens  (dark / light aware)
+//  Palette (dark / light aware)
 // ─────────────────────────────────────────────
-class _T {
-  // Surfaces
-  static Color bg(bool d) =>
-      d ? const Color(0xFF0A0D14) : const Color(0xFFF4F6FB);
-  static Color surface(bool d) =>
-      d ? const Color(0xFF11151F) : const Color(0xFFFFFFFF);
-  static Color card(bool d) =>
-      d ? const Color(0xFF161B29) : const Color(0xFFFFFFFF);
-  static Color cardBorder(bool d) =>
-      d ? const Color(0xFF222840) : const Color(0xFFE2E8F5);
-  static Color divider(bool d) =>
-      d ? const Color(0xFF1E2436) : const Color(0xFFECF0F9);
-  static Color rowSurface(bool d) =>
-      d ? const Color(0xFF0F1219) : const Color(0xFFF8FAFF);
+class _P {
+  const _P(this.dark);
+  final bool dark;
 
-  // Text
-  static Color textPrimary(bool d) =>
-      d ? const Color(0xFFF0F4FF) : const Color(0xFF0F172A);
-  static Color textSecondary(bool d) =>
-      d ? const Color(0xFF7B8DB0) : const Color(0xFF64748B);
+  static _P of(BuildContext c) => _P(Theme.of(c).brightness == Brightness.dark);
 
-  // Accent (same hue; bg adapts)
-  static const accent = Color(0xFF4F7EFF);
-  static Color accentBg(bool d) =>
-      d ? const Color(0x334F7EFF) : const Color(0xFFEEF3FF);
+  Color get bg => dark ? const Color(0xFF0D1114) : const Color(0xFFF2F4F6);
+  Color get surface => dark ? const Color(0xFF161B1F) : const Color(0xFFFFFFFF);
+  Color get line => dark ? const Color(0xFF262D33) : const Color(0xFFE3E7EB);
+  Color get ink => dark ? const Color(0xFFEAEEF1) : const Color(0xFF14191E);
+  Color get muted => dark ? const Color(0xFF8B97A1) : const Color(0xFF5F6B76);
 
-  static const amber = Color(0xFFFFB547);
-  static Color amberBg(bool d) =>
-      d ? const Color(0x33FFB547) : const Color(0xFFFFF8ED);
+  Color get accent => dark ? const Color(0xFF4FC3CE) : const Color(0xFF0B7A85);
+  Color get onAccent => dark ? const Color(0xFF0D1114) : Colors.white;
 
-  static const bullish = Color(0xFF16A968);
-  static Color bullishBg(bool d) =>
-      d ? const Color(0x1A22C987) : const Color(0xFFEDFBF3);
+  Color get up => dark ? const Color(0xFF3DD68C) : const Color(0xFF128A5B);
+  Color get down => dark ? const Color(0xFFFF6B6B) : const Color(0xFFD64545);
+  Color get info => dark ? const Color(0xFF9A9BFF) : const Color(0xFF4F4FC9);
+  Color get warn => dark ? const Color(0xFFF2B84B) : const Color(0xFFB7791F);
+}
 
-  static const bearish = Color(0xFFEF4444);
-  static Color bearishBg(bool d) =>
-      d ? const Color(0x1AFF5A6E) : const Color(0xFFFFF0F0);
+// ─────────────────────────────────────────────
+//  Status  (what state an alert is in)
+// ─────────────────────────────────────────────
+enum _Status { waiting, checking, hit, paused, expired }
 
-  // Status foreground colours
-  static Color statusFg(String status, bool d) {
-    switch (status.toLowerCase()) {
-      case 'triggered':
-        return d ? const Color(0xFF22C987) : const Color(0xFF16A968);
-      case 'processing':
-        return accent;
-      case 'expired':
-        return d ? const Color(0xFFFF5A6E) : bearish;
-      default: // pending / paused
-        return d ? const Color(0xFF7B8DB0) : const Color(0xFF94A3B8);
+_Status _statusOf(String raw) {
+  switch (raw.toLowerCase()) {
+    case 'triggered':
+      return _Status.hit;
+    case 'processing':
+      return _Status.checking;
+    case 'paused':
+      return _Status.paused;
+    case 'expired':
+      return _Status.expired;
+    default:
+      return _Status.waiting;
+  }
+}
+
+extension _StatusX on _Status {
+  String get label {
+    switch (this) {
+      case _Status.checking:
+        return 'Checking now';
+      case _Status.hit:
+        return 'Target hit';
+      case _Status.paused:
+        return 'Paused';
+      case _Status.expired:
+        return 'Expired';
+      default:
+        return 'Waiting';
     }
   }
 
-  static IconData statusIcon(String status) {
-    switch (status.toLowerCase()) {
-      case 'triggered':
-        return Icons.check_circle_rounded;
-      case 'processing':
+  IconData get icon {
+    switch (this) {
+      case _Status.checking:
         return Icons.sync_rounded;
-      case 'paused':
+      case _Status.hit:
+        return Icons.check_circle_rounded;
+      case _Status.paused:
         return Icons.pause_circle_rounded;
-      case 'expired':
+      case _Status.expired:
         return Icons.timer_off_rounded;
       default:
         return Icons.schedule_rounded;
     }
   }
 
-  static String statusLabel(String status) {
-    switch (status.toLowerCase()) {
-      case 'triggered':
-        return 'Triggered';
-      case 'processing':
-        return 'Processing';
-      case 'paused':
-        return 'Paused';
-      case 'expired':
-        return 'Expired';
+  String get meaning {
+    switch (this) {
+      case _Status.checking:
+        return "We're checking this alert against the latest prices right now.";
+      case _Status.hit:
+        return 'Your condition came true and we sent you a notification.';
+      case _Status.paused:
+        return "This alert is switched off. You won't be notified until it is switched on again.";
+      case _Status.expired:
+        return "This alert ended before your condition came true, so it's no longer watching.";
       default:
-        return 'Pending';
+        return "We're watching the market for you. Nothing has happened yet, so no notification was sent.";
     }
   }
 
-  // Radius
-  static const r12 = 12.0;
-  static const r16 = 16.0;
-  static const r20 = 20.0;
-}
-
-// ─────────────────────────────────────────────
-//  Alert-type helpers (top-level, no state)
-// ─────────────────────────────────────────────
-Color _alertColor(String type, bool d) {
-  switch (type) {
-    case 'price_above':
-    case 'breaking_high':
-    case 'breaking_52w_high':
-    case 'breaking_week_high':
-      return _T.bullish;
-    case 'price_below':
-    case 'breaking_low':
-    case 'breaking_52w_low':
-    case 'breaking_week_low':
-      return _T.bearish;
-    case 'premium':
-      return _T.amber;
-    default:
-      return _T.accent;
+  Color color(_P p) {
+    switch (this) {
+      case _Status.checking:
+        return p.accent;
+      case _Status.hit:
+        return p.up;
+      case _Status.paused:
+        return p.warn;
+      default:
+        return p.muted;
+    }
   }
 }
 
-Color _alertBg(String type, bool d) {
-  switch (type) {
-    case 'price_above':
-    case 'breaking_high':
-    case 'breaking_52w_high':
-    case 'breaking_week_high':
-      return _T.bullishBg(d);
-    case 'price_below':
-    case 'breaking_low':
-    case 'breaking_52w_low':
-    case 'breaking_week_low':
-      return _T.bearishBg(d);
-    case 'premium':
-      return _T.amberBg(d);
+// ─────────────────────────────────────────────
+//  Filters
+// ─────────────────────────────────────────────
+enum _Filter { all, waiting, hit, stopped }
+
+String _filterLabel(_Filter f) {
+  switch (f) {
+    case _Filter.waiting:
+      return 'Waiting';
+    case _Filter.hit:
+      return 'Target hit';
+    case _Filter.stopped:
+      return 'Stopped';
     default:
-      return _T.accentBg(d);
+      return 'All';
   }
 }
 
-IconData _alertIcon(String type) {
+bool _matchesFilter(AlertModel a, _Filter f) {
+  final s = _statusOf(a.status);
+  switch (f) {
+    case _Filter.waiting:
+      return s == _Status.waiting || s == _Status.checking;
+    case _Filter.hit:
+      return s == _Status.hit;
+    case _Filter.stopped:
+      return s == _Status.paused || s == _Status.expired;
+    default:
+      return true;
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Alert types in plain language
+// ─────────────────────────────────────────────
+enum _Dir { up, down, custom }
+
+_Dir _dirOf(String type) {
+  if (type == 'premium') return _Dir.custom;
+  if (type.contains('above') || type.contains('high')) return _Dir.up;
+  if (type.contains('below') || type.contains('low')) return _Dir.down;
+  return _Dir.custom;
+}
+
+Color _dirColor(_Dir d, _P p) {
+  switch (d) {
+    case _Dir.up:
+      return p.up;
+    case _Dir.down:
+      return p.down;
+    default:
+      return p.info;
+  }
+}
+
+IconData _typeIcon(String type) {
   switch (type) {
     case 'price_above':
       return Icons.north_east_rounded;
     case 'price_below':
       return Icons.south_east_rounded;
     case 'breaking_high':
-      return Icons.rocket_launch_rounded;
-    case 'breaking_low':
-      return Icons.arrow_downward_rounded;
-    case 'breaking_52w_high':
-      return Icons.emoji_events_rounded;
-    case 'breaking_52w_low':
-      return Icons.south_rounded;
     case 'breaking_week_high':
-      return Icons.show_chart_rounded;
+    case 'breaking_52w_high':
+      return Icons.trending_up_rounded;
+    case 'breaking_low':
     case 'breaking_week_low':
+    case 'breaking_52w_low':
       return Icons.trending_down_rounded;
-    case 'premium':
-      return Icons.auto_awesome_rounded;
     default:
-      return Icons.notifications_rounded;
+      return Icons.tune_rounded;
   }
 }
 
-const Map<String, String> _alertTypeLabels = {
-  'price_above': 'Price Above',
-  'price_below': 'Price Below',
-  'breaking_high': 'Breaking Day High',
-  'breaking_low': 'Breaking Day Low',
-  'breaking_52w_high': '52W High',
-  'breaking_52w_low': '52W Low',
-  'breaking_week_high': 'Week High',
-  'breaking_week_low': 'Week Low',
-  'premium': 'Premium',
+const List<String> _typeOrder = [
+  'price_above',
+  'price_below',
+  'breaking_high',
+  'breaking_low',
+  'breaking_week_high',
+  'breaking_week_low',
+  'breaking_52w_high',
+  'breaking_52w_low',
+  'premium',
+];
+
+const Map<String, String> _typeName = {
+  'price_above': 'Price above',
+  'price_below': 'Price below',
+  'breaking_high': "Today's high",
+  'breaking_low': "Today's low",
+  'breaking_week_high': 'One-week high',
+  'breaking_week_low': 'One-week low',
+  'breaking_52w_high': '52-week high',
+  'breaking_52w_low': '52-week low',
+  'premium': 'Custom conditions',
 };
 
-const Set<String> _priceInputTypes = {'price_above', 'price_below'};
+const Map<String, String> _typeGuide = {
+  'price_above':
+      'Notifies you when a stock rises to the price you pick, or higher. Good for catching a breakout or deciding when to book profit.',
+  'price_below':
+      'Notifies you when a stock drops to the price you pick, or lower. Good for spotting a buying chance or guarding against a bigger fall.',
+  'breaking_high':
+      "Notifies you when the stock trades higher than any price seen so far today. It often means buyers are in control.",
+  'breaking_low':
+      "Notifies you when the stock trades lower than any price seen so far today. It often means sellers are in control.",
+  'breaking_week_high':
+      "Notifies you when the stock goes higher than its highest price of the past week.",
+  'breaking_week_low':
+      "Notifies you when the stock goes lower than its lowest price of the past week.",
+  'breaking_52w_high':
+      "Notifies you when the stock reaches its highest price in the past 52 weeks (about a year).",
+  'breaking_52w_low':
+      "Notifies you when the stock falls to its lowest price in the past 52 weeks (about a year).",
+  'premium':
+      'A custom alert built from your own conditions. We notify you when the conditions you set come true.',
+};
 
+String _headline(AlertModel a) {
+  switch (a.type) {
+    case 'price_above':
+      return 'Goes above ${_rupee(a.targetPrice)}';
+    case 'price_below':
+      return 'Falls below ${_rupee(a.targetPrice)}';
+    case 'breaking_high':
+      return "Crosses today's high";
+    case 'breaking_low':
+      return "Drops below today's low";
+    case 'breaking_week_high':
+      return "Crosses this week's high";
+    case 'breaking_week_low':
+      return "Drops below this week's low";
+    case 'breaking_52w_high':
+      return 'Reaches a new 52-week high';
+    case 'breaking_52w_low':
+      return 'Falls to a new 52-week low';
+    case 'premium':
+      return 'Your custom conditions come true';
+    default:
+      return _typeName[a.type] ?? a.type.replaceAll('_', ' ');
+  }
+}
+
+String _meaningFor(AlertModel a) {
+  final price = _rupee(a.targetPrice);
+  switch (a.type) {
+    case 'price_above':
+      return "We'll notify you when the price rises to $price or higher. Useful for catching a breakout or deciding when to book profit.";
+    case 'price_below':
+      return "We'll notify you when the price drops to $price or lower. Useful for spotting a buying chance or guarding against a bigger fall.";
+    default:
+      return _typeGuide[a.type] ??
+          "A custom alert. We'll notify you when your conditions come true.";
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Small helpers
+// ─────────────────────────────────────────────
 String _symbolDisplay(String s) =>
     s.replaceAll('-EQ', '').replaceAll('NSE:', '').replaceAll('-BZ', '');
+
+/// ₹1,23,456.00 (Indian digit grouping)
+String _rupee(double v) {
+  final parts = v.toStringAsFixed(2).split('.');
+  var whole = parts[0];
+  if (whole.length > 3) {
+    final last3 = whole.substring(whole.length - 3);
+    var rest = whole.substring(0, whole.length - 3);
+    final chunks = <String>[];
+    while (rest.length > 2) {
+      chunks.insert(0, rest.substring(rest.length - 2));
+      rest = rest.substring(0, rest.length - 2);
+    }
+    if (rest.isNotEmpty) chunks.insert(0, rest);
+    whole = '${chunks.join(',')},$last3';
+  }
+  return '₹$whole.${parts[1]}';
+}
+
+class _Cond {
+  const _Cond(this.text, this.logical);
+  final String text;
+  final String logical;
+}
+
+String _term(String raw) {
+  final t = raw.trim();
+  if (t.toLowerCase() == 'ltp') return 'Last price';
+  return t.replaceAll('_', ' ').toUpperCase();
+}
+
+String _opWords(String op) {
+  switch (op.toLowerCase().trim()) {
+    case '>':
+    case 'gt':
+      return 'is above';
+    case '<':
+    case 'lt':
+      return 'is below';
+    case '>=':
+    case 'gte':
+      return 'is at or above';
+    case '<=':
+    case 'lte':
+      return 'is at or below';
+    case '==':
+    case '=':
+    case 'eq':
+      return 'equals';
+    case 'crosses_above':
+    case 'cross_above':
+    case 'crosses above':
+      return 'crosses above';
+    case 'crosses_below':
+    case 'cross_below':
+    case 'crosses below':
+      return 'crosses below';
+    default:
+      return op.replaceAll('_', ' ');
+  }
+}
+
+List<_Cond> _conditionLines(List<dynamic>? raw) {
+  if (raw == null) return const [];
+  final out = <_Cond>[];
+  for (final c in raw) {
+    if (c is! Map) continue;
+    final left = c['left']?.toString() ?? '';
+    final op = c['operator']?.toString() ?? '';
+    final right = c['right']?.toString() ?? '';
+    if (left.isEmpty || op.isEmpty || right.isEmpty) continue;
+    out.add(_Cond('${_term(left)} ${_opWords(op)} ${_term(right)}',
+        (c['logical']?.toString() ?? '').toLowerCase()));
+  }
+  return out;
+}
 
 // ─────────────────────────────────────────────
 //  Page
@@ -197,30 +373,21 @@ class MyAlertsPage extends StatefulWidget {
   State<MyAlertsPage> createState() => _MyAlertsPageState();
 }
 
-class _MyAlertsPageState extends State<MyAlertsPage>
-    with SingleTickerProviderStateMixin {
+class _MyAlertsPageState extends State<MyAlertsPage> {
   bool isLoading = true;
   bool hasError = false;
-  Map<String, List<AlertModel>> alerts = {};
-  List<AlertModel> ungroupedAlerts = [];
+  List<AlertModel> _all = [];
   final _supabase = Supabase.instance.client;
   bool _isPremium = false;
-  bool _showTriggeredOnly = false;
   bool _groupBySymbol = true;
+  _Filter _filter = _Filter.all;
 
   RealtimeChannel? _alertsChannel;
   StreamSubscription? _premiumSubscription;
-  late AnimationController _fadeCtrl;
-
-  int get _total => ungroupedAlerts.length;
-  int get _fired =>
-      ungroupedAlerts.where((a) => a.status == 'triggered').length;
 
   @override
   void initState() {
     super.initState();
-    _fadeCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 500));
     NotificationServiceFirebase().forceRefreshAndSyncToken();
     _checkPremiumStatus();
     _setupRealtimeListener();
@@ -230,7 +397,6 @@ class _MyAlertsPageState extends State<MyAlertsPage>
   void dispose() {
     _alertsChannel?.unsubscribe();
     _premiumSubscription?.cancel();
-    _fadeCtrl.dispose();
     super.dispose();
   }
 
@@ -262,10 +428,6 @@ class _MyAlertsPageState extends State<MyAlertsPage>
   }
 
   void _setupRealtimeListener() {
-    setState(() {
-      isLoading = true;
-      hasError = false;
-    });
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
@@ -300,44 +462,47 @@ class _MyAlertsPageState extends State<MyAlertsPage>
     }
   }
 
+  void _retry() {
+    setState(() {
+      isLoading = true;
+      hasError = false;
+    });
+    _setupRealtimeListener();
+  }
+
   Future<void> _loadAlerts() async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
+        if (!mounted) return;
         setState(() {
           hasError = true;
           isLoading = false;
         });
         return;
       }
-      var q = _supabase
+      final response = await _supabase
           .from('alerts')
           .select()
           .eq('user_id', user.uid)
-          .eq('is_deleted', false);
-      if (_showTriggeredOnly) q = q.eq('status', 'triggered');
-      final response = await q.order('updated_at', ascending: false);
+          .eq('is_deleted', false)
+          .order('updated_at', ascending: false);
       if (!mounted) return;
 
-      Map<String, List<AlertModel>> grouped = {};
-      List<AlertModel> flat = [];
+      final flat = <AlertModel>[];
       for (var row in response) {
         try {
-          final a = AlertModel.fromJson(row);
-          flat.add(a);
-          grouped.putIfAbsent(a.symbol, () => []).add(a);
+          flat.add(AlertModel.fromJson(row));
         } catch (e) {
           debugPrint('parse: $e');
         }
       }
 
       setState(() {
-        alerts = grouped;
-        ungroupedAlerts = flat;
+        _all = flat;
         isLoading = false;
         hasError = false;
       });
-      _fadeCtrl.forward(from: 0);
     } catch (e) {
       debugPrint('load alerts: $e');
       if (!mounted) return;
@@ -348,996 +513,1081 @@ class _MyAlertsPageState extends State<MyAlertsPage>
     }
   }
 
+  void _openStock(String symbol) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SetAlertPage(
+          stockName: symbol,
+          segment: symbol.contains('NIFTY') ? 'index' : 'stock',
+        ),
+      ),
+    );
+  }
+
+  void _addAlert() {
+    HapticFeedback.mediumImpact();
+    Navigator.push(
+        context, MaterialPageRoute(builder: (_) => AllSearchPageMeili()));
+  }
+
+  void _showGuide(_P p) {
+    HapticFeedback.selectionClick();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: p.surface,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _GuideSheet(p: p),
+    );
+  }
+
   // ── Build ─────────────────────────────────────
   @override
   Widget build(BuildContext context) {
-    final d = Theme.of(context).brightness == Brightness.dark;
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: d ? Brightness.light : Brightness.dark,
-    ));
+    final p = _P.of(context);
+    final showFab = !isLoading && !hasError && _all.isNotEmpty;
 
-    return Scaffold(
-      backgroundColor: _T.bg(d),
-      extendBodyBehindAppBar: true,
-      appBar: _buildAppBar(context, d),
-      floatingActionButton: _buildFAB(d),
-      body: isLoading
-          ? _buildSkeleton(d)
-          : hasError
-              ? _buildError(d)
-              : (_groupBySymbol ? alerts.isEmpty : ungroupedAlerts.isEmpty)
-                  ? _buildEmpty(d)
-                  : _buildContent(d),
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: p.dark ? Brightness.light : Brightness.dark,
+      ),
+      child: Scaffold(
+        backgroundColor: p.bg,
+        floatingActionButton: showFab
+            ? FloatingActionButton.extended(
+                onPressed: _addAlert,
+                backgroundColor: p.accent,
+                foregroundColor: p.onAccent,
+                elevation: 2,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14)),
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('New alert',
+                    style: TextStyle(fontWeight: FontWeight.w700)),
+              )
+            : null,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              _buildHeader(p),
+              Expanded(child: _buildBody(p)),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
-  // ── AppBar ────────────────────────────────────
-  // Fixed height AppBar that NEVER overflows:
-  //   • SizedBox constrains the inner content
-  //   • Title column uses Expanded + overflow:ellipsis
-  //   • No back button (per request)
-  PreferredSizeWidget _buildAppBar(BuildContext context, bool d) {
-    const double appBarHeight = 62;
+  // ── Header ────────────────────────────────────
+  Widget _buildHeader(_P p) {
+    final stocks = _all.map((a) => a.symbol).toSet().length;
+    final hit = _all.where((a) => _statusOf(a.status) == _Status.hit).length;
 
-    return PreferredSize(
-      preferredSize: const Size.fromHeight(appBarHeight),
-      child: ClipRect(
-        child: Container(
-          decoration: BoxDecoration(
-            color: _T.bg(d).withOpacity(1.0),
-            border:
-                Border(bottom: BorderSide(color: _T.divider(d), width: 0.5)),
-          ),
-          child: SafeArea(
-            bottom: false,
-            // SafeArea adds top padding for the status bar.
-            // The SizedBox below gives the *remaining* bar room.
-            child: SizedBox(
-              height: appBarHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
+    String sub;
+    if (isLoading) {
+      sub = 'Loading your alerts…';
+    } else if (hasError) {
+      sub = "We couldn't load your alerts.";
+    } else if (_all.isEmpty) {
+      sub = "You aren't watching any stocks yet.";
+    } else {
+      sub =
+          'Watching $stocks stock${stocks == 1 ? '' : 's'} with ${_all.length} alert${_all.length == 1 ? '' : 's'}.';
+      if (hit > 0) {
+        sub += ' $hit ${hit == 1 ? 'has' : 'have'} reached your target.';
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          if (Navigator.of(context).canPop())
+            GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                Navigator.of(context).pop();
+              },
+              child: Container(
+                width: 36,
+                height: 36,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: p.surface,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: p.line),
+                ),
+                child: Icon(Icons.arrow_back_ios_new_rounded,
+                    size: 14, color: p.muted),
+              ),
+            ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    // ── Back button ──────────────────────
-                    if (Navigator.of(context).canPop()) ...[
-                      GestureDetector(
-                        onTap: () {
-                          HapticFeedback.selectionClick();
-                          Navigator.of(context).pop();
-                        },
-                        child: Container(
-                          width: 34,
-                          height: 34,
-                          margin: const EdgeInsets.only(right: 10),
-                          decoration: BoxDecoration(
-                            color: _T.surface(d),
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: _T.cardBorder(d)),
-                          ),
-                          child: Icon(Icons.arrow_back_ios_new_rounded,
-                              size: 14, color: _T.textSecondary(d)),
+                    Text('Alerts',
+                        style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.w800,
+                            color: p.ink,
+                            letterSpacing: -0.8,
+                            height: 1.1)),
+                    if (_isPremium) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF2B84B),
+                          borderRadius: BorderRadius.circular(6),
                         ),
+                        child: const Text('PRO',
+                            style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                color: Color(0xFF14191E))),
                       ),
                     ],
-                    // ── Title + subtitle ────────────────
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Alerts',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                  color: _T.textPrimary(d),
-                                  letterSpacing: -0.5,
-                                  height: 1.1,
-                                ),
-                              ),
-                              if (_isPremium) ...[
-                                const SizedBox(width: 8),
-                                _ProBadge(),
-                              ],
-                            ],
-                          ),
-                          if (!isLoading && !hasError) ...[
-                            const SizedBox(height: 1),
-                            Text(
-                              '$_total alert${_total == 1 ? '' : 's'}'
-                              '${_fired > 0 ? ' · $_fired fired' : ''}',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: _T.textSecondary(d),
-                                height: 1.1,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                    // ── Controls ───────────────────────
-                    _PillToggle(
-                      active: _showTriggeredOnly,
-                      label: _showTriggeredOnly ? 'Fired' : 'All',
-                      icon: Icons.bolt_rounded,
-                      isDark: d,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(
-                            () => _showTriggeredOnly = !_showTriggeredOnly);
-                        _loadAlerts();
-                      },
-                    ),
-                    const SizedBox(width: 8),
-                    _PillToggle(
-                      active: _groupBySymbol,
-                      label: _groupBySymbol ? 'Grouped' : 'List',
-                      icon: _groupBySymbol
-                          ? Icons.layers_rounded
-                          : Icons.view_list_rounded,
-                      isDark: d,
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() => _groupBySymbol = !_groupBySymbol);
-                      },
-                    ),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text(sub,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        TextStyle(fontSize: 13, color: p.muted, height: 1.35)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          GestureDetector(
+            onTap: () => _showGuide(p),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: p.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: p.line),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.help_outline_rounded, size: 16, color: p.accent),
+                  const SizedBox(width: 6),
+                  Text('Guide',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: p.ink)),
+                ],
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  // ── FAB ───────────────────────────────────────
-  Widget _buildFAB(bool d) {
-    return MagicalAIButton(
-      label: "Add Alert",
-      onPressed: () {
-        HapticFeedback.mediumImpact();
-        Navigator.push(
-            context, MaterialPageRoute(builder: (_) => AllSearchPageMeili()));
-      },
-    );
-  }
-
-  // ── States ────────────────────────────────────
-  Widget _buildSkeleton(bool d) {
-    return SafeArea(
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-        itemCount: 8,
-        itemBuilder: (_, i) => _SkeletonCard(
-          delay: i,
-          isDark: d,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildError(bool d) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-                color: _T.bearishBg(d),
-                borderRadius: BorderRadius.circular(_T.r20)),
-            child: Icon(Icons.wifi_off_rounded, size: 44, color: _T.bearish),
-          ),
-          const SizedBox(height: 20),
-          Text('Failed to load alerts',
-              style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                  color: _T.textPrimary(d))),
-          const SizedBox(height: 8),
-          Text('Check your connection and try again',
-              style: TextStyle(fontSize: 14, color: _T.textSecondary(d))),
-          const SizedBox(height: 24),
-          _GlowButton(
-              label: 'Retry',
-              icon: Icons.refresh_rounded,
-              onTap: _setupRealtimeListener),
         ],
       ),
     );
   }
 
-  Widget _buildEmpty(bool d) {
+  // ── Body states ───────────────────────────────
+  Widget _buildBody(_P p) {
+    if (isLoading) return _SkeletonList(p: p);
+    if (hasError) return _buildError(p);
+    if (_all.isEmpty) return _buildEmpty(p);
+    return _buildLoaded(p);
+  }
+
+  Widget _buildLoaded(_P p) {
+    final visible = _all.where((a) => _matchesFilter(a, _filter)).toList();
+
+    return Column(
+      children: [
+        // Filter chips
+        const SizedBox(height: 4),
+        SizedBox(
+          height: 40,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              for (final f in _Filter.values)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _FilterChipX(
+                    label: _filterLabel(f),
+                    count: _all.where((a) => _matchesFilter(a, f)).length,
+                    selected: _filter == f,
+                    p: p,
+                    onTap: () {
+                      HapticFeedback.selectionClick();
+                      setState(() => _filter = f);
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        // Count + view switch
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Showing ${visible.length} of ${_all.length}',
+                  style: TextStyle(fontSize: 12, color: p.muted),
+                ),
+              ),
+              _ViewSwitch(
+                grouped: _groupBySymbol,
+                p: p,
+                onChanged: (v) {
+                  HapticFeedback.selectionClick();
+                  setState(() => _groupBySymbol = v);
+                },
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: visible.isEmpty
+              ? _buildNoMatches(p)
+              : RefreshIndicator(
+                  color: p.accent,
+                  backgroundColor: p.surface,
+                  onRefresh: _loadAlerts,
+                  child: _groupBySymbol
+                      ? _buildGrouped(p, visible)
+                      : _buildFlat(p, visible),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGrouped(_P p, List<AlertModel> visible) {
+    final groups = <String, List<AlertModel>>{};
+    for (final a in visible) {
+      groups.putIfAbsent(a.symbol, () => []).add(a);
+    }
+    final keys = groups.keys.toList();
+
+    return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+      itemCount: keys.length,
+      itemBuilder: (_, i) {
+        final sym = keys[i];
+        return _StockSection(
+          symbol: sym,
+          alerts: groups[sym]!,
+          p: p,
+          onManage: () => _openStock(sym),
+        );
+      },
+    );
+  }
+
+  Widget _buildFlat(_P p, List<AlertModel> visible) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 110),
+      children: [
+        _Block(
+          p: p,
+          children: [
+            for (final a in visible)
+              _AlertTile(
+                key: ValueKey(a.id),
+                alert: a,
+                p: p,
+                showSymbol: true,
+                onEdit: () => _openStock(a.symbol),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNoMatches(_P p) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(28),
-              decoration: BoxDecoration(
-                color: _T.accentBg(d),
-                shape: BoxShape.circle,
-                border: Border.all(color: _T.accent.withOpacity(0.2), width: 1),
-              ),
-              child: Icon(Icons.notifications_none_rounded,
-                  size: 56, color: _T.accent),
-            ),
-            const SizedBox(height: 28),
-            Text('No alerts yet',
-                style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: _T.textPrimary(d),
-                    letterSpacing: -0.5)),
-            const SizedBox(height: 10),
-            Text(
-              'Get notified the moment a stock\nhits your target or crosses a key level.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                  fontSize: 15, color: _T.textSecondary(d), height: 1.6),
-            ),
-            const SizedBox(height: 32),
-            _GlowButton(
-              label: 'Create your first alert',
-              icon: Icons.add_rounded,
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => AllSearchPageMeili())),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildContent(bool d) => FadeTransition(
-        opacity: _fadeCtrl,
-        child: _groupBySymbol ? _buildGroupedList(d) : _buildUngroupedList(d),
-      );
-
-  Widget _buildGroupedList(bool d) {
-    final topPad = MediaQuery.of(context).padding.top + 62 + 12;
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(child: SizedBox(height: topPad)),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) {
-                final sym = alerts.keys.elementAt(i);
-                return _SymbolCard(
-                  symbol: sym,
-                  displayName: _symbolDisplay(sym),
-                  alerts: alerts[sym]!,
-                  isDark: d,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => SetAlertPage(
-                        stockName: sym,
-                        segment: sym.contains("NIFTY") ? "index" : "stock",
-                      ),
-                    ),
-                  ),
-                );
-              },
-              childCount: alerts.length,
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
-      ],
-    );
-  }
-
-  Widget _buildUngroupedList(bool d) {
-    final topPad = MediaQuery.of(context).padding.top + 62 + 12;
-    return CustomScrollView(
-      slivers: [
-        SliverToBoxAdapter(child: SizedBox(height: topPad)),
-        SliverPadding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          sliver: SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (ctx, i) {
-                final a = ungroupedAlerts[i];
-                return _UngroupedAlertCard(
-                  alert: a,
-                  displayName: _symbolDisplay(a.symbol),
-                  isDark: d,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => SetAlertPage(stockName: a.symbol)),
-                  ),
-                );
-              },
-              childCount: ungroupedAlerts.length,
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 100)),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Symbol Card  (grouped view)
-// ─────────────────────────────────────────────
-class _SymbolCard extends StatefulWidget {
-  const _SymbolCard({
-    required this.symbol,
-    required this.displayName,
-    required this.alerts,
-    required this.isDark,
-    required this.onTap,
-  });
-  final String symbol;
-  final String displayName;
-  final List<AlertModel> alerts;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  State<_SymbolCard> createState() => _SymbolCardState();
-}
-
-class _SymbolCardState extends State<_SymbolCard> {
-  bool _expanded = true;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = widget.isDark;
-    final hasTriggered = widget.alerts.any((a) => a.status == 'triggered');
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: _T.card(d),
-        borderRadius: BorderRadius.circular(_T.r20),
-        border: Border.all(
-          color: hasTriggered ? _T.bullish.withOpacity(0.35) : _T.cardBorder(d),
-          width: hasTriggered ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(d ? 0.22 : 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-          if (hasTriggered)
-            BoxShadow(
-                color: _T.bullish.withOpacity(0.08),
-                blurRadius: 20,
-                spreadRadius: 2),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(_T.r20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(_T.r20),
-          onTap: widget.onTap,
-          splashColor: _T.accent.withOpacity(0.05),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    _SymbolAvatar(displayName: widget.displayName, isDark: d),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(widget.displayName,
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                color: _T.textPrimary(d),
-                                letterSpacing: -0.3,
-                              )),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${widget.alerts.length} alert${widget.alerts.length == 1 ? '' : 's'}',
-                            style: TextStyle(
-                                fontSize: 12, color: _T.textSecondary(d)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _AlertStatusDots(alerts: widget.alerts, isDark: d),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () {
-                        HapticFeedback.selectionClick();
-                        setState(() => _expanded = !_expanded);
-                      },
-                      child: AnimatedRotation(
-                        duration: const Duration(milliseconds: 200),
-                        turns: _expanded ? 0 : -0.25,
-                        child: Container(
-                          padding: const EdgeInsets.all(6),
-                          decoration: BoxDecoration(
-                            color: _T.divider(d),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: Icon(Icons.keyboard_arrow_down_rounded,
-                              size: 16, color: _T.textSecondary(d)),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                AnimatedCrossFade(
-                  duration: const Duration(milliseconds: 220),
-                  crossFadeState: _expanded
-                      ? CrossFadeState.showFirst
-                      : CrossFadeState.showSecond,
-                  firstChild: Column(
-                    children: [
-                      const SizedBox(height: 12),
-                      Container(
-                          height: 1,
-                          color: _T.divider(d),
-                          margin: const EdgeInsets.only(bottom: 10)),
-                      ...widget.alerts
-                          .map((a) => _AlertRow(alert: a, isDark: d)),
-                    ],
-                  ),
-                  secondChild: const SizedBox.shrink(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Ungrouped Alert Card
-//  Layout:
-//    [Avatar]  [Name]          [updated time]
-//    ─────────────────────────────────────────
-//    [Full-width _AlertRow]
-// ─────────────────────────────────────────────
-class _UngroupedAlertCard extends StatelessWidget {
-  const _UngroupedAlertCard({
-    required this.alert,
-    required this.displayName,
-    required this.isDark,
-    required this.onTap,
-  });
-  final AlertModel alert;
-  final String displayName;
-  final bool isDark;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = isDark;
-    final isTriggered = alert.status.toLowerCase() == 'triggered';
-    final statusColor = _T.statusFg(alert.status.toLowerCase(), d);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: _T.card(d),
-        borderRadius: BorderRadius.circular(_T.r20),
-        border: Border.all(
-          color: isTriggered ? _T.bullish.withOpacity(0.35) : _T.cardBorder(d),
-          width: isTriggered ? 1.5 : 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withOpacity(d ? 0.22 : 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4)),
-          if (isTriggered)
-            BoxShadow(
-                color: _T.bullish.withOpacity(0.08),
-                blurRadius: 20,
-                spreadRadius: 2),
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(_T.r20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(_T.r20),
-          onTap: onTap,
-          splashColor: _T.accent.withOpacity(0.05),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header row: avatar · name · time ──
-                Row(
-                  children: [
-                    _SymbolAvatar(displayName: displayName, isDark: d),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            displayName,
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                              color: _T.textPrimary(d),
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            timeago.format(alert.updatedAt),
-                            style: TextStyle(
-                                fontSize: 11, color: _T.textSecondary(d)),
-                          ),
-                        ],
-                      ),
-                    ),
-                    // Status dot
-                    Icon(_T.statusIcon(alert.status.toLowerCase()),
-                        size: 12, color: statusColor),
-                    const SizedBox(width: 4),
-                    Text(
-                      _T.statusLabel(alert.status.toLowerCase()),
-                      style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: statusColor),
-                    ),
-                  ],
-                ),
-                // ── Divider ───────────────────────────
-                Container(
-                    height: 1,
-                    color: _T.divider(d),
-                    margin: const EdgeInsets.symmetric(vertical: 12)),
-                // ── Full-width alert row ───────────────
-                _AlertRow(alert: alert, isDark: d, hideStatus: true),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Alert Row
-//  Layout (stacked, no horizontal crowding):
-//    [TypePill]          [status-icon · label]
-//    ₹price              ← own line
-//    condition chips     ← own line
-//    ⚡ timestamp        ← only when triggered
-// ─────────────────────────────────────────────
-class _AlertRow extends StatelessWidget {
-  const _AlertRow(
-      {required this.alert, required this.isDark, this.hideStatus = false});
-  final AlertModel alert;
-  final bool isDark;
-  final bool hideStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = isDark;
-    final type = alert.type;
-    final status = alert.status.toLowerCase();
-    final color = _alertColor(type, d);
-    final bg = _alertBg(type, d);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: _T.rowSurface(d),
-          borderRadius: BorderRadius.circular(_T.r12),
-          border: Border.all(color: color.withOpacity(0.18)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── Row 1: type pill  +  status (icon + text only, no bg pill) ──
-            Row(
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: bg,
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(_alertIcon(type), size: 12, color: color),
-                      const SizedBox(width: 4),
-                      Text(
-                        _alertTypeLabels[type] ?? type,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: color,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const Spacer(),
-                // Status: just icon + label, hidden when card header already shows it
-                if (!hideStatus) ...[
-                  Icon(_T.statusIcon(status),
-                      size: 11, color: _T.statusFg(status, d)),
-                  const SizedBox(width: 3),
-                  Text(
-                    _T.statusLabel(status),
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      color: _T.statusFg(status, d),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-
-            // ── Row 2: price on its own line ──────────────────────────────
-            if (_priceInputTypes.contains(type)) ...[
-              const SizedBox(height: 7),
-              Text(
-                '₹${alert.targetPrice.toStringAsFixed(2)}',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                  letterSpacing: -0.4,
-                ),
-              ),
-            ],
-
-            // ── Conditions ────────────────────────────────────────────────
-            if (alert.complexConditions != null &&
-                alert.complexConditions!.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              _ConditionChips(conditions: alert.complexConditions!, isDark: d),
-            ],
-
-            // ── Triggered timestamp ───────────────────────────────────────
-            if (status == 'triggered') ...[
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Icon(Icons.bolt_rounded,
-                      size: 11, color: _T.statusFg('triggered', d)),
-                  const SizedBox(width: 3),
-                  Expanded(
-                    child: Text(
-                      '${timeago.format(alert.updatedAt)} · ${_formatDateTime(alert.updatedAt.toLocal())}',
-                      style: TextStyle(
-                          fontSize: 11, color: _T.statusFg('triggered', d)),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Condition Chips
-// ─────────────────────────────────────────────
-class _ConditionChips extends StatelessWidget {
-  const _ConditionChips({required this.conditions, required this.isDark});
-  final List<dynamic> conditions;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    final d = isDark;
-    return Wrap(
-      spacing: 4,
-      runSpacing: 4,
-      children: conditions.map<Widget>((c) {
-        final left = c['left']?.toString().toUpperCase() ?? '';
-        final op = c['operator']?.toString() ?? '';
-        final right = c['right']?.toString().toUpperCase() ?? '';
-        final logical = c['logical']?.toString() ?? '';
-        if (left.isEmpty || op.isEmpty || right.isEmpty) {
-          return const SizedBox.shrink();
-        }
-        return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-              decoration: BoxDecoration(
-                color: d ? const Color(0xFF0D2040) : const Color(0xFFEEF4FF),
-                borderRadius: BorderRadius.circular(6),
-                border:
-                    Border.all(color: _T.accent.withOpacity(d ? 0.2 : 0.25)),
-              ),
-              child: RichText(
-                text: TextSpan(
-                  style: const TextStyle(fontSize: 11),
-                  children: [
-                    TextSpan(
-                        text: left,
-                        style: TextStyle(
-                            color: d
-                                ? const Color(0xFF7BB3FF)
-                                : const Color(0xFF3B6ECC),
-                            fontWeight: FontWeight.w700)),
-                    TextSpan(
-                        text: ' $op ',
-                        style: TextStyle(
-                            color: d ? _T.amber : const Color(0xFFB45309),
-                            fontWeight: FontWeight.w600)),
-                    TextSpan(
-                        text: right,
-                        style: TextStyle(
-                            color: d ? _T.bullish : const Color(0xFF15803D),
-                            fontWeight: FontWeight.w700)),
-                  ],
-                ),
-              ),
-            ),
-            if (logical.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Text(
-                  logical.toUpperCase(),
-                  style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w800,
-                      color: _T.bearish,
-                      letterSpacing: 0.5),
-                ),
-              ),
+            Text('No alerts in this view',
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.w700, color: p.ink)),
+            const SizedBox(height: 6),
+            Text('Try another filter to see the rest of your alerts.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: p.muted, height: 1.4)),
+            const SizedBox(height: 16),
+            _TextLink(
+                label: 'Show all alerts',
+                p: p,
+                onTap: () => setState(() => _filter = _Filter.all)),
           ],
-        );
-      }).toList(),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildError(_P p) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.wifi_off_rounded, size: 36, color: p.down),
+            const SizedBox(height: 16),
+            Text("Couldn't load your alerts",
+                style: TextStyle(
+                    fontSize: 20, fontWeight: FontWeight.w800, color: p.ink)),
+            const SizedBox(height: 8),
+            Text(
+                'This is usually a connection problem. Check your internet and try again. Your alerts are safe.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: p.muted, height: 1.45)),
+            const SizedBox(height: 20),
+            _PrimaryButton(
+                label: 'Try again',
+                icon: Icons.refresh_rounded,
+                p: p,
+                onTap: _retry),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(_P p) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.notifications_none_rounded, size: 40, color: p.muted),
+            const SizedBox(height: 16),
+            Text("You aren't watching anything yet",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: p.ink,
+                    letterSpacing: -0.4)),
+            const SizedBox(height: 10),
+            Text(
+                "Pick a stock and tell us the price or level you care about. We'll send a notification the moment it happens, so you don't have to keep checking.",
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: p.muted, height: 1.5)),
+            const SizedBox(height: 24),
+            _PrimaryButton(
+                label: 'Add your first alert',
+                icon: Icons.add_rounded,
+                p: p,
+                onTap: _addAlert),
+            const SizedBox(height: 8),
+            _TextLink(
+                label: 'How alerts work', p: p, onTap: () => _showGuide(p)),
+          ],
+        ),
+      ),
     );
   }
 }
 
 // ─────────────────────────────────────────────
-//  Status Dots  (grouped card header summary)
+//  Filter chip + view switch
 // ─────────────────────────────────────────────
-class _AlertStatusDots extends StatelessWidget {
-  const _AlertStatusDots({required this.alerts, required this.isDark});
-  final List<AlertModel> alerts;
-  final bool isDark;
+class _FilterChipX extends StatelessWidget {
+  const _FilterChipX({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.p,
+    required this.onTap,
+  });
+  final String label;
+  final int count;
+  final bool selected;
+  final _P p;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final d = isDark;
-    final triggered = alerts.where((a) => a.status == 'triggered').length;
-    final pending = alerts.where((a) => a.status == 'pending').length;
-    final others = alerts.length - triggered - pending;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: selected ? p.ink : p.surface,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: selected ? p.ink : p.line),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? p.bg : p.ink)),
+            const SizedBox(width: 6),
+            Text('$count',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: selected ? p.bg.withOpacity(0.7) : p.muted)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewSwitch extends StatelessWidget {
+  const _ViewSwitch(
+      {required this.grouped, required this.p, required this.onChanged});
+  final bool grouped;
+  final _P p;
+  final ValueChanged<bool> onChanged;
+
+  Widget _seg(String text, bool on, VoidCallback tap) {
+    return GestureDetector(
+      onTap: tap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: on ? p.surface : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(text,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: on ? p.ink : p.muted)),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: p.line,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _seg('By stock', grouped, () => onChanged(true)),
+          _seg('Newest first', !grouped, () => onChanged(false)),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Stock section  (grouped view)
+// ─────────────────────────────────────────────
+class _StockSection extends StatelessWidget {
+  const _StockSection({
+    required this.symbol,
+    required this.alerts,
+    required this.p,
+    required this.onManage,
+  });
+  final String symbol;
+  final List<AlertModel> alerts;
+  final _P p;
+  final VoidCallback onManage;
+
+  String _summary() {
+    final waiting = alerts.where((a) {
+      final s = _statusOf(a.status);
+      return s == _Status.waiting || s == _Status.checking;
+    }).length;
+    final hit = alerts.where((a) => _statusOf(a.status) == _Status.hit).length;
+    final stopped = alerts.length - waiting - hit;
+    final parts = <String>[];
+    if (waiting > 0) parts.add('$waiting waiting');
+    if (hit > 0) parts.add('$hit target hit');
+    if (stopped > 0) parts.add('$stopped stopped');
+    return parts.join(', ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = _symbolDisplay(symbol);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onManage,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(
+                children: [
+                  _Avatar(name: name, size: 40, p: p),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            style: TextStyle(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: p.ink,
+                                letterSpacing: -0.3)),
+                        const SizedBox(height: 2),
+                        Text(_summary(),
+                            style: TextStyle(fontSize: 12, color: p.muted)),
+                      ],
+                    ),
+                  ),
+                  Text('Manage',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: p.accent)),
+                  Icon(Icons.chevron_right_rounded, size: 18, color: p.accent),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _Block(
+            p: p,
+            children: [
+              for (final a in alerts)
+                _AlertTile(
+                  key: ValueKey(a.id),
+                  alert: a,
+                  p: p,
+                  onEdit: onManage,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A flat bordered surface that stacks tiles with hairline dividers.
+class _Block extends StatelessWidget {
+  const _Block({required this.p, required this.children});
+  final _P p;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final items = <Widget>[];
+    for (var i = 0; i < children.length; i++) {
+      if (i > 0) items.add(Divider(height: 1, thickness: 1, color: p.line));
+      items.add(children[i]);
+    }
+    return Container(
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: p.line),
+      ),
+      child: Column(children: items),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Alert tile
+//    ▍ Goes above ₹2,900.00                    ⌄
+//    ▍ ● Waiting, set 2 days ago
+//    ▍ (tap) → what this means, status, edit
+// ─────────────────────────────────────────────
+class _AlertTile extends StatefulWidget {
+  const _AlertTile({
+    Key? key,
+    required this.alert,
+    required this.p,
+    required this.onEdit,
+    this.showSymbol = false,
+  }) : super(key: key);
+  final AlertModel alert;
+  final _P p;
+  final VoidCallback onEdit;
+  final bool showSymbol;
+
+  @override
+  State<_AlertTile> createState() => _AlertTileState();
+}
+
+class _AlertTileState extends State<_AlertTile> {
+  bool _open = false;
+
+  Widget _mini(String t) => Padding(
+        padding: const EdgeInsets.only(bottom: 3),
+        child: Text(t,
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: widget.p.ink)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final a = widget.alert;
+    final p = widget.p;
+    final status = _statusOf(a.status);
+    final statusColor = status.color(p);
+    final barColor = _dirColor(_dirOf(a.type), p);
+    final conds = _conditionLines(a.complexConditions);
+    final hasLogical = conds.any((c) => c.logical.isNotEmpty);
+
+    final when = status == _Status.hit
+        ? '${timeago.format(a.updatedAt)}, ${_formatDateTime(a.updatedAt.toLocal())}'
+        : 'set ${timeago.format(a.createdAt)}';
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          setState(() => _open = !_open);
+        },
+        child: Stack(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(17, 14, 12, 14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.showSymbol) ...[
+                    Row(
+                      children: [
+                        _Avatar(name: _symbolDisplay(a.symbol), size: 26, p: p),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(_symbolDisplay(a.symbol),
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w800,
+                                  color: p.ink)),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(_headline(a),
+                            style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                color: p.ink,
+                                height: 1.25,
+                                letterSpacing: -0.2)),
+                      ),
+                      const SizedBox(width: 8),
+                      Icon(
+                          _open
+                              ? Icons.expand_less_rounded
+                              : Icons.expand_more_rounded,
+                          size: 20,
+                          color: p.muted),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 5,
+                    runSpacing: 2,
+                    children: [
+                      Icon(status.icon, size: 14, color: statusColor),
+                      Text(status.label,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: statusColor)),
+                      Text(when,
+                          style: TextStyle(fontSize: 12, color: p.muted)),
+                    ],
+                  ),
+                  if (conds.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    _ConditionList(conds: conds, p: p),
+                  ],
+                  AnimatedSize(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOut,
+                    alignment: Alignment.topCenter,
+                    child: _open
+                        ? Container(
+                            width: double.infinity,
+                            margin: const EdgeInsets.only(top: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: p.bg,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _mini('What this means'),
+                                Text(_meaningFor(a),
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: p.muted,
+                                        height: 1.45)),
+                                const SizedBox(height: 10),
+                                _mini('Status: ${status.label}'),
+                                Text(status.meaning,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        color: p.muted,
+                                        height: 1.45)),
+                                if (hasLogical) ...[
+                                  const SizedBox(height: 10),
+                                  _mini('"and" vs "or"'),
+                                  Text(
+                                      '"and" means every condition must be true. "or" means any one of them is enough.',
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          color: p.muted,
+                                          height: 1.45)),
+                                ],
+                                const SizedBox(height: 12),
+                                _OutlineButton(
+                                  label: 'Edit this alert',
+                                  icon: Icons.edit_outlined,
+                                  p: p,
+                                  onTap: widget.onEdit,
+                                ),
+                              ],
+                            ),
+                          )
+                        : const SizedBox(width: double.infinity),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 0,
+              top: 0,
+              bottom: 0,
+              child: Container(width: 3, color: barColor),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────
+//  Custom conditions written as sentences
+// ─────────────────────────────────────────────
+class _ConditionList extends StatelessWidget {
+  const _ConditionList({required this.conds, required this.p});
+  final List<_Cond> conds;
+  final _P p;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (triggered > 0)
-          _Dot(color: _T.statusFg('triggered', d), count: triggered, isDark: d),
-        if (pending > 0)
-          _Dot(color: _T.statusFg('pending', d), count: pending, isDark: d),
-        if (others > 0) _Dot(color: _T.accent, count: others, isDark: d),
+        Text('Notify me only when',
+            style: TextStyle(fontSize: 12, color: p.muted)),
+        const SizedBox(height: 4),
+        for (var i = 0; i < conds.length; i++) ...[
+          Text(conds[i].text,
+              style: TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w600, color: p.ink)),
+          if (i < conds.length - 1 && conds[i].logical.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(conds[i].logical,
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontStyle: FontStyle.italic,
+                      color: p.muted)),
+            )
+          else if (i < conds.length - 1)
+            const SizedBox(height: 4),
+        ],
       ],
     );
   }
 }
 
-class _Dot extends StatelessWidget {
-  const _Dot({required this.color, required this.count, required this.isDark});
-  final Color color;
-  final int count;
-  final bool isDark;
+// ─────────────────────────────────────────────
+//  Guide bottom sheet (plain-language help)
+// ─────────────────────────────────────────────
+class _GuideSheet extends StatelessWidget {
+  const _GuideSheet({required this.p});
+  final _P p;
+
+  Widget _title(String t) => Padding(
+        padding: const EdgeInsets.only(top: 24, bottom: 8),
+        child: Text(t,
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: p.ink,
+                letterSpacing: -0.2)),
+      );
+
+  Widget _row(IconData icon, Color color, String name, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(name,
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        color: p.ink)),
+                const SizedBox(height: 2),
+                Text(text,
+                    style:
+                        TextStyle(fontSize: 13, color: p.muted, height: 1.45)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _term2(String term, String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(term,
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.w700, color: p.ink)),
+          const SizedBox(height: 2),
+          Text(text,
+              style: TextStyle(fontSize: 13, color: p.muted, height: 1.45)),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 4),
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withOpacity(isDark ? 0.15 : 0.12),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        '$count',
-        style:
-            TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: color),
+    return ConstrainedBox(
+      constraints:
+          BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+      child: SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          children: [
+            Center(
+              child: Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                    color: p.line, borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('How alerts work',
+                style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w800,
+                    color: p.ink,
+                    letterSpacing: -0.6)),
+            const SizedBox(height: 8),
+            Text(
+                "An alert watches a stock for you. When the condition you chose happens, we send a notification, so you don't have to keep checking the screen.",
+                style: TextStyle(fontSize: 14, color: p.muted, height: 1.5)),
+            _title('Kinds of alerts'),
+            for (final t in _typeOrder)
+              _row(_typeIcon(t), _dirColor(_dirOf(t), p), _typeName[t]!,
+                  _typeGuide[t]!),
+            _title('What the status means'),
+            for (final s in _Status.values)
+              _row(s.icon, s.color(p), s.label, s.meaning),
+            _title('Words you may see'),
+            _term2('Target price',
+                'The price you pick. When the stock reaches it, we notify you.'),
+            _term2('Breakout',
+                'When a price pushes past a level it has struggled to cross before. Traders often see it as the start of a bigger move.'),
+            _term2("Today's high / low",
+                'The highest and lowest prices the stock has traded at so far today.'),
+            _term2('52-week high / low',
+                'The highest and lowest prices the stock has traded at in the past year.'),
+            const SizedBox(height: 12),
+            Text('Alerts are notifications, not advice to buy or sell.',
+                style: TextStyle(fontSize: 12, color: p.muted)),
+          ],
+        ),
       ),
     );
   }
 }
 
 // ─────────────────────────────────────────────
-//  Symbol Avatar
+//  Avatar
 // ─────────────────────────────────────────────
-class _SymbolAvatar extends StatelessWidget {
-  const _SymbolAvatar({required this.displayName, required this.isDark});
-  final String displayName;
-  final bool isDark;
+class _Avatar extends StatelessWidget {
+  const _Avatar({required this.name, required this.size, required this.p});
+  final String name;
+  final double size;
+  final _P p;
+
+  Widget _fallback() => Container(
+        width: size,
+        height: size,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: p.accent.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(size * 0.28),
+        ),
+        child: Text(
+          name.isNotEmpty ? name[0].toUpperCase() : '?',
+          style: TextStyle(
+              fontSize: size * 0.42,
+              fontWeight: FontWeight.w800,
+              color: p.accent),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 44,
-      height: 44,
+      width: size,
+      height: size,
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(_T.r12),
+        borderRadius: BorderRadius.circular(size * 0.28),
         child: CachedNetworkImage(
-          imageUrl: "${Constants.OptionXiS3Loc}$displayName.png",
+          imageUrl: "${Constants.OptionXiS3Loc}$name.png",
           fit: BoxFit.cover,
-          placeholder: (_, __) =>
-              _FallbackAvatar(name: displayName, isDark: isDark),
-          errorWidget: (_, __, ___) =>
-              _FallbackAvatar(name: displayName, isDark: isDark),
+          placeholder: (_, __) => _fallback(),
+          errorWidget: (_, __, ___) => _fallback(),
         ),
       ),
     );
   }
 }
 
-class _FallbackAvatar extends StatelessWidget {
-  const _FallbackAvatar({required this.name, required this.isDark});
-  final String name;
-  final bool isDark;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 44,
-      width: 44,
-      decoration: BoxDecoration(
-        color: _T.accentBg(isDark),
-        borderRadius: BorderRadius.circular(_T.r12),
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        name.isNotEmpty ? name[0].toUpperCase() : '?',
-        style: const TextStyle(
-            fontSize: 18, fontWeight: FontWeight.w800, color: _T.accent),
-      ),
-    );
-  }
-}
-
 // ─────────────────────────────────────────────
-//  PRO Badge
+//  Buttons
 // ─────────────────────────────────────────────
-class _ProBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-            colors: [Color(0xFFFFB547), Color(0xFFFF8C00)]),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: const Text('PRO',
-          style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w800,
-              color: Colors.black,
-              letterSpacing: 0.5)),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  Pill Toggle
-// ─────────────────────────────────────────────
-class _PillToggle extends StatelessWidget {
-  const _PillToggle({
-    required this.active,
-    required this.label,
-    required this.icon,
-    required this.isDark,
-    required this.onTap,
-  });
-  final bool active;
+class _PrimaryButton extends StatelessWidget {
+  const _PrimaryButton(
+      {required this.label,
+      required this.icon,
+      required this.p,
+      required this.onTap});
   final String label;
   final IconData icon;
-  final bool isDark;
+  final _P p;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final d = isDark;
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: active ? _T.accentBg(d) : _T.surface(d),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-              color: active ? _T.accent.withOpacity(0.45) : _T.cardBorder(d)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon,
-                size: 13, color: active ? _T.accent : _T.textSecondary(d)),
-            const SizedBox(width: 5),
-            Text(label,
-                style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: active ? _T.accent : _T.textSecondary(d))),
-          ],
+    return Material(
+      color: p.accent,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 18, color: p.onAccent),
+              const SizedBox(width: 8),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: p.onAccent)),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────
-//  Glow Button
-// ─────────────────────────────────────────────
-class _GlowButton extends StatelessWidget {
-  const _GlowButton(
-      {required this.label, required this.icon, required this.onTap});
+class _OutlineButton extends StatelessWidget {
+  const _OutlineButton(
+      {required this.label,
+      required this.icon,
+      required this.p,
+      required this.onTap});
   final String label;
   final IconData icon;
+  final _P p;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: _T.accent,
-          borderRadius: BorderRadius.circular(_T.r16),
-          boxShadow: [
-            BoxShadow(
-                color: _T.accent.withOpacity(0.3),
-                blurRadius: 20,
-                offset: const Offset(0, 8))
-          ],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: p.accent.withOpacity(0.5)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: Colors.white),
-            const SizedBox(width: 8),
+            Icon(icon, size: 15, color: p.accent),
+            const SizedBox(width: 6),
             Text(label,
-                style: const TextStyle(
-                    fontSize: 14,
+                style: TextStyle(
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white)),
+                    color: p.accent)),
           ],
         ),
       ),
@@ -1345,84 +1595,110 @@ class _GlowButton extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  Skeleton Card
-// ─────────────────────────────────────────────
-class _SkeletonCard extends StatefulWidget {
-  const _SkeletonCard({required this.delay, required this.isDark});
-  final int delay;
-  final bool isDark;
+class _TextLink extends StatelessWidget {
+  const _TextLink({required this.label, required this.p, required this.onTap});
+  final String label;
+  final _P p;
+  final VoidCallback onTap;
 
   @override
-  State<_SkeletonCard> createState() => _SkeletonCardState();
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onTap,
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 14, fontWeight: FontWeight.w600, color: p.accent)),
+    );
+  }
 }
 
-class _SkeletonCardState extends State<_SkeletonCard>
+// ─────────────────────────────────────────────
+//  Loading skeleton (one shared pulse)
+// ─────────────────────────────────────────────
+class _SkeletonList extends StatefulWidget {
+  const _SkeletonList({required this.p});
+  final _P p;
+
+  @override
+  State<_SkeletonList> createState() => _SkeletonListState();
+}
+
+class _SkeletonListState extends State<_SkeletonList>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _anim;
+  late final AnimationController _c;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1200))
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1100))
       ..repeat(reverse: true);
-    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut);
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _c.dispose();
     super.dispose();
   }
 
+  Widget _bone(double w, double h, Color c, {double r = 6}) => Container(
+        width: w,
+        height: h,
+        decoration:
+            BoxDecoration(color: c, borderRadius: BorderRadius.circular(r)),
+      );
+
   @override
   Widget build(BuildContext context) {
-    final d = widget.isDark;
+    final p = widget.p;
     return AnimatedBuilder(
-      animation: _anim,
+      animation: _c,
       builder: (_, __) {
-        final shimmer = Color.lerp(_T.card(d), _T.surface(d), _anim.value)!;
-        return Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: shimmer,
-            borderRadius: BorderRadius.circular(_T.r20),
-            border: Border.all(color: _T.cardBorder(d)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                      color: _T.divider(d),
-                      borderRadius: BorderRadius.circular(_T.r12))),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                        height: 13,
-                        width: 100,
-                        decoration: BoxDecoration(
-                            color: _T.divider(d),
-                            borderRadius: BorderRadius.circular(4))),
-                    const SizedBox(height: 8),
-                    Container(
-                        height: 10,
-                        width: 60,
-                        decoration: BoxDecoration(
-                            color: _T.divider(d),
-                            borderRadius: BorderRadius.circular(4))),
-                  ],
-                ),
+        final bone = Color.lerp(p.line, p.surface, _c.value * 0.8)!;
+        return ListView(
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+          children: List.generate(3, (_) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _bone(40, 40, bone, r: 11),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _bone(110, 14, bone),
+                          const SizedBox(height: 6),
+                          _bone(70, 10, bone),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: p.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: p.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _bone(180, 14, bone),
+                        const SizedBox(height: 8),
+                        _bone(120, 10, bone),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            );
+          }),
         );
       },
     );
@@ -1430,7 +1706,7 @@ class _SkeletonCardState extends State<_SkeletonCard>
 }
 
 // ─────────────────────────────────────────────
-//  Models
+//  Models  (unchanged, other files may import these)
 // ─────────────────────────────────────────────
 class StatusConfig {
   final String label;
@@ -1515,7 +1791,8 @@ String _formatDateTime(DateTime dt) {
   final time =
       '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   if (check == today) return 'Today $time';
-  if (check == today.subtract(const Duration(days: 1)))
+  if (check == today.subtract(const Duration(days: 1))) {
     return 'Yesterday $time';
+  }
   return '${dt.day}/${dt.month}/${dt.year} $time';
 }

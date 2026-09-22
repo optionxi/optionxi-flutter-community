@@ -8,8 +8,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 const String kAtlasTable = 'atlas_output';
 const String kOhlcvTable = 'nifty_ohlcv';
 const String kOhlcvSymbol = 'NIFTY';
-const String kYahooTicker = '^NSEI';
-
 const List<int> kLookbackOptions = [5, 10, 15, 20, 30, 45, 60, 120, 180];
 const int kDefaultLookback = 60;
 const double kProbMin = 60, kProbMax = 90, kProbDefault = 70;
@@ -25,22 +23,23 @@ const List<String> kEntryModes = [
 ];
 
 class MarketHours {
-  static const openHour = 9, openMinute = 15;
+  static const openHour = 9, openMinute = 30;
   static const closeHour = 15, closeMinute = 15;
 }
 
 // -----------------------------------------------------------------------------
 // TIME HELPERS
 // -----------------------------------------------------------------------------
-DateTime msToIstWallClock(int ms) =>
-    DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+DateTime msToIstWallClock(int ms) {
+  final u = DateTime.fromMillisecondsSinceEpoch(ms, isUtc: true);
+  return DateTime(u.year, u.month, u.day, u.hour, u.minute, u.second);
+}
 
 DateTime floorTo5(DateTime dt) =>
-    DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute - dt.minute % 5);
-
+    DateTime(dt.year, dt.month, dt.day, dt.hour, dt.minute - dt.minute % 5);
 String fmtDate(DateTime dt) => DateFormat('yyyy-MM-dd').format(dt);
-String fmtDateShort(DateTime dt) => DateFormat('d MMM').format(dt);
-String fmtTime(DateTime dt) => DateFormat('HH:mm').format(dt);
+String fmtDateShort(DateTime dt) => DateFormat('MMM d').format(dt);
+String fmtTime(DateTime dt) => DateFormat('HH:mm a').format(dt);
 
 String normalizeDirection(String? raw) {
   final s = (raw ?? '').toLowerCase();
@@ -279,8 +278,8 @@ class SupabaseService {
     return all.map((r) {
       final tsUtc = DateTime.parse(r['ts'] as String).toUtc();
       final tsIst = tsUtc.add(const Duration(hours: 5, minutes: 30));
-      final tsIstWall = DateTime.utc(tsIst.year, tsIst.month, tsIst.day,
-          tsIst.hour, tsIst.minute, tsIst.second);
+      final tsIstWall = DateTime(tsIst.year, tsIst.month, tsIst.day, tsIst.hour,
+          tsIst.minute, tsIst.second);
       return Candle(
         tsIstWall,
         (r['open'] as num).toDouble(),
@@ -338,15 +337,16 @@ class AtlasEngine {
     return best;
   }
 
+// inside AtlasEngine
   static DateTime _openDt(String day) {
     final p = day.split('-').map(int.parse).toList();
-    return DateTime.utc(
+    return DateTime(
         p[0], p[1], p[2], MarketHours.openHour, MarketHours.openMinute);
   }
 
   static DateTime _closeDt(String day) {
     final p = day.split('-').map(int.parse).toList();
-    return DateTime.utc(
+    return DateTime(
         p[0], p[1], p[2], MarketHours.closeHour, MarketHours.closeMinute);
   }
 
@@ -371,12 +371,25 @@ class AtlasEngine {
         final atEntry = candles.where((c) => !c.ts.isAfter(entryDt)).toList();
         if (prior.isEmpty || atEntry.isEmpty) continue;
         final entryCandle = atEntry.last;
+
         final dayHigh = prior.map((c) => c.high).reduce(math.max);
         final dayLow = prior.map((c) => c.low).reduce(math.min);
-        final brokeOut =
-            (sig.direction == 'Bull' && entryCandle.high > dayHigh) ||
-                (sig.direction == 'Bear' && entryCandle.low < dayLow);
-        if (brokeOut) {
+        final bool entryBrokeOut = sig.direction == 'Bull'
+            ? entryCandle.high > dayHigh
+            : entryCandle.low < dayLow;
+
+        bool prevBrokeOut = false;
+        if (prior.length > 1) {
+          final prevCandle = prior.last;
+          final beforePrev = prior.sublist(0, prior.length - 1);
+          final highBeforePrev = beforePrev.map((c) => c.high).reduce(math.max);
+          final lowBeforePrev = beforePrev.map((c) => c.low).reduce(math.min);
+          prevBrokeOut = sig.direction == 'Bull'
+              ? prevCandle.high > highBeforePrev
+              : prevCandle.low < lowBeforePrev;
+        }
+
+        if (entryBrokeOut || prevBrokeOut) {
           kept.add(sig);
           break;
         }
@@ -431,18 +444,24 @@ class AtlasEngine {
       final postEntry = w.length > 1 ? w.sublist(1) : <Candle>[];
       bool success = false;
       for (final c in postEntry) {
-        if (sig.direction == 'Bear' && c.low < entryLow) {
+        if (sig.direction == 'Bear' &&
+            c.low < entryLow &&
+            c.close < startPrice) {
           success = true;
           break;
         }
-        if (sig.direction == 'Bull' && c.high > entryHigh) {
+        if (sig.direction == 'Bull' &&
+            c.high > entryHigh &&
+            c.close > startPrice) {
           success = true;
           break;
         }
       }
+
       final peakCandle = sig.direction == 'Bear'
           ? w.reduce((a, b) => a.low <= b.low ? a : b)
           : w.reduce((a, b) => a.high >= b.high ? a : b);
+
       final timeToPeak = peakCandle.ts.difference(entryDt).inSeconds / 60.0;
       out.add(Outcome(
         signal: sig,
@@ -590,12 +609,25 @@ class AtlasEngine {
         final atEntry = candles.where((c) => !c.ts.isAfter(entryDt)).toList();
         if (prior.isEmpty || atEntry.isEmpty) continue;
         final entryCandle = atEntry.last;
+
         final dayHigh = prior.map((c) => c.high).reduce(math.max);
         final dayLow = prior.map((c) => c.low).reduce(math.min);
-        final brokeOut =
-            (sig.direction == 'Bull' && entryCandle.high > dayHigh) ||
-                (sig.direction == 'Bear' && entryCandle.low < dayLow);
-        if (!brokeOut) continue;
+        final bool entryBrokeOut = sig.direction == 'Bull'
+            ? entryCandle.high > dayHigh
+            : entryCandle.low < dayLow;
+
+        bool prevBrokeOut = false;
+        if (prior.length > 1) {
+          final prevCandle = prior.last;
+          final beforePrev = prior.sublist(0, prior.length - 1);
+          final highBeforePrev = beforePrev.map((c) => c.high).reduce(math.max);
+          final lowBeforePrev = beforePrev.map((c) => c.low).reduce(math.min);
+          prevBrokeOut = sig.direction == 'Bull'
+              ? prevCandle.high > highBeforePrev
+              : prevCandle.low < lowBeforePrev;
+        }
+
+        if (!(entryBrokeOut || prevBrokeOut)) continue;
         final w = candles
             .where((c) => !c.ts.isBefore(entryDt) && !c.ts.isAfter(closeDt))
             .toList();
