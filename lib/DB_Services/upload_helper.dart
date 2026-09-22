@@ -42,7 +42,7 @@ class UploadHelperIMGPDF {
           filename);
 
       if (result.toString() != "null") {
-        GlobalSnackBarGet().showGetSucess("Sucess", "PDF Uploaded");
+        GlobalSnackBarGet().showGetSucess("Success", "PDF Uploaded");
         pdfController.text = result.toString();
         isdone = true;
         // Loader remove
@@ -99,7 +99,7 @@ class UploadHelperIMGPDF {
         .uploadFile(File(imgController.text), "$mainpath/$subpath/", filename);
 
     if (result.toString() != "null") {
-      GlobalSnackBarGet().showGetSucess("Sucess", "Image Uploaded");
+      GlobalSnackBarGet().showGetSucess("Success", "Image Uploaded");
       imgController.text = result.toString();
       isdone = true;
 
