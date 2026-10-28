@@ -140,7 +140,7 @@ class _OTPState extends State<OTP> {
                           //     .signInWithCredential(credential);
 
                           // GlobalSnackBarGet()
-                          //     .showGetSucess("Sucess", 'OTP Verified');
+                          //     .showGetSuccess("Success", 'OTP Verified');
 
                           // Navigator.push(
                           //   context,

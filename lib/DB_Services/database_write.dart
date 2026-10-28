@@ -8,7 +8,7 @@ class DatabaseWriteService {
   FirebaseDatabase db = FirebaseDatabase.instance;
 
   Future<bool> updateUserFCM(String uidkey, String fcmkey) async {
-    // bool is_sucess = false;
+    // bool is_success = false;
     final ref = db.ref();
     if (uidkey == "null") {
       // GlobalSnackBarGet().showGetError("Error", "No user key found");
@@ -30,14 +30,14 @@ class DatabaseWriteService {
 
   //Add registered user details, logged in users
   Future<bool> addUserData(suid, dm_reg_user user) async {
-    bool is_sucess = false;
+    bool is_success = false;
     final ref = db.ref();
 
     try {
       // make sure to use await function for catching exception
       await ref.child('regusers').child(suid).set(user.toJson());
-      GlobalSnackBarGet().showGetSucess("Registered", "Welcome ${user.rgName}");
-      is_sucess = true;
+      GlobalSnackBarGet().showGetSuccess("Registered", "Welcome ${user.rgName}");
+      is_success = true;
     } on PlatformException catch (err) {
       GlobalSnackBarGet().showGetError("Error", err.toString());
       print("Catched error: $err");
@@ -46,7 +46,7 @@ class DatabaseWriteService {
       GlobalSnackBarGet().showGetError("Error", "Something else went wrong");
     }
 
-    return is_sucess;
+    return is_success;
   }
 
   // Add stock to favorites/watchlist

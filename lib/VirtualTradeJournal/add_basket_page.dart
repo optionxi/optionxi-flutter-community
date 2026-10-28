@@ -8,7 +8,7 @@ import 'package:optionxi/Helpers/badge_service_obx.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
-import 'package:optionxi/VirtualTradeJournal/dialog_order_sucess.dart';
+import 'package:optionxi/VirtualTradeJournal/dialog_order_success.dart';
 
 class AddToBasketPage extends StatefulWidget {
   final DataStockModel stock;

@@ -68,10 +68,10 @@
 //           .uploadFile(File(imagefilepath), "gallery/$forane/$cat/", filename);
 
 //       if (result.toString() != "null") {
-//         GlobalSnackBarGet().showGetSucess("Sucess", "Image Uploaded");
+//         GlobalSnackBarGet().showGetSuccess("Success", "Image Uploaded");
 //         imagefilepath = result.toString();
 //       } else {
-//         GlobalSnackBarGet().showGetError("Error", "Image couldnt be uploaded");
+//         GlobalSnackBarGet().showGetError("Error", "Image couldn't be uploaded");
 //       }
 //     }
 

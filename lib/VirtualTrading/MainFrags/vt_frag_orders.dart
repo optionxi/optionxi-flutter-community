@@ -129,7 +129,7 @@ class _OrdersPageState extends State<OrdersPage>
           //         Expanded(
           //           child: Text(
           //             // 'Order processed: ID $deletedId',
-          //             'Order processed sucessfully',
+          //             'Order processed successfully',
           //             style: const TextStyle(
           //               color: Colors.white,
           //               fontWeight: FontWeight.w500,

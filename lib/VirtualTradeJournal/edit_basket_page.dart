@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:optionxi/Helpers/constants.dart';
 import 'package:optionxi/Helpers/global_snackbar_get.dart';
 import 'package:optionxi/PushNotification/notifcation_service.dart';
-import 'package:optionxi/VirtualTradeJournal/dialog_order_sucess.dart';
+import 'package:optionxi/VirtualTradeJournal/dialog_order_success.dart';
 import 'package:optionxi/VirtualTrading/VDataModel/v_holdings_journal.dart';
 
 class EditBasketPage extends StatefulWidget {

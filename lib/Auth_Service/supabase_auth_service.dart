@@ -347,7 +347,7 @@ class AuthService {
         // Authenticate with Supabase (fallback method for phone auth)
         await _authenticateWithSupabase(result.user!);
         await _syncUserDataWithSupabase(result.user!);
-        GlobalSnackBarGet().showGetSucess("Success", "Successfully Logged In");
+        GlobalSnackBarGet().showGetSuccess("Success", "Successfully Logged In");
       }
     } on firebase_auth.FirebaseAuthException catch (e) {
       if (e.code == 'invalid-verification-code') {

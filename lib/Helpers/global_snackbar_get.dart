@@ -86,7 +86,7 @@ class GlobalSnackBarGet {
     );
   }
 
-  void showGetSucess(String head, String title, {int durationMs = 2000}) {
+  void showGetSuccess(String head, String title, {int durationMs = 2000}) {
     Get.snackbar(
       '',
       '',
@@ -169,7 +169,7 @@ class GlobalSnackBarGet {
       reverseAnimationCurve: Curves.easeInCubic,
       animationDuration: _animationDuration,
       overlayBlur: 2.0,
-      overlayColor: Colors.black.withOpacity(0.05),
+      overlayColor: Colors.black.withValues(alpha: 0.05),
       icon: Icon(
         Icons.check_circle_outline_rounded,
         color: Colors.green.shade300,
